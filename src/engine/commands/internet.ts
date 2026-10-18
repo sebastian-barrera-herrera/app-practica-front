@@ -69,6 +69,8 @@ export const SITES: Site[] = [
     '/users/1': json({ id: 1, name: 'Leanne Graham', username: 'Bret', email: 'Sincere@april.biz' }),
     '/posts/1': json({ userId: 1, id: 1, title: 'sunt aut facere repellat provident', body: 'quia et suscipit…' }),
   } },
+  { host: 'dns.google', ip: '8.8.8.8', ptr: 'dns.google', latency: 9, routes: {} },
+  { host: 'one.one.one.one', ip: '1.1.1.1', ptr: 'one.one.one.one', latency: 7, https: true, routes: { '/': text('<html><head><title>1.1.1.1</title></head><body>Cloudflare DNS</body></html>\n', 'text/html') } },
   { host: 'ifconfig.me', ip: '34.160.111.145', latency: 30, https: true, routes: { '/': text('203.0.113.42\n'), '/ip': text('203.0.113.42\n') } },
   { host: 'wttr.in', ip: '5.9.243.187', latency: 150, https: true, routes: { '/': text('Madrid: ☀️ +18°C\n') } },
   { host: 'router.local', ip: '192.168.1.1', latency: 1.2, routes: { '/': text('<html><body><h1>Router admin</h1></body></html>\n', 'text/html') } },

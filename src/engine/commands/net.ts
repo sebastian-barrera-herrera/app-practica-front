@@ -251,7 +251,24 @@ defineCommand('ip', {
       c.out(`lo               UNKNOWN        127.0.0.1/8 ::1/128 \neth0             UP             ${sys.ipAddr}/24 fe80::42:acff:fe11:2/64 \n`);
       return 0;
     }
-    c.out(`1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000\n    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00\n    inet 127.0.0.1/8 scope host lo\n       valid_lft forever preferred_lft forever\n    inet6 ::1/128 scope host noprefixroute \n       valid_lft forever preferred_lft forever\n2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UP group default qlen 1000\n    link/ether ${sys.mac} brd ff:ff:ff:ff:ff:ff\n    inet ${sys.ipAddr}/24 brd 192.168.1.255 scope global dynamic eth0\n       valid_lft 84321sec preferred_lft 84321sec\n    inet6 fe80::42:acff:fe11:2/64 scope link \n       valid_lft forever preferred_lft forever\n`);
+    const only4 = c.args.includes('-4');
+    const only6 = c.args.includes('-6');
+    const dev = args.slice(1).find((a) => a !== 'show' && a !== 'list' && a !== 'dev');
+    const ifaces = [
+      { name: 'lo', head: '1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000', link: '    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00', v4: '    inet 127.0.0.1/8 scope host lo', v6: '    inet6 ::1/128 scope host noprefixroute ', life4: 'forever preferred_lft forever', life6: 'forever preferred_lft forever' },
+      { name: 'eth0', head: '2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UP group default qlen 1000', link: `    link/ether ${sys.mac} brd ff:ff:ff:ff:ff:ff`, v4: `    inet ${sys.ipAddr}/24 brd 192.168.1.255 scope global dynamic eth0`, v6: '    inet6 fe80::42:acff:fe11:2/64 scope link ', life4: '84321sec preferred_lft 84321sec', life6: 'forever preferred_lft forever' },
+    ].filter((i) => !dev || i.name === dev);
+    if (dev && !ifaces.length) {
+      c.err(`Device "${dev}" does not exist.\n`);
+      return 1;
+    }
+    const lines: string[] = [];
+    for (const i of ifaces) {
+      lines.push(i.head, i.link);
+      if (!only6) lines.push(i.v4, `       valid_lft ${i.life4}`);
+      if (!only4) lines.push(i.v6, `       valid_lft ${i.life6}`);
+    }
+    c.out(lines.join('\n') + '\n');
     return 0;
   }
   if (['r', 'ro', 'route'].includes(obj)) {
@@ -394,7 +411,8 @@ defineCommand('host', { summary: 'Resuelve nombres DNS de forma sencilla', usage
 });
 
 defineCommand('traceroute', { summary: 'Muestra la ruta que siguen los paquetes hasta un destino', usage: 'traceroute DESTINO', category: 'redes', package: 'traceroute', level: 3, examples: [['traceroute google.com', 'Saltos hasta Google']] }, (c) => {
-  const host = c.args.filter((a) => !a.startsWith('-'))[0];
+  const o = parseOpts(c, c.args, { flags: 'nIT', values: 'mqwf' });
+  const host = o.rest[0];
   const r = host ? resolveHost(c.sh.sys, c.fs, host) : null;
   if (!r) {
     c.err(`${host}: Name or service not known\nCannot handle "host" cmdline arg \`${host}' on position 1 (argc 1)\n`);
@@ -474,6 +492,29 @@ async function knownHostsCheck(c: Ctx, host: string, ip: string): Promise<boolea
   return true;
 }
 
+/** ¿Alguna clave pública local está autorizada para ese usuario en el servidor? */
+function keyAuth(c: Ctx, w: World, user: string): boolean {
+  let pubs: string[] = [];
+  try {
+    const dir = `${c.sh.home()}/.ssh`;
+    pubs = c.fs
+      .readdir(dir, c.cred)
+      .filter((f) => f.endsWith('.pub'))
+      .map((f) => c.fs.readFile(`${dir}/${f}`, c.cred).trim().split(/\s+/)[1])
+      .filter(Boolean);
+  } catch {
+    return false;
+  }
+  const home = w.sys.user(user)?.home;
+  if (!pubs.length || !home) return false;
+  try {
+    const ak = w.fs.readFile(`${home}/.ssh/authorized_keys`, null);
+    return pubs.some((k) => ak.includes(k));
+  } catch {
+    return false;
+  }
+}
+
 defineCommand('ssh', {
   summary: 'Conecta de forma segura a otro equipo (Secure Shell)',
   usage: 'ssh [-p PUERTO] [USUARIO@]HOST [COMANDO]',
@@ -550,10 +591,12 @@ defineCommand('ssh', {
     c.err(`${user}@${hostname}: Permission denied (publickey,password).\n`);
     return 255;
   }
-  c.err(`${user}@${hostname}'s password: `);
-  const pw = await c.stdin.readLine();
-  if (pw === null) return 255;
-  c.err('\n');
+  if (!keyAuth(c, w, user)) {
+    c.err(`${user}@${hostname}'s password: `);
+    const pw = await c.stdin.readLine();
+    if (pw === null) return 255;
+    c.err('\n');
+  }
   const cmd = o.rest.slice(1).join(' ');
   const shell = w.shell.clone();
   shell.setUser(user);
@@ -586,8 +629,10 @@ defineCommand('ssh-keygen', {
     const a = await c.stdin.readLine();
     if (a === null || !/^y/i.test(a)) return 1;
   }
-  c.out('Enter passphrase (empty for no passphrase): \nEnter same passphrase again: \n');
-  if (c.stdin.isTTY) { await c.stdin.readLine(); await c.stdin.readLine(); }
+  if (o.val('N') === undefined) {
+    c.out('Enter passphrase (empty for no passphrase): \nEnter same passphrase again: \n');
+    if (c.stdin.isTTY) { await c.stdin.readLine(); await c.stdin.readLine(); }
+  }
   const rnd = fakeRand(file + c.sh.sys.clock.now);
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
   const rs = (n: number) => Array.from({ length: n }, () => chars[Math.floor(rnd() * 64)]).join('');
@@ -613,11 +658,28 @@ defineCommand('ssh-copy-id', { summary: 'Instala tu clave pública en un servido
     return 1;
   }
   const host = target.split('@').pop()!;
+  const user = target.includes('@') ? target.split('@')[0] : c.sh.user;
   const r = resolveHost(c.sh.sys, c.fs, host);
   if (!r?.site?.ssh) { c.err(`ssh: connect to host ${host} port 22: Connection refused\n`); return 1; }
   c.out(`/usr/bin/ssh-copy-id: INFO: Source of key(s) to be installed: "${c.sh.home()}/.ssh/${pubs[0]}"\n`);
-  c.err(`${target}'s password: `);
-  await c.stdin.readLine();
+  if (!(await knownHostsCheck(c, host, r.ip))) return 1;
+  const w = remoteWorld(c, host, r.ip);
+  if (!w.sys.users.has(user)) { c.err(`${user}@${host}: Permission denied (publickey,password).\n`); return 1; }
+  if (keyAuth(c, w, user)) {
+    c.out('/usr/bin/ssh-copy-id: INFO: attempting to log in with the new key(s), to filter out any that are already installed\n/usr/bin/ssh-copy-id: WARNING: All keys were skipped because they already exist on the remote system.\n\t\t(if you think this is a mistake, you may want to use -f option)\n\n');
+    return 0;
+  }
+  c.err(`${user}@${host}'s password: `);
+  const pw = await c.stdin.readLine();
+  if (pw === null) return 1;
+  c.err('\n');
+  const rhome = w.sys.user(user)!.home;
+  const rcred = w.sys.cred(user);
+  const pub = c.fs.readFile(`${c.sh.home()}/.ssh/${pubs[0]}`, c.cred);
+  try {
+    w.fs.mkdirp(`${rhome}/.ssh`, 0o700, rcred);
+    w.fs.writeFile(`${rhome}/.ssh/authorized_keys`, pub.endsWith('\n') ? pub : pub + '\n', { append: true, cred: rcred, mode: 0o600 });
+  } catch { /* sin permiso */ }
   c.out(`\nNumber of key(s) added: 1\n\nNow try logging into the machine, with:   "ssh '${target}'"\nand check to make sure that only the key(s) you wanted were added.\n\n`);
 });
 
@@ -674,9 +736,11 @@ defineCommand('scp', {
   const w = remoteWorld(c, remoteSide.host!, r.ip);
   const user = remoteSide.user ?? c.sh.user;
   if (!w.sys.users.has(user)) { c.err(`${user}@${remoteSide.host}: Permission denied (publickey,password).\nscp: Connection closed\n`); return 255; }
-  c.err(`${user}@${remoteSide.host}'s password: `);
-  await c.stdin.readLine();
-  c.err('\n');
+  if (!keyAuth(c, w, user)) {
+    c.err(`${user}@${remoteSide.host}'s password: `);
+    await c.stdin.readLine();
+    c.err('\n');
+  }
   const rcred = w.sys.cred(user);
   const rhome = w.sys.user(user)!.home;
   const rpath = (p: string) => (p.startsWith('/') ? p : p === '~' || p === '.' ? rhome : p.startsWith('~/') ? `${rhome}/${p.slice(2)}` : `${rhome}/${p}`);
@@ -748,9 +812,11 @@ defineCommand('rsync', {
     const w = remoteWorld(c, remote.host!, r.ip);
     const user = remote.user ?? c.sh.user;
     if (!w.sys.users.has(user)) { c.err(`${user}@${remote.host}: Permission denied (publickey,password).\n`); return 255; }
-    c.err(`${user}@${remote.host}'s password: `);
-    await c.stdin.readLine();
-    c.err('\n');
+    if (!keyAuth(c, w, user)) {
+      c.err(`${user}@${remote.host}'s password: `);
+      await c.stdin.readLine();
+      c.err('\n');
+    }
     rhome = w.sys.user(user)!.home;
     const rpath = (p: string) => (p.startsWith('/') ? p : p === '~' || p === '.' ? rhome : `${rhome}/${p.replace(/^~\//, '')}`);
     if (dest.host) { dfs = w.fs; dcred = w.sys.cred(user); destBase = rpath(dest.path); }

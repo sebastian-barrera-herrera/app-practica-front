@@ -9,6 +9,7 @@ function mkTerm(setup: any = {}) {
 }
 
 async function runSolution(term: Terminal, steps: string[]) {
+  const pending: Promise<unknown>[] = [];
   for (let i = 0; i < steps.length; i++) {
     const s = steps[i];
     if (s === '^C' || s === '^Z' || s === '^D') continue;
@@ -26,12 +27,16 @@ async function runSolution(term: Terminal, steps: string[]) {
       term.signal('EOF');
       await p;
     } else {
-      // líneas de entrada interactiva: si el comando anterior está esperando, se entrega como entrada
+      // Si el comando queda esperando entrada (ssh, passwd, ssh-keygen…), las siguientes líneas se le entregan.
       const r = term.exec(s);
-      await new Promise((res) => setTimeout(res, 5));
-      await r;
+      pending.push(r);
+      for (let k = 0; k < 3000; k++) {
+        await new Promise((res) => setTimeout(res, 1));
+        if (!term.busy || term.awaitingInput) break;
+      }
     }
   }
+  await Promise.all(pending);
 }
 
 describe('estructura del contenido', () => {

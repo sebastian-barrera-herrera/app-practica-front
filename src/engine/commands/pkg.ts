@@ -1,7 +1,7 @@
 /** apt, dpkg, systemctl, service, journalctl, crontab. */
 import { C, color, isoFull, MONTHS, pad2, table } from '../format';
 import { removeBinaries, pkgDef } from '../pkgdb';
-import { defineCommand, parseOpts, type Ctx } from '../registry';
+import { defineCommand, parseOpts, REGISTRY, type Ctx } from '../registry';
 import { SignalEx } from '../shell';
 import type { ServiceEntry } from '../sys';
 import { installPackage } from '../world';
@@ -34,6 +34,22 @@ async function confirm(c: Ctx, assumeYes: boolean): Promise<boolean> {
 }
 
 const kb = (n: number) => (n >= 1024 ? `${(n / 1024).toFixed(1)} MB` : `${n} kB`);
+
+/** Actualizaciones pendientes simuladas tras `apt update`. [paquete, versión nueva, versión instalada] */
+const UPGRADABLE: [string, string, string][] = [
+  ['bash', '5.2.21-2ubuntu4.1', '5.2.21-2ubuntu4'],
+  ['curl', '8.5.0-2ubuntu10.5', '8.5.0-2ubuntu10.2'],
+  ['libc6', '2.39-0ubuntu8.3', '2.39-0ubuntu8.2'],
+  ['libcurl4t64', '8.5.0-2ubuntu10.5', '8.5.0-2ubuntu10.2'],
+  ['libssl3t64', '3.0.13-0ubuntu3.4', '3.0.13-0ubuntu3.2'],
+  ['openssh-client', '1:9.6p1-3ubuntu13.5', '1:9.6p1-3ubuntu13'],
+  ['openssh-server', '1:9.6p1-3ubuntu13.5', '1:9.6p1-3ubuntu13'],
+  ['openssl', '3.0.13-0ubuntu3.4', '3.0.13-0ubuntu3.2'],
+  ['sudo', '1.9.15p5-3ubuntu5.1', '1.9.15p5-3ubuntu5'],
+  ['systemd', '255.4-1ubuntu8.4', '255.4-1ubuntu8.1'],
+  ['tzdata', '2024b-0ubuntu0.24.04.1', '2024a-2ubuntu1'],
+  ['vim-tiny', '2:9.1.0016-1ubuntu7.3', '2:9.1.0016-1ubuntu7'],
+];
 
 defineCommand(['apt', 'apt-get'], {
   summary: 'Gestor de paquetes de Debian/Ubuntu',
@@ -72,7 +88,7 @@ defineCommand(['apt', 'apt-get'], {
         c.out('0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n');
         return 0;
       }
-      c.out('The following packages will be upgraded:\n  libc6 libssl3 openssl systemd tzdata\n5 upgraded, 0 newly installed, 0 to remove and 7 not upgraded.\nNeed to get 12.4 MB of archives.\nAfter this operation, 0 B of additional disk space will be used.\n');
+      c.out(`The following packages will be upgraded:\n  ${UPGRADABLE.map((u) => u[0]).join(' ')}\n${UPGRADABLE.length} upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\nNeed to get 12.4 MB of archives.\nAfter this operation, 0 B of additional disk space will be used.\n`);
       if (!(await confirm(c, yes))) return 1;
       c.out('Get:1 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libc6 amd64 2.39-0ubuntu8.3 [2,906 kB]\nFetched 12.4 MB in 2s (6,200 kB/s)\n(Reading database ... 70234 files and directories currently installed.)\nPreparing to unpack .../libc6_2.39-0ubuntu8.3_amd64.deb ...\nSetting up libc6:amd64 (2.39-0ubuntu8.3) ...\nProcessing triggers for man-db (2.12.0-4build2) ...\n');
       sys.aptUpdated = false;
@@ -173,9 +189,13 @@ defineCommand(['apt', 'apt-get'], {
     }
     case 'list': {
       if (c.io.tty) c.out('Listing... Done\n');
+      if (o.has('U')) {
+        if (sys.aptUpdated) for (const [n, v, old] of UPGRADABLE) c.out(`${n}/noble-updates ${v} amd64 [upgradable from: ${old}]\n`);
+        return 0;
+      }
       for (const p of [...sys.packages.values()].sort((a, b) => (a.name < b.name ? -1 : 1))) {
         if (o.has('I') && !p.installed) continue;
-        if (o.has('U')) { if (p.name === 'libc6') c.out('libc6/noble-updates 2.39-0ubuntu8.3 amd64 [upgradable from: 2.39-0ubuntu8.2]\n'); continue; }
+        if (o.has('U')) continue;
         if (pkgs.length && !pkgs.some((q) => p.name.includes(q))) continue;
         c.out(`${p.name}/noble ${p.version} amd64${p.installed ? ' [installed]' : ''}\n`);
       }
@@ -232,7 +252,10 @@ defineCommand('dpkg', {
     const f = o.rest[0];
     if (!f) return c.fail('--search needs at least one file name pattern argument', 2);
     const base = f.split('/').pop()!;
-    const hit = [...sys.packages.values()].find((p) => p.installed && (p.name === base || (f.startsWith('/usr/bin') || f.startsWith('/bin')) && p.name === 'coreutils'));
+    const byDef = REGISTRY.get(base)?.package ? sys.packages.get(REGISTRY.get(base)!.package!) : undefined;
+    const byName = [...sys.packages.values()].find((p) => p.installed && p.name === base);
+    const core = /^\/(usr\/)?s?bin\//.test(f) ? sys.packages.get('coreutils') : undefined;
+    const hit = [byDef, byName].find((p) => p?.installed) ?? (core?.installed ? core : undefined);
     if (!hit) { c.err(`dpkg-query: no path found matching pattern ${f}\n`); return 1; }
     c.out(`${hit.name}: ${f}\n`);
     return 0;

@@ -433,6 +433,10 @@ export function createWorld(opts: WorldOptions = {}): World {
   if (opts.hostname) sys.hostname = opts.hostname;
   const fs = new VFS(clock);
   createBase(sys, fs);
+  if (opts.hostname) {
+    fs.writeFile('/etc/hostname', opts.hostname + '\n', { cred: null });
+    fs.writeFile('/etc/hosts', fs.readFile('/etc/hosts', null).replace('127.0.1.1 dojo', `127.0.1.1 ${opts.hostname}`), { cred: null });
+  }
 
   // servicios base
   const svc = (name: string, description: string, state: 'active' | 'inactive', enabled: boolean, port?: number, pid?: number) =>

@@ -373,6 +373,11 @@ export class Terminal {
     return { out: stripAnsi(out), err: stripAnsi(err), text: stripAnsi(chunks.map((c) => c.s).join('')), status: rec?.status ?? 0 };
   }
 
+  /** Hay un comando en marcha bloqueado esperando que se le escriba una línea. */
+  get awaitingInput(): boolean {
+    return this.busy && this.stdin.waiting;
+  }
+
   /** Teclas especiales: Ctrl+C, Ctrl+Z, Ctrl+D. */
   signal(sig: 'INT' | 'TSTP' | 'EOF') {
     if (!this.busy) return;
