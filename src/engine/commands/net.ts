@@ -610,6 +610,32 @@ defineCommand('ssh', {
   return 0;
 });
 
+defineCommand('sshd', {
+  summary: 'Servidor SSH (demonio); con -t comprueba la configuración',
+  usage: 'sudo sshd -t',
+  category: 'redes',
+  sbin: true,
+  level: 4,
+  options: [['-t', 'Comprueba la validez del archivo de configuración y sale']],
+  examples: [['sudo sshd -t', 'Valida /etc/ssh/sshd_config antes de reiniciar el servicio']],
+}, (c) => {
+  if (c.cred.name !== 'root') return c.fail('sshd re-exec requires execution with an absolute path', 1);
+  if (!c.args.includes('-t')) return c.fail('use "systemctl start ssh" para arrancar el servicio', 1);
+  let cfg = '';
+  try {
+    cfg = c.fs.readFile('/etc/ssh/sshd_config', null);
+  } catch {
+    c.err('sshd: /etc/ssh/sshd_config: No such file or directory\n');
+    return 255;
+  }
+  const bad = cfg.split('\n').findIndex((l) => /^\s*PermitRootLogin\s+(?!yes$|no$|prohibit-password$|forced-commands-only$)\S+/.test(l));
+  if (bad >= 0) {
+    c.err(`/etc/ssh/sshd_config line ${bad + 1}: unsupported option or value\n`);
+    return 255;
+  }
+  return 0;
+});
+
 defineCommand('ssh-keygen', {
   summary: 'Genera pares de claves SSH',
   usage: 'ssh-keygen [-t tipo] [-C comentario] [-f archivo]',
@@ -871,6 +897,42 @@ defineCommand('rsync', {
 
 // ───────────────────────── ufw ─────────────────────────
 
+const UFW_SERVICES: Record<string, string> = { ssh: '22/tcp', http: '80/tcp', https: '443/tcp', dns: '53', ftp: '21/tcp', smtp: '25/tcp', mysql: '3306/tcp', postgresql: '5432/tcp' };
+
+/** Normaliza una regla de ufw a `destino|ACCIÓN|origen`. Acepta `22/tcp`, `ssh`, `from IP [to any port N] [proto tcp]`… */
+function parseUfwRule(action: string, tokens: string[]): string | null {
+  let from = 'Anywhere';
+  let dest = '';
+  let port = '';
+  let proto = '';
+  let short = '';
+  for (let i = 0; i < tokens.length; i++) {
+    const t = tokens[i];
+    if (t === 'from') from = tokens[++i] === 'any' ? 'Anywhere' : tokens[i] ?? from;
+    else if (t === 'to') dest = tokens[++i] ?? '';
+    else if (t === 'port') port = tokens[++i] ?? '';
+    else if (t === 'proto') proto = tokens[++i] ?? '';
+    else if (t === 'in' || t === 'out') continue;
+    else if (!short) short = t;
+  }
+  let to = '';
+  if (short) {
+    to = UFW_SERVICES[short.toLowerCase()] ?? short;
+    if (proto && !to.includes('/') && /^\d/.test(to)) to += `/${proto}`;
+  } else if (port) {
+    to = proto ? `${port}/${proto}` : port;
+    if (dest && dest !== 'any') to = `${dest} ${to}`;
+  } else if (dest && dest !== 'any') to = dest;
+  else if (from === 'Anywhere') return null;
+  else to = 'Anywhere';
+  return `${to}|${action}|${from}`;
+}
+
+function ufwRow(rule: string): { to: string; action: string; from: string } {
+  const [to, action, from] = rule.split('|');
+  return { to, action, from: from ?? 'Anywhere' };
+}
+
 defineCommand('ufw', {
   summary: 'Cortafuegos sencillo (Uncomplicated Firewall)',
   usage: 'sudo ufw enable|disable|status|allow|deny|delete REGLA',
@@ -892,22 +954,36 @@ defineCommand('ufw', {
     case 'status': {
       if (!sys.ufwEnabled) { c.out('Status: inactive\n'); return 0; }
       const numbered = c.args.includes('numbered');
-      const rules = sys.ufwRules;
-      c.out('Status: active\n\n' + (rules.length ? `To${' '.repeat(26)}Action      From\n--${' '.repeat(26)}------      ----\n` + rules.map((r, i) => `${numbered ? `[${String(i + 1).padStart(2)}] ` : ''}${r.split('|')[0].padEnd(numbered ? 22 : 26)}${(r.split('|')[1]).padEnd(12)}Anywhere`).join('\n') + '\n' : ''));
+      const rows = sys.ufwRules.map(ufwRow);
+      const head = `To${' '.repeat(25)}Action      From\n--${' '.repeat(25)}------      ----\n`;
+      c.out('Status: active\n\n' + (rows.length ? head + rows.map((r, i) => `${numbered ? `[${String(i + 1).padStart(2)}] ` : ''}${r.to.padEnd(numbered ? 22 : 27)}${r.action.padEnd(12)}${r.from}`).join('\n') + '\n' : ''));
       return 0;
     }
     case 'allow': case 'deny': case 'reject': case 'limit': {
-      const rule = c.args[1];
+      const rule = parseUfwRule(sub.toUpperCase(), c.args.slice(1));
       if (!rule) return c.fail('ERROR: Need to give a rule', 1);
-      sys.ufwRules.push(`${rule}|${sub.toUpperCase()}`);
-      c.out(sys.ufwEnabled ? 'Rule added\nRule added (v6)\n' : 'Skipping adding existing rule\n'.replace('Skipping adding existing rule', 'Rules updated\nRules updated (v6)'));
+      if (sys.ufwRules.includes(rule)) {
+        c.out('Skipping adding existing rule\nSkipping adding existing rule (v6)\n');
+        return 0;
+      }
+      sys.ufwRules.push(rule);
+      c.out(sys.ufwEnabled ? 'Rule added\nRule added (v6)\n' : 'Rules updated\nRules updated (v6)\n');
       return 0;
     }
     case 'delete': {
       const arg = c.args[1];
-      const idx = /^\d+$/.test(arg) ? parseInt(arg, 10) - 1 : sys.ufwRules.findIndex((r) => r.startsWith(c.args.slice(2).join(' ')));
-      if (idx >= 0 && idx < sys.ufwRules.length) sys.ufwRules.splice(idx, 1);
-      c.out('Rule deleted\n');
+      let idx = -1;
+      if (/^\d+$/.test(arg ?? '')) idx = parseInt(arg, 10) - 1;
+      else if (['allow', 'deny', 'reject', 'limit'].includes(arg ?? '')) {
+        const rule = parseUfwRule(arg.toUpperCase(), c.args.slice(2));
+        idx = rule ? sys.ufwRules.indexOf(rule) : -1;
+      }
+      if (idx < 0 || idx >= sys.ufwRules.length) {
+        c.err('Could not delete non-existent rule\n');
+        return 0;
+      }
+      sys.ufwRules.splice(idx, 1);
+      c.out('Rule deleted\nRule deleted (v6)\n');
       return 0;
     }
     case 'reset': sys.ufwRules = []; sys.ufwEnabled = false; c.out('Resetting all rules to installed defaults.\n'); return 0;

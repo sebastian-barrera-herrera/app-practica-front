@@ -8,6 +8,9 @@ import { w6 } from './worlds/w6';
 import { w7 } from './worlds/w7';
 import { w8 } from './worlds/w8';
 import { w9 } from './worlds/w9';
+import { w10 } from './worlds/w10';
+import { w11 } from './worlds/w11';
+import { w12 } from './worlds/w12';
 
 export const LEVELS: LevelDef[] = [
   { id: 'basico', title: 'Nivel Básico', subtitle: 'Cinturón blanco', color: '#22D3A6', emoji: '🥋' },
@@ -15,7 +18,7 @@ export const LEVELS: LevelDef[] = [
   { id: 'avanzado', title: 'Nivel Avanzado', subtitle: 'Cinturón negro', color: '#A78BFA', emoji: '⚫' },
 ];
 
-export const WORLDS: WorldDef[] = [w1, w2, w3, w4, w5, w6, w7, w8, w9];
+export const WORLDS: WorldDef[] = [w1, w2, w3, w4, w5, w6, w7, w8, w9, w10, w11, w12];
 
 export const LESSONS: Lesson[] = WORLDS.flatMap((w) => w.lessons);
 

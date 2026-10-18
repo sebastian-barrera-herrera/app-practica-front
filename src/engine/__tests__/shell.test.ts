@@ -233,4 +233,22 @@ describe('shell básico', () => {
     await sh(t, 'bg');
     expect((await sh(t, 'jobs')).out).toMatch(/Running\s+sleep 200/);
   });
+  test('sustitución de procesos <( )', async () => {
+    const t = mk();
+    await sh(t, 'printf "uno\\ndos\\ntres\\n" > a.txt; printf "dos\\ntres\\ncuatro\\n" > b.txt');
+    expect(await out(t, 'comm -12 <(sort a.txt) <(sort b.txt)')).toBe('dos\ntres\n');
+    expect(await out(t, 'diff <(sort a.txt) <(sort b.txt)')).toBe('0a1\n> cuatro\n3d3\n< uno\n');
+    expect(await out(t, 'while read l; do echo "-> $l"; done < <(head -n 2 a.txt)')).toBe('-> uno\n-> dos\n');
+    expect(await out(t, 'cat <(echo hola) <(echo mundo)')).toBe('hola\nmundo\n');
+    // los ficheros temporales se limpian al terminar la línea
+    expect(await out(t, 'ls /dev/fd')).toBe('');
+  });
+  test('la expansión de historial ignora comentarios y cuerpos de heredoc', async () => {
+    const t = mk();
+    await t.exec("cat > s.sh <<'EOF'\n#!/bin/bash\necho hola\nEOF");
+    expect(await out(t, 'cat s.sh')).toBe('#!/bin/bash\necho hola\n');
+    expect(await out(t, 'echo ok # !!')).toBe('ok\n');
+    await sh(t, 'echo uno');
+    expect(await out(t, 'echo "!!"')).toContain('echo uno');
+  });
 });

@@ -12,6 +12,8 @@ export interface UserEntry {
   home: string;
   shell: string;
   locked?: boolean;
+  /** Caducidad de contraseña (chage). Fechas en ms; -1 = sin límite. */
+  aging?: { lastChange?: number; min?: number; max?: number; warn?: number; inactive?: number; expire?: number };
 }
 
 export interface GroupEntry {

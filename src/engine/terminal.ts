@@ -170,11 +170,42 @@ export class Terminal {
   private expandHistory(line: string): string | null {
     if (!/!/.test(line)) return null;
     let changed = false;
-    // fuera de comillas simples
+    // fuera de comillas simples, de comentarios (#…) y del cuerpo de los heredocs
     let out = '';
     let inSingle = false;
+    let heredocEnd: string | null = null;
+    let lineStart = true;
     for (let i = 0; i < line.length; i++) {
       const ch = line[i];
+      if (lineStart) {
+        lineStart = false;
+        const eol = line.indexOf('\n', i);
+        const text = line.slice(i, eol < 0 ? line.length : eol);
+        if (heredocEnd !== null) {
+          // cuerpo del heredoc: se copia tal cual
+          if (text.trim() === heredocEnd) heredocEnd = null;
+          out += text + (eol < 0 ? '' : '\n');
+          i = eol < 0 ? line.length : eol;
+          lineStart = true;
+          continue;
+        }
+        const hd = /<<-?\s*(['"]?)([A-Za-z_][\w]*)\1/.exec(text);
+        if (hd) heredocEnd = hd[2];
+        inSingle = false;
+      }
+      if (ch === '\n') {
+        lineStart = true;
+        out += ch;
+        continue;
+      }
+      if (ch === '#' && !inSingle && (i === 0 || /\s/.test(line[i - 1]))) {
+        // comentario: el resto de la línea no se expande
+        const eol = line.indexOf('\n', i);
+        const end = eol < 0 ? line.length : eol;
+        out += line.slice(i, end);
+        i = end - 1;
+        continue;
+      }
       if (ch === "'") inSingle = !inSingle;
       if (ch === '!' && !inSingle && i + 1 < line.length && !/[\s=]/.test(line[i + 1])) {
         const rest = line.slice(i + 1);

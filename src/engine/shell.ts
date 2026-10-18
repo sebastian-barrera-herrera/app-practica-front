@@ -581,7 +581,8 @@ export class Shell {
 
   // ───────────────────────── expansión de palabras ─────────────────────────
 
-  async cmdSub(src: string): Promise<string> {
+  /** Ejecuta `src` en una subshell y devuelve su salida tal cual. */
+  async captureSub(src: string): Promise<string> {
     let node: Node;
     try {
       node = parse(src);
@@ -603,7 +604,24 @@ export class Shell {
       if (e instanceof ExitEx) this.lastStatus = e.code;
       else throw e;
     }
-    return buf.replace(/\n+$/, '');
+    return buf;
+  }
+
+  private psubSeq = 0;
+  private psubFiles: string[] = [];
+
+  /** <( cmd ): vuelca la salida en /dev/fd/N y devuelve esa ruta. Se borra al terminar la línea. */
+  async procSub(src: string): Promise<string> {
+    const text = await this.captureSub(src);
+    const path = `/dev/fd/${63 - (this.psubSeq++ % 30)}`;
+    this.fs.mkdirp('/dev/fd', 0o755, null);
+    this.fs.writeFile(path, text, { cred: null });
+    this.psubFiles.push(path);
+    return path;
+  }
+
+  async cmdSub(src: string): Promise<string> {
+    return (await this.captureSub(src)).replace(/\n+$/, '');
   }
 
   private expandBracesInWord(word: Word): Word[] {
@@ -707,6 +725,9 @@ export class Shell {
         }
         case 'cmd':
           pushSplittable(await this.cmdSub(part.src));
+          break;
+        case 'psub':
+          pushQuoted(await this.procSub(part.src));
           break;
         case 'arith':
           pushSplittable(String(this.arith(await this.expandString([{ t: 'lit', s: part.expr }]))));
@@ -851,8 +872,17 @@ export class Shell {
       throw e;
     }
     this.io = io;
-    const st = await this.execNode(node, io);
-    return st;
+    try {
+      return await this.execNode(node, io);
+    } finally {
+      for (const f of this.psubFiles.splice(0)) {
+        try {
+          this.fs.unlink(f, null);
+        } catch {
+          /* ya no existe */
+        }
+      }
+    }
   }
 
   async execNode(node: Node, io: IO): Promise<number> {

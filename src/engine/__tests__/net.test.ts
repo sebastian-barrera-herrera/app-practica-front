@@ -48,3 +48,19 @@ describe('red e internet simulada', () => {
     expect((await sh(t, 'ssh-copy-id server')).out).toContain('already exist');
   });
 });
+
+describe('ufw', () => {
+  test('reglas con origen, servicios por nombre y borrado', async () => {
+    const t = mk({ packages: ['ufw'] });
+    await sh(t, 'sudo ufw enable');
+    await sh(t, 'sudo ufw allow ssh');
+    expect((await sh(t, 'sudo ufw allow 22/tcp')).out).toContain('Skipping adding existing rule');
+    await sh(t, 'sudo ufw deny from 203.0.113.9');
+    const st = await out(t, 'sudo ufw status');
+    expect(st).toMatch(/^22\/tcp {21}ALLOW {7}Anywhere$/m);
+    expect(st).toMatch(/^Anywhere {19}DENY {8}203\.0\.113\.9$/m);
+    expect((await sh(t, 'sudo ufw delete deny from 203.0.113.9')).out).toContain('Rule deleted');
+    expect(await out(t, 'sudo ufw status')).not.toContain('203.0.113.9');
+    expect((await sh(t, 'sudo ufw delete allow 9999')).err).toContain('non-existent');
+  });
+});

@@ -447,7 +447,7 @@ defineCommand('passwd', {
     return 1;
   }
   if (o.has('S')) {
-    c.out(`${target} ${u.locked ? 'L' : 'P'} 03/10/2026 0 99999 7 -1\n`);
+    c.out(`${target} ${u.locked ? 'L' : 'P'} 03/10/2026 ${u.aging?.min ?? 0} ${u.aging?.max ?? 99999} ${u.aging?.warn ?? 7} ${u.aging?.inactive ?? -1}\n`);
     return 0;
   }
   if (o.has('l')) { u.locked = true; c.out(`passwd: password expiry information changed.\n`); return 0; }
@@ -487,10 +487,59 @@ defineCommand('getent', { summary: 'Consulta bases de datos del sistema (passwd,
   } else return c.fail('Unknown database: ' + db, 1);
 });
 
-defineCommand('chage', { summary: 'Muestra o cambia la caducidad de contraseñas', usage: 'chage -l USUARIO', category: 'usuarios', level: 4 }, (c) => {
-  const name = c.args.find((a) => !a.startsWith('-')) ?? c.sh.user;
-  c.out(`Last password change\t\t\t\t\t: Mar 10, 2026\nPassword expires\t\t\t\t\t: never\nPassword inactive\t\t\t\t\t: never\nAccount expires\t\t\t\t\t\t: never\nMinimum number of days between password change\t\t: 0\nMaximum number of days between password change\t\t: 99999\nNumber of days of warning before password expires\t: 7\n`);
-  void name;
+const DAY_MS = 86400000;
+const AGING_DEFAULT = { min: 0, max: 99999, warn: 7, inactive: -1 };
+const LAST_CHANGE = Date.UTC(2026, 2, 10);
+
+function fmtChageDate(ms: number): string {
+  const d = new Date(ms);
+  return `${MONTHS_EN[d.getUTCMonth()]} ${String(d.getUTCDate()).padStart(2, '0')}, ${d.getUTCFullYear()}`;
+}
+const MONTHS_EN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+defineCommand('chage', {
+  summary: 'Muestra o cambia la caducidad de contraseñas',
+  usage: 'chage [-l] [-M DÍAS] [-m DÍAS] [-W DÍAS] [-I DÍAS] [-E FECHA] USUARIO',
+  category: 'usuarios',
+  level: 4,
+  options: [['-l', 'Lista la información de caducidad'], ['-M N', 'Días máximos de validez'], ['-m N', 'Días mínimos entre cambios'], ['-W N', 'Días de aviso'], ['-E fecha', 'Caduca la cuenta (AAAA-MM-DD, -1 nunca)'], ['-d 0', 'Obliga a cambiar la contraseña en el próximo acceso']],
+  examples: [['sudo chage -l ana', 'Ver caducidad'], ['sudo chage -M 90 ana', 'La contraseña caduca a los 90 días'], ['sudo chage -d 0 ana', 'Forzar cambio en el próximo login']],
+}, (c) => {
+  const o = parseOpts(c, c.args, { flags: 'l', values: 'MmWIEd' });
+  const name = o.rest[0] ?? c.sh.user;
+  const sys = c.sh.sys;
+  const u = sys.users.get(name);
+  if (!u) return c.fail(`user '${name}' does not exist`, 1);
+  const root = c.cred.name === 'root';
+  const changing = ['M', 'm', 'W', 'I', 'E', 'd'].some((k) => o.val(k) !== undefined);
+  if (changing) {
+    if (!root) return c.fail('Permission denied.', 1);
+    const ag = (u.aging ??= {});
+    const num = (k: string) => {
+      const v = o.val(k);
+      return v === undefined ? undefined : parseInt(v, 10);
+    };
+    if (num('M') !== undefined) ag.max = num('M');
+    if (num('m') !== undefined) ag.min = num('m');
+    if (num('W') !== undefined) ag.warn = num('W');
+    if (num('I') !== undefined) ag.inactive = num('I');
+    if (o.val('E') !== undefined) ag.expire = o.val('E') === '-1' ? undefined : Date.parse(o.val('E')!);
+    if (o.val('d') !== undefined) ag.lastChange = o.val('d') === '0' ? 0 : Date.parse(o.val('d')!);
+    return 0;
+  }
+  if (!o.has('l')) return c.fail('usage: chage [options] LOGIN', 2);
+  if (!root && name !== c.sh.user) return c.fail(`Permission denied.`, 1);
+  const ag = { ...AGING_DEFAULT, ...(u.aging ?? {}) };
+  const last = u.aging?.lastChange ?? LAST_CHANGE;
+  const must = last === 0;
+  const never = (v: string) => v;
+  const expires = must ? 'password must be changed' : ag.max >= 99999 ? never('never') : fmtChageDate(last + ag.max * DAY_MS);
+  const inactive = ag.inactive < 0 || ag.max >= 99999 ? 'never' : fmtChageDate(last + (ag.max + ag.inactive) * DAY_MS);
+  const accExp = u.aging?.expire ? fmtChageDate(u.aging.expire) : 'never';
+  c.out(
+    `Last password change\t\t\t\t\t: ${must ? 'password must be changed' : fmtChageDate(last)}\nPassword expires\t\t\t\t\t: ${expires}\nPassword inactive\t\t\t\t\t: ${inactive}\nAccount expires\t\t\t\t\t\t: ${accExp}\nMinimum number of days between password change\t\t: ${ag.min}\nMaximum number of days between password change\t\t: ${ag.max}\nNumber of days of warning before password expires\t: ${ag.warn}\n`,
+  );
+  return 0;
 });
 
 defineCommand('visudo', { summary: 'Edita el archivo sudoers de forma segura', usage: 'sudo visudo', category: 'permisos', sbin: true, level: 4 }, async (c) => {

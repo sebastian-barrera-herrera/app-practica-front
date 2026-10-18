@@ -177,7 +177,7 @@ export function httpFetch(sys: System, fs: VFS, rt: { random(): number }, url: s
     if (svc && (svc.name === 'nginx' || svc.name === 'apache2')) {
       if (scheme === 'https') return { ok: false, curlCode: 35, error: 'OpenSSL SSL_connect: SSL_ERROR_SYSCALL in connection to ' + host + ':' + port };
       let content: string | null = null;
-      const roots = svc.name === 'nginx' ? ['/var/www/html/index.nginx-debian.html', '/var/www/html/index.html'] : ['/var/www/html/index.html'];
+      const roots = svc.name === 'nginx' ? ['/var/www/html/index.html', '/var/www/html/index.nginx-debian.html'] : ['/var/www/html/index.html'];
       if (path === '/' || path === '/index.html') {
         for (const f of roots) {
           try {

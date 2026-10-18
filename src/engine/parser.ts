@@ -18,6 +18,7 @@ export type Part =
   | { t: 'dq'; parts: DqPart[] }
   | { t: 'param'; name: string; op?: string; arg?: Word }
   | { t: 'cmd'; src: string }
+  | { t: 'psub'; src: string } // <( comando )
   | { t: 'arith'; expr: string }
   | { t: 'tilde'; user: string }
   | { t: 'arr'; words: Word[] };
@@ -175,6 +176,8 @@ class Lexer {
         return true;
       }
     }
+    // <( … ) es sustitución de procesos: lo lee el lexer de palabras
+    if (c === '<' && s[this.i + 1] === '(') return false;
     if (three === '<<<') return this.op('<<<', 3);
     if (three === '&>>') return this.op('&>>', 3);
     if (three === '<<-') return this.heredocOp(true, 3);
@@ -295,6 +298,14 @@ class Lexer {
         parts.push({ t: 'arr', words });
         this.i = e + 1;
         break;
+      }
+      if (c === '<' && s[this.i + 1] === '(') {
+        const e = findMatching(s, this.i + 2, '(', ')');
+        if (e < 0) throw new ParseError('paréntesis sin cerrar', true);
+        flush();
+        parts.push({ t: 'psub', src: s.slice(this.i + 2, e) });
+        this.i = e + 1;
+        continue;
       }
       if (META.has(c)) break;
       if (c === '\\') {

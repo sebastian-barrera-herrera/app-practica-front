@@ -371,6 +371,27 @@ defineCommand(['env', 'printenv'], {
   return sub.runArgv(rest, c.io);
 });
 
+defineCommand('logger', {
+  summary: 'Escribe un mensaje en el registro del sistema (syslog)',
+  usage: 'logger [-t ETIQUETA] MENSAJE',
+  category: 'sistema',
+  level: 3,
+  options: [['-t TAG', 'Etiqueta que identifica al origen']],
+  examples: [['logger "Copia terminada"', 'Añade una línea a /var/log/syslog'], ['logger -t backup "OK"', 'Con etiqueta propia']],
+}, (c) => {
+  const o = parseOpts(c, c.args, { flags: 'is', values: 't' });
+  const msg = o.rest.join(' ');
+  if (!msg) return 0;
+  const tag = o.val('t') ?? c.sh.user;
+  const when = strftime('%b %e %H:%M:%S', c.sh.sys.clock.now);
+  try {
+    c.fs.writeFile('/var/log/syslog', `${when} ${c.sh.sys.hostname} ${tag}: ${msg}\n`, { append: true, cred: null });
+  } catch (e) {
+    return c.fsfail(e, '/var/log/syslog');
+  }
+  return 0;
+});
+
 defineCommand(['clear', 'reset'], { summary: 'Limpia la pantalla de la terminal', usage: 'clear', category: 'navegacion', level: 1, examples: [['clear', 'Limpia la pantalla (también Ctrl+L)']] }, (c) => {
   c.out('\x1b[2J\x1b[H');
 });

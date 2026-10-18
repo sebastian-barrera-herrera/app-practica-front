@@ -235,3 +235,25 @@ describe('persistencia', () => {
     expect(await out(t2, 'which tree')).toBe('/usr/bin/tree\n');
   });
 });
+
+describe('administración', () => {
+  test('logger escribe en syslog y chage guarda la caducidad', async () => {
+    const t = mk({ users: { ana: ['users'] } });
+    await sh(t, 'logger -t backup "copia lista"');
+    expect(await out(t, 'tail -n 1 /var/log/syslog')).toMatch(/dojo backup: copia lista\n$/);
+    expect((await sh(t, 'chage -M 10 ana')).err).toContain('Permission denied');
+    await sh(t, 'sudo chage -M 90 ana');
+    expect(await out(t, 'sudo chage -l ana')).toMatch(/Maximum number of days between password change\t\t: 90/);
+    expect(await out(t, 'sudo chage -l ana')).toMatch(/Password expires\t\t\t\t\t: Jun 08, 2026/);
+    expect(await out(t, 'sudo passwd -S ana')).toMatch(/^ana P 03\/10\/2026 0 90 7 -1/);
+  });
+
+  test('sshd -t valida la configuración', async () => {
+    const t = mk();
+    expect((await sh(t, 'sudo sshd -t')).status).toBe(0);
+    await sh(t, "sudo sed -i 's/^PermitRootLogin.*/PermitRootLogin quizas/' /etc/ssh/sshd_config");
+    const bad = await sh(t, 'sudo sshd -t');
+    expect(bad.status).toBe(255);
+    expect(bad.err).toContain('unsupported option');
+  });
+});
