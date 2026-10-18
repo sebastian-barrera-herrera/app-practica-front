@@ -351,7 +351,7 @@ defineCommand('systemctl', {
   const useColor = c.tty;
   const root = c.cred.name === 'root';
   if (!sub) {
-    return c.sh.dispatch(['systemctl', 'list-units', '--type=service'], c.io);
+    return c.sh.dispatch(['systemctl', 'list-units', ...(o.has('F') ? ['--failed'] : ['--type=service'])], c.io);
   }
   const mutating = ['start', 'stop', 'restart', 'reload', 'enable', 'disable', 'mask', 'unmask', 'daemon-reload', 'try-restart', 'reload-or-restart', 'kill'];
   if (mutating.includes(sub) && !root) {

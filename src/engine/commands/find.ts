@@ -120,8 +120,7 @@ function parseFind(c: Ctx, args: string[], gl: { maxdepth: number; mindepth: num
         c.out(`${String(n.ino).padStart(8)} ${String(Math.ceil(c.fs.sizeOf(n) / 1024)).padStart(4)} ${modeString(n.kind, n.mode)} ${String(n.nlink).padStart(2)} ${n.uid.padEnd(8)} ${n.gid.padEnd(8)} ${String(c.fs.sizeOf(n)).padStart(8)} ${lsDate(n.mtime, now)} ${x.path}\n`);
         return true;
       });
-      case '-delete': return act(async (x) => {
-        gl.depthFirst = true;
+      case '-delete': gl.depthFirst = true; return act(async (x) => {
         try {
           if (x.node.kind === 'dir') c.fs.rmdir(c.abs(x.path), c.cred);
           else c.fs.unlink(c.abs(x.path), c.cred);

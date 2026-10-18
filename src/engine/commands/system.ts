@@ -872,10 +872,10 @@ defineCommand(['top', 'htop'], {
 
 defineCommand('pgrep', {
   summary: 'Busca procesos por nombre',
-  usage: 'pgrep [-lfu] PATRÓN',
+  usage: 'pgrep [-lafu] PATRÓN',
   category: 'procesos',
   level: 2,
-  options: [['-l', 'Muestra también el nombre'], ['-f', 'Busca en la línea de comando completa'], ['-u USER', 'Solo de ese usuario'], ['-x', 'Coincidencia exacta']],
+  options: [['-l', 'Muestra también el nombre'], ['-a', 'Muestra la línea de comando completa'], ['-f', 'Busca en la línea de comando completa'], ['-u USER', 'Solo de ese usuario'], ['-x', 'Coincidencia exacta']],
   examples: [['pgrep -l ssh', 'PID y nombre de procesos ssh']],
 }, (c) => {
   const o = parseOpts(c, c.args, { flags: 'lfxia', values: 'u' });
@@ -888,7 +888,10 @@ defineCommand('pgrep', {
     const target = o.has('f') ? p.command : psCommandName(p.command);
     return o.has('x') ? target === pat : re.test(target);
   });
-  for (const p of found) c.out(o.has('l') ? `${p.pid} ${psCommandName(p.command)}\n` : `${p.pid}\n`);
+  for (const p of found) {
+    if (o.has('a')) c.out(`${p.pid} ${p.command}\n`);
+    else c.out(o.has('l') ? `${p.pid} ${psCommandName(p.command)}\n` : `${p.pid}\n`);
+  }
   return found.length ? 0 : 1;
 });
 

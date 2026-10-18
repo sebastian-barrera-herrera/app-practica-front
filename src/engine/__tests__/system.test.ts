@@ -12,6 +12,7 @@ describe('procesos', () => {
     expect(await out(t, 'ps')).toMatch(/PID TTY\s+TIME CMD\n\s*\d+ pts\/0\s+00:00:00 bash\n\s*\d+ pts\/0\s+00:00:00 ps\n/);
     expect(await out(t, 'ps -o pid,comm -p 1')).toMatch(/PID COMMAND\n\s*1 init/);
     expect(await out(t, 'pgrep -l sshd')).toMatch(/^\d+ sshd/);
+    expect(await out(t, 'pgrep -a cron')).toMatch(/^\d+ \/usr\/sbin\/cron/);
     const r = await sh(t, 'kill 1');
     expect(r.err).toContain('Operation not permitted');
     expect((await sh(t, 'kill 99999')).err).toContain('No such process');

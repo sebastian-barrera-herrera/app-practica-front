@@ -239,4 +239,13 @@ describe('permisos', () => {
     expect(await out(t, 'stat -c %a pd')).toBe('700\n');
     expect(await out(t, 'umask -S')).toBe('u=rwx,g=,o=\n');
   });
+  test('find -delete borra una sola vez y sin errores', async () => {
+    const t = mk();
+    await sh(t, 'mkdir -p p/tmp p/vacia && touch p/tmp/a.tmp p/tmp/b.tmp && echo k > p/keep.txt');
+    const r = await sh(t, "find p -name '*.tmp' -delete");
+    expect(r.err).toBe('');
+    expect((await out(t, 'find p')).trim().split('\n')).toEqual(['p', 'p/keep.txt', 'p/tmp', 'p/vacia']);
+    expect((await sh(t, 'find p -empty -delete')).err).toBe('');
+    expect((await out(t, 'find p')).trim().split('\n')).toEqual(['p', 'p/keep.txt']);
+  });
 });
