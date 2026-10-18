@@ -13,7 +13,7 @@ export type Check =
   | { t: 'owner'; path: string; user?: string; group?: string }
   | { t: 'link'; path: string; target?: string; hard?: boolean }
   | { t: 'output'; includes?: string | string[]; equals?: string; matches?: string; notIncludes?: string; stderr?: boolean; any?: boolean }
-  | { t: 'ran'; matches: string }
+  | { t: 'ran'; matches: string; min?: number }
   | { t: 'used'; cmd: string; flags?: string[] }
   | { t: 'env'; name: string; value?: string }
   | { t: 'alias'; name: string; value?: string }
@@ -42,7 +42,8 @@ export const owner = (path: string, user?: string, group?: string): Check => ({ 
 export const out = (includes: string | string[], o: Partial<Extract<Check, { t: 'output' }>> = {}): Check => ({ t: 'output', includes, ...o });
 export const outEq = (equals: string): Check => ({ t: 'output', equals });
 export const outRe = (matches: string): Check => ({ t: 'output', matches });
-export const ran = (matches: string): Check => ({ t: 'ran', matches });
+export const ran = (matches: string, min?: number): Check => ({ t: 'ran', matches, min });
+export const exitCode = (code: number): Check => ({ t: 'status', code });
 export const used = (cmd: string, flags?: string[]): Check => ({ t: 'used', cmd, flags });
 export const all = (...checks: Check[]): Check => ({ t: 'all', checks });
 export const any = (...checks: Check[]): Check => ({ t: 'any', checks });
@@ -130,7 +131,8 @@ export function evaluate(check: Check, term: Terminal): CheckResult {
     }
     case 'ran': {
       const re = new RegExp(check.matches);
-      return term.runs.some((r) => re.test(r.line)) ? ok : fail('Aún no has ejecutado el comando pedido');
+      const n = term.runs.filter((r) => re.test(r.line)).length;
+      return n >= (check.min ?? 1) ? ok : fail('Aún no has ejecutado el comando pedido');
     }
     case 'used': {
       const hit = term.runs.some((r) =>

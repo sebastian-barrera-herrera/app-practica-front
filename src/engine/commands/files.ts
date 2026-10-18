@@ -912,6 +912,9 @@ export function describeFile(c: Ctx, abs: string): string {
   if (content === '' && !l.size) return 'empty';
   if (content.startsWith('\x7fELF')) return 'ELF 64-bit LSB pie executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, BuildID[sha1]=' + hash32(abs).toString(16).padStart(8, '0') + 'a1b2c3d4e5f6, for GNU/Linux 3.2.0, stripped';
   if (content.startsWith('\x1f\x8b')) return 'gzip compressed data, from Unix, original size modulo 2^32 ' + (l.size ?? 0);
+  if (content.startsWith('BZh')) return 'bzip2 compressed data, block size = 900k';
+  if (content.startsWith('\xfd7zXZ')) return 'XZ compressed data, checksum CRC64';
+  if (content.startsWith('ustar')) return 'POSIX tar archive (GNU)';
   if (content.startsWith('PK')) return 'Zip archive data, at least v2.0 to extract';
   if (content.startsWith('\xff\xd8\xff')) return 'JPEG image data, JFIF standard 1.01, resolution (DPI), density 72x72, segment length 16, baseline, precision 8, 1920x1080, components 3';
   if (content.startsWith('\x89PNG')) return 'PNG image data, 800 x 600, 8-bit/color RGBA, non-interlaced';
