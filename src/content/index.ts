@@ -1,5 +1,7 @@
 import type { LevelDef, Lesson, WorldDef, Challenge, Step } from './types';
 import { w1 } from './worlds/w1';
+import { w2 } from './worlds/w2';
+import { w3 } from './worlds/w3';
 
 export const LEVELS: LevelDef[] = [
   { id: 'basico', title: 'Nivel Básico', subtitle: 'Cinturón blanco', color: '#22D3A6', emoji: '🥋' },
@@ -7,7 +9,7 @@ export const LEVELS: LevelDef[] = [
   { id: 'avanzado', title: 'Nivel Avanzado', subtitle: 'Cinturón negro', color: '#A78BFA', emoji: '⚫' },
 ];
 
-export const WORLDS: WorldDef[] = [w1];
+export const WORLDS: WorldDef[] = [w1, w2, w3];
 
 export const LESSONS: Lesson[] = WORLDS.flatMap((w) => w.lessons);
 

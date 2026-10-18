@@ -56,6 +56,11 @@ export const service = (name: string, o: { state?: 'active' | 'inactive' | 'fail
 export const userExists = (name: string, o: { groups?: string[]; shell?: string } = {}): Check => ({ t: 'user', name, exists: true, ...o });
 export const whoami = (user: string): Check => ({ t: 'whoami', user });
 export const procRunning = (matches: string, running = true): Check => ({ t: 'proc', matches, running });
+export const funcDefined = (name: string): Check => ({ t: 'func', name });
+export const jobState = (state: 'running' | 'stopped' | 'any'): Check => ({ t: 'job', state });
+export const groupExists = (name: string, o: { member?: string } = {}): Check => ({ t: 'group', name, exists: true, ...o });
+export const crontabHas = (includes: string, user?: string): Check => ({ t: 'crontab', includes, user });
+export const fileCount = (dir: string, count: number, cmp?: 'eq' | 'gte' | 'lte'): Check => ({ t: 'file-count', dir, count, cmp });
 
 export interface CheckResult {
   ok: boolean;
