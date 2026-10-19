@@ -1,4 +1,5 @@
-import type { LevelDef, Lesson, WorldDef, Challenge, Step } from './types';
+import type { AnyChallenge, CourseId, LevelDef, Lesson, Step, WorldDef } from './types';
+import { PY_WORLDS } from './py';
 import { w1 } from './worlds/w1';
 import { w2 } from './worlds/w2';
 import { w3 } from './worlds/w3';
@@ -18,18 +19,63 @@ export const LEVELS: LevelDef[] = [
   { id: 'avanzado', title: 'Nivel Avanzado', subtitle: 'Cinturón negro', color: '#A78BFA', emoji: '⚫' },
 ];
 
-export const WORLDS: WorldDef[] = [w1, w2, w3, w4, w5, w6, w7, w8, w9, w10, w11, w12];
+const LINUX_WORLDS: WorldDef[] = [w1, w2, w3, w4, w5, w6, w7, w8, w9, w10, w11, w12];
 
-export const LESSONS: Lesson[] = WORLDS.flatMap((w) => w.lessons);
+export interface CourseDef {
+  id: CourseId;
+  /** Nombre corto: «Linux», «Python». */
+  name: string;
+  emoji: string;
+  tagline: string;
+  /** Laboratorio de práctica libre. */
+  lab: { title: string; emoji: string; kind: 'terminal' | 'python'; blurb: string };
+  /** Sustantivos del curso para textos de la interfaz. */
+  nouns: { challenge: string; challenges: string; library: string; libraryBlurb: string; item: string };
+  worlds: WorldDef[];
+  levels: LevelDef[];
+  lessons: Lesson[];
+}
 
-export const lessonById = (id: string): Lesson | undefined => LESSONS.find((l) => l.id === id);
-export const worldById = (id: string): WorldDef | undefined => WORLDS.find((w) => w.id === id);
-export const worldOfLesson = (lessonId: string): WorldDef | undefined => WORLDS.find((w) => w.lessons.some((l) => l.id === lessonId));
+const mk = (c: Omit<CourseDef, 'lessons'>): CourseDef => ({ ...c, lessons: c.worlds.flatMap((w) => w.lessons) });
 
-export function allChallenges(): { challenge: Challenge; lessonId: string | null; worldId: string }[] {
-  const out: { challenge: Challenge; lessonId: string | null; worldId: string }[] = [];
-  for (const w of WORLDS) {
-    for (const l of w.lessons) for (const s of l.steps) if (s.type === 'practice') out.push({ challenge: s.challenge, lessonId: l.id, worldId: w.id });
+export const COURSES: Record<CourseId, CourseDef> = {
+  linux: mk({
+    id: 'linux',
+    name: 'Linux',
+    emoji: '🐧',
+    tagline: 'Terminal, archivos, permisos, redes y administración',
+    lab: { title: 'Terminal', emoji: '⌨️', kind: 'terminal', blurb: 'Un Linux simulado donde puedes escribir lo que quieras sin romper nada.' },
+    nouns: { challenge: 'reto de terminal', challenges: 'retos de terminal', library: 'Biblioteca de comandos', libraryBlurb: 'Ficha de cada comando: opciones y ejemplos', item: 'comando' },
+    worlds: LINUX_WORLDS,
+    levels: LEVELS,
+  }),
+  python: mk({
+    id: 'python',
+    name: 'Python',
+    emoji: '🐍',
+    tagline: 'De tu primer print() a clases, generadores y asyncio',
+    lab: { title: 'Editor', emoji: '🧪', kind: 'python', blurb: 'Escribe y ejecuta Python al instante: editor con salida y un REPL interactivo.' },
+    nouns: { challenge: 'reto de código', challenges: 'retos de código', library: 'Biblioteca de Python', libraryBlurb: 'Funciones, métodos y módulos con ejemplos', item: 'función' },
+    worlds: PY_WORLDS,
+    levels: LEVELS,
+  }),
+};
+
+export const COURSE_IDS: CourseId[] = ['linux', 'python'];
+export const COURSE_LIST: CourseDef[] = COURSE_IDS.map((id) => COURSES[id]);
+export const courseDef = (id: CourseId): CourseDef => COURSES[id];
+
+export const ALL_LESSONS: Lesson[] = COURSE_LIST.flatMap((c) => c.lessons);
+
+export const lessonById = (id: string): Lesson | undefined => ALL_LESSONS.find((l) => l.id === id);
+export const worldById = (id: string): WorldDef | undefined => COURSE_LIST.flatMap((c) => c.worlds).find((w) => w.id === id);
+export const worldOfLesson = (lessonId: string): WorldDef | undefined => COURSE_LIST.flatMap((c) => c.worlds).find((w) => w.lessons.some((l) => l.id === lessonId));
+export const courseOfLesson = (lessonId: string): CourseId | undefined => worldOfLesson(lessonId)?.course;
+
+export function allChallenges(course: CourseId): { challenge: AnyChallenge; lessonId: string | null; worldId: string }[] {
+  const out: { challenge: AnyChallenge; lessonId: string | null; worldId: string }[] = [];
+  for (const w of COURSES[course].worlds) {
+    for (const l of w.lessons) for (const s of l.steps) if (s.type === 'practice' || s.type === 'pypractice') out.push({ challenge: s.challenge, lessonId: l.id, worldId: w.id });
     if (w.boss) out.push({ challenge: w.boss, lessonId: null, worldId: w.id });
   }
   return out;

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, View, type ScrollViewInstance } from 'react-native';
+import { ScrollView, View, type ScrollViewInstance } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Terminal } from '@/engine/terminal';
 import type { DemoLine } from '@/content/types';
@@ -8,7 +8,7 @@ import { Button } from './Button';
 import { Inline } from './RichText';
 import { AnsiText } from './TerminalView';
 import { T } from './Text';
-import { colors, fonts, radius } from './theme';
+import { colors, fonts, radius, makeStyles } from './theme';
 
 interface Block {
   cmd: string;
@@ -113,11 +113,11 @@ export function DemoView({ lines, setup, intro, onComplete }: { lines: DemoLine[
   );
 }
 
-const styles = StyleSheet.create({
+const styles = makeStyles(() => ({
   term: { backgroundColor: colors.termBg, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, overflow: 'hidden' },
   titleBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, backgroundColor: colors.bg2, borderBottomWidth: 1, borderBottomColor: colors.line },
   dot: { width: 10, height: 10, borderRadius: 5, marginRight: 6 },
   note: { marginTop: 4, paddingLeft: 8, borderLeftWidth: 2, borderLeftColor: colors.cyan },
-});
+}));
 
 export { fonts };

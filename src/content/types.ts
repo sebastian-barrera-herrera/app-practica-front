@@ -1,5 +1,9 @@
 import type { Check } from '@/engine/check';
 import type { Files, WorldOptions } from '@/engine/world';
+import type { PyCheck, PyOptions } from '@/pyengine/types';
+
+/** Cursos disponibles. Cada curso tiene su ruta, su laboratorio, su progreso y su meta diaria. */
+export type CourseId = 'linux' | 'python';
 
 export type LevelId = 'basico' | 'intermedio' | 'avanzado';
 
@@ -46,7 +50,11 @@ export type Question =
   /** Rellenar huecos con opciones. */
   | { t: 'fill'; q: string; template: string; options: string[]; answers: string[]; why: string }
   /** Predecir la salida: la respuesta correcta se obtiene ejecutando `cmd` en `setup`. */
-  | { t: 'output'; q: string; cmd: string; setup?: WorldOptions; wrong: string[]; why: string };
+  | { t: 'output'; q: string; cmd: string; setup?: WorldOptions; wrong: string[]; why: string }
+  /** Python: escribir código que cumpla `check` (mini reto dentro del quiz). */
+  | { t: 'pycode'; q: string; starter?: string; setup?: PyOptions; check: PyCheck; solution: string; hint?: string; why: string }
+  /** Python: predecir la salida. La respuesta correcta se obtiene ejecutando `code` con el intérprete. */
+  | { t: 'pyout'; q: string; code: string; setup?: PyOptions; wrong: string[]; why: string };
 
 export type QuestionKind = Question['t'];
 
@@ -73,6 +81,29 @@ export interface Challenge {
   expectInitialFail?: boolean;
 }
 
+/** Reto de código Python: el alumno escribe un programa que cumple `check`. */
+export interface PyChallenge {
+  lang: 'py';
+  id: string;
+  prompt: string;
+  goal: string;
+  setup?: PyOptions;
+  /** Código inicial del editor. */
+  starter?: string;
+  check: PyCheck;
+  /** Solución de referencia (se verifica en los tests). */
+  solution: string;
+  hints: string[];
+  explain: string;
+  par?: number;
+  /** Funciones/conceptos que se practican aquí. */
+  commands?: string[];
+  expectInitialFail?: boolean;
+}
+
+export type AnyChallenge = Challenge | PyChallenge;
+export const isPyChallenge = (c: AnyChallenge): c is PyChallenge => (c as PyChallenge).lang === 'py';
+
 // ───────────────────────── pasos de lección ─────────────────────────
 
 export interface DemoLine {
@@ -87,7 +118,16 @@ export type Step =
   | { type: 'demo'; title?: string; lines: DemoLine[]; setup?: WorldOptions; intro?: string }
   | { type: 'illustration'; id: IllustrationId; title?: string; caption?: string }
   | { type: 'quiz'; q: Question }
-  | { type: 'practice'; challenge: Challenge };
+  | { type: 'practice'; challenge: Challenge }
+  /** Python: celdas de código que se ejecutan una a una en una sesión compartida (como un cuaderno). */
+  | { type: 'pydemo'; title?: string; intro?: string; setup?: PyOptions; cells: PyCell[] }
+  | { type: 'pypractice'; challenge: PyChallenge };
+
+export interface PyCell {
+  code: string;
+  /** Explicación bajo la salida. */
+  note?: string;
+}
 
 export interface Lesson {
   id: string;
@@ -104,6 +144,8 @@ export interface Lesson {
 
 export interface WorldDef {
   id: string;
+  /** Curso al que pertenece (por defecto 'linux'). */
+  course: CourseId;
   index: number;
   title: string;
   subtitle: string;
@@ -115,7 +157,7 @@ export interface WorldDef {
   /** Presentación narrativa de la zona. */
   intro: string;
   /** Misión final integradora (opcional). */
-  boss?: Challenge;
+  boss?: AnyChallenge;
 }
 
 export interface LevelDef {

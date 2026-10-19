@@ -1,35 +1,48 @@
-import { router } from 'expo-router';
-import React, { useMemo } from 'react';
+import { router, useLocalSearchParams } from 'expo-router';
+import React, { useMemo, useState } from 'react';
 import { FlatList, Pressable, View } from 'react-native';
-import { WORLDS } from '@/content';
-import { ACHIEVEMENTS } from '@/game/achievements';
+import { COURSE_LIST } from '@/content';
+import { allAchievements } from '@/game/achievements';
+import { flat } from '@/game/root';
 import { useGame } from '@/game/store';
 import { Card } from '@/ui/Card';
+import { Chip } from '@/ui/Chip';
+import { courseColor } from '@/ui/courseColors';
 import { ProgressBar } from '@/ui/ProgressBar';
 import { Screen } from '@/ui/Screen';
 import { T } from '@/ui/Text';
 import { colors } from '@/ui/theme';
 
+type Filter = 'all' | 'general' | 'linux' | 'python';
+
 export default function Achievements() {
-  const s = useGame();
+  const params = useLocalSearchParams<{ course?: string }>();
+  const root = useGame();
+  const [filter, setFilter] = useState<Filter>(params.course === 'linux' || params.course === 'python' ? params.course : 'all');
   const list = useMemo(() => {
-    const all = ACHIEVEMENTS(WORLDS);
-    const ctx = { worlds: WORLDS, levels: [] };
+    const all = allAchievements(COURSE_LIST).filter((a) => (filter === 'all' ? true : filter === 'general' ? !a.course : a.course === filter));
     return all
-      .map((a) => ({ a, at: s.achievements[a.id], p: s.achievements[a.id] ? 1 : a.progress ? Math.min(1, a.progress(s, ctx)) : 0 }))
+      .map((a) => ({ a, at: root.achievements[a.id], p: root.achievements[a.id] ? 1 : a.progress ? Math.min(1, a.progress(flat(root, a.course ?? root.active), root)) : 0 }))
       .sort((x, y) => (x.at ? 0 : 1) - (y.at ? 0 : 1) || (y.at ?? 0) - (x.at ?? 0) || y.p - x.p);
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- depende solo de las porciones relevantes del estado
-  }, [s.achievements, s.lessons, s.stats, s.xp, s.streak, s.exams]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- depende solo de las porciones relevantes del estado
+  }, [root.achievements, root.courses, root.xp, root.streak, root.goalDays, filter]);
   const got = list.filter((x) => x.at).length;
 
   return (
     <Screen edges={['top', 'bottom']}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingTop: 8, paddingBottom: 12 }}>
-        <Pressable onPress={() => router.back()} hitSlop={12}><T style={{ fontSize: 22 }} color={colors.dim}>←</T></Pressable>
+        <Pressable onPress={() => router.back()} hitSlop={12} accessibilityLabel="Volver"><T style={{ fontSize: 22 }} color={colors.dim}>←</T></Pressable>
         <View style={{ flex: 1 }}>
           <T v="h1">Logros</T>
           <T v="tiny" color={colors.dim}>{got} de {list.length} desbloqueados</T>
         </View>
+      </View>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+        <Chip label="Todos" active={filter === 'all'} onPress={() => setFilter('all')} />
+        <Chip label="⭐ General" active={filter === 'general'} color={colors.amber} onPress={() => setFilter('general')} />
+        {COURSE_LIST.map((c) => (
+          <Chip key={c.id} label={`${c.emoji} ${c.name}`} active={filter === c.id} color={courseColor(c.id)} onPress={() => setFilter(c.id)} />
+        ))}
       </View>
       <ProgressBar value={got / Math.max(1, list.length)} color={colors.amber} height={10} style={{ marginBottom: 12 }} />
       <FlatList
@@ -44,6 +57,7 @@ export default function Achievements() {
                 <T style={{ fontSize: 28, opacity: at ? 1 : 0.35 }}>{at ? a.emoji : '🔒'}</T>
               </View>
               <View style={{ flex: 1, gap: 2 }}>
+                {a.course ? <T v="tiny" bold color={courseColor(a.course)}>{COURSE_LIST.find((c) => c.id === a.course)?.name.toUpperCase()}</T> : null}
                 <T v="h3">{a.title}</T>
                 <T v="small" color={colors.dim}>{a.desc}</T>
                 {!at && a.progress ? <ProgressBar value={p} color={colors.cyan} height={6} style={{ marginTop: 4 }} /> : null}

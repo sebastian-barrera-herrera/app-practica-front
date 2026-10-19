@@ -1,8 +1,10 @@
 import { evaluate } from '@/engine/check';
 import { REGISTRY } from '@/engine/registry';
 import { Terminal } from '@/engine/terminal';
-import { WORLDS, allChallenges } from '../index';
+import { COURSES, COURSE_LIST, allChallenges } from '../index';
 import type { Question } from '../types';
+
+const WORLDS = COURSES.linux.worlds;
 
 declare const __dirname: string;
 declare const require: (m: string) => any;
@@ -53,7 +55,23 @@ describe('ilustraciones', () => {
   });
 });
 
-describe('estructura del contenido', () => {
+describe('cursos', () => {
+  test('los ids de lecciones y zonas son únicos entre todos los cursos', () => {
+    const ids = new Set<string>();
+    for (const c of COURSE_LIST)
+      for (const w of c.worlds) {
+        expect(w.course).toBe(c.id);
+        expect(ids.has(w.id)).toBe(false);
+        ids.add(w.id);
+        for (const l of w.lessons) {
+          expect(ids.has(l.id)).toBe(false);
+          ids.add(l.id);
+        }
+      }
+  });
+});
+
+describe('estructura del contenido (Linux)', () => {
   test('ids únicos y metadatos válidos', () => {
     const ids = new Set<string>();
     for (const w of WORLDS) {
@@ -73,7 +91,7 @@ describe('estructura del contenido', () => {
 });
 
 describe('retos de terminal', () => {
-  const all = allChallenges();
+  const all = allChallenges('linux');
   test.each(all.map((x) => [x.challenge.id, x]))('%s: la solución completa el reto', async (_id, x: any) => {
     const ch = x.challenge;
     const term = mkTerm(ch.setup);
@@ -88,7 +106,7 @@ describe('retos de terminal', () => {
   });
 });
 
-describe('preguntas', () => {
+describe('preguntas (Linux)', () => {
   const qs: { id: string; q: Question }[] = [];
   for (const w of WORLDS)
     for (const l of w.lessons)

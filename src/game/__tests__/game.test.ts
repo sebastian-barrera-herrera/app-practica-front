@@ -1,5 +1,6 @@
-import { WORLDS, LEVELS } from '@/content';
-import { addXp, finishLesson, initialState, lessonUnlocked, nextLesson, worldUnlocked, unlockAchievements, answer, recordExam, type Ctx } from '../progress';
+import { COURSES } from '@/content';
+import { addXp, finishLesson, initialState, lessonUnlocked, nextLesson, worldUnlocked, answer, recordExam } from '../progress';
+import { addStudySeconds, dayComplete, flat, goalStreak, hasProgress, initialRoot, migrateRoot, unflat, unlockAchievements, withCourse } from '../root';
 import { emptyStreak, touchStreak, dayKey, streakAlive } from '../streak';
 import { review, dueItems, mastery, INTERVALS, DAY } from '../srs';
 import { levelFromXp, levelProgress, xpForLevel, starsFor, lessonXp } from '../xp';
@@ -7,7 +8,8 @@ import { levelFromXp, levelProgress, xpForLevel, starsFor, lessonXp } from '../x
 import { blitzPool, dailyChallenge, learnedQuestions, reviewSession, shouldOfferSurprise, surpriseSession } from '../sessions';
 import { certExam, worldExam } from '../exams';
 
-const ctx: Ctx = { worlds: WORLDS, levels: LEVELS };
+const LINUX = COURSES.linux;
+const WORLDS = LINUX.worlds;
 const T0 = new Date(2026, 2, 14, 12, 0, 0).getTime();
 
 describe('xp y niveles', () => {
@@ -77,16 +79,17 @@ describe('progreso', () => {
     expect(worldUnlocked(s, WORLDS, 0)).toBe(true);
     expect(lessonUnlocked(s, WORLDS, 0, 0)).toBe(true);
     expect(lessonUnlocked(s, WORLDS, 0, 1)).toBe(false);
-    const r = finishLesson(s, { lessonId: 'w1-1', quizTotal: 6, quizFirstTry: 6, practices: 2, hintsUsed: 0 }, T0, ctx);
+    const r = finishLesson(s, { lessonId: 'w1-1', quizTotal: 6, quizFirstTry: 6, practices: 2, hintsUsed: 0 }, T0);
     expect(r.stars).toBe(3);
     expect(r.xp.total).toBeGreaterThan(40);
     expect(r.state.lessons['w1-1'].done).toBe(true);
     expect(lessonUnlocked(r.state, WORLDS, 0, 1)).toBe(true);
-    expect(r.newAchievements.map((a) => a.id)).toEqual(expect.arrayContaining(['first-step', 'perfect']));
+    const ach = unlockAchievements(unflat(initialRoot(), 'linux', r.state), T0, [LINUX]);
+    expect(ach.unlocked.map((a) => a.id)).toEqual(expect.arrayContaining(['linux:first-step', 'linux:perfect']));
     expect(r.state.streak.current).toBe(1);
     expect(nextLesson(r.state, WORLDS)?.lessonIndex).toBe(1);
     // repetir da menos xp
-    const again = finishLesson(r.state, { lessonId: 'w1-1', quizTotal: 6, quizFirstTry: 6, practices: 2, hintsUsed: 0 }, T0 + 1000, ctx);
+    const again = finishLesson(r.state, { lessonId: 'w1-1', quizTotal: 6, quizFirstTry: 6, practices: 2, hintsUsed: 0 }, T0 + 1000);
     expect(again.xp.total).toBeLessThan(r.xp.total);
     expect(again.firstTime).toBe(false);
   });
@@ -101,8 +104,8 @@ describe('progreso', () => {
     s = recordExam(s, 'w1', 0.9, 0.7, T0);
     expect(s.exams.w1.passed).toBe(true);
     expect(s.stats.examsPassed).toBe(1);
-    const u = unlockAchievements(s, T0, ctx);
-    expect(u.unlocked.map((a) => a.id)).toContain('exam-pass');
+    const u = unlockAchievements(unflat(initialRoot(), 'linux', s), T0, [LINUX]);
+    expect(u.unlocked.map((a) => a.id)).toContain('linux:exam-pass');
     const x = addXp(s, 120, T0);
     expect(x.levelUp).toBe(2);
   });
@@ -111,32 +114,110 @@ describe('progreso', () => {
 describe('sesiones', () => {
   test('repaso, sorpresa, blitz, diario', () => {
     let s = initialState();
-    const base = learnedQuestions(s);
+    const base = learnedQuestions(s, LINUX);
     expect(base.length).toBeGreaterThan(0);
-    const r0 = reviewSession(s, T0);
+    const r0 = reviewSession(s, T0, LINUX);
     expect(r0.items.length).toBeGreaterThan(0);
     expect(r0.fresh).toBe(true);
     s = answer(s, base[0].id, false, T0);
     s = answer(s, base[1].id, false, T0);
     s = answer(s, base[2].id, false, T0);
-    const r1 = reviewSession(s, T0 + 3600000);
+    const r1 = reviewSession(s, T0 + 3600000, LINUX);
     expect(r1.fresh).toBe(false);
     expect(r1.due).toBe(3);
-    expect(surpriseSession(s, T0).length).toBe(5);
-    expect(blitzPool(s, 'all').length).toBeGreaterThan(5);
-    const d = dailyChallenge(s, T0);
+    expect(surpriseSession(s, T0, LINUX).length).toBe(5);
+    expect(blitzPool(s, 'all', LINUX).length).toBeGreaterThan(5);
+    const d = dailyChallenge(s, T0, LINUX)!;
     expect(d.challenge.id).toBeTruthy();
-    expect(dailyChallenge(s, T0).challenge.id).toBe(d.challenge.id);
+    expect(dailyChallenge(s, T0, LINUX)!.challenge.id).toBe(d.challenge.id);
     expect(shouldOfferSurprise(s, T0)).toBe(false);
   });
 
   test('exámenes', () => {
     const w = WORLDS[0];
-    const e = worldExam(w, 'x');
+    const e = worldExam(LINUX, w, 'x');
     expect(e.questions.length).toBeGreaterThan(5);
     expect(e.challenges.length).toBe(1);
-    const c = certExam('basico', 'x');
+    const c = certExam(LINUX, 'basico', 'x');
     expect(c.questions.length).toBeGreaterThan(8);
     expect(c.id).toBe('cert-basico');
+  });
+});
+
+
+describe('estado raíz y multi-curso', () => {
+  test('vista plana por curso y logros por curso', () => {
+    let root = initialRoot();
+    const r = withCourse(root, 'linux', (s) => finishLesson(s, { lessonId: 'w1-1', quizTotal: 4, quizFirstTry: 4, practices: 1, hintsUsed: 0 }, T0));
+    root = r.root;
+    expect(flat(root, 'linux').lessons['w1-1'].done).toBe(true);
+    expect(flat(root, 'python').lessons['w1-1']).toBeUndefined();
+    // el XP y la racha son globales
+    expect(flat(root, 'python').xp).toBe(root.xp);
+    expect(root.xp).toBeGreaterThan(0);
+    const u = unlockAchievements(root, T0, [LINUX, COURSES.python]);
+    const ids = u.unlocked.map((a) => a.id);
+    expect(ids).toContain('linux:first-step');
+    expect(ids).not.toContain('python:first-step');
+    expect(hasProgress(root)).toBe(true);
+    expect(hasProgress(initialRoot())).toBe(false);
+  });
+
+  test('tiempo de estudio, meta diaria y racha de metas', () => {
+    let root = initialRoot();
+    root = { ...root, settings: { ...root.settings, goalMinutes: { linux: 1, python: 1 } } };
+    const a = addStudySeconds(root, 'linux', 30, T0);
+    expect(a.reached).toBe(false);
+    const b = addStudySeconds(a.root, 'linux', 40, T0);
+    expect(b.reached).toBe(true);
+    expect(b.bonusXp).toBeGreaterThan(0);
+    expect(dayComplete(b.root, dayKey(T0))).toBe(false); // falta Python
+    // no repite el bono el mismo día
+    const again = addStudySeconds(b.root, 'linux', 40, T0 + 1000);
+    expect(again.bonusXp).toBe(0);
+    const c = addStudySeconds(b.root, 'python', 61, T0);
+    expect(c.dayDone).toBe(true);
+    expect(goalStreak(c.root, T0).current).toBe(1);
+    // días consecutivos
+    let r2 = c.root;
+    for (const n of [1, 2]) {
+      r2 = addStudySeconds(r2, 'linux', 61, T0 + n * DAY).root;
+      r2 = addStudySeconds(r2, 'python', 61, T0 + n * DAY).root;
+    }
+    expect(goalStreak(r2, T0 + 2 * DAY).current).toBe(3);
+    // si hoy aún no está completo, la racha se mide desde ayer
+    expect(goalStreak(r2, T0 + 3 * DAY).current).toBe(3);
+    expect(goalStreak(r2, T0 + 4 * DAY).current).toBe(0);
+  });
+
+  test('migración desde el estado de un solo curso (v1)', () => {
+    const v1 = {
+      xp: 120,
+      streak: { current: 2, best: 4, lastDay: '2026-03-13', freezes: 1 },
+      dailyXp: {},
+      lessons: { 'w1-1': { done: true, stars: 3, bestAccuracy: 1, plays: 1 } },
+      challenges: {},
+      exams: {},
+      srs: {},
+      achievements: { 'first-step': 1, 'world-w1': 2, 'streak-3': 3 },
+      stats: { questions: 5 },
+      settings: { name: 'Seb', onboarded: true },
+      surprise: { lastShown: 0, scheduledUntil: 0 },
+      daily: { day: '', done: false },
+      sandbox: null,
+      seenCommands: {},
+    };
+    const root = migrateRoot(v1);
+    expect(root.courses.linux.lessons['w1-1'].done).toBe(true);
+    expect(root.courses.python.lessons).toEqual({});
+    expect(root.achievements['linux:first-step']).toBe(1);
+    expect(root.achievements['linux:world-w1']).toBe(2);
+    expect(root.achievements['streak-3']).toBe(3);
+    expect(root.settings.name).toBe('Seb');
+    expect(root.settings.goalMinutes).toEqual({ linux: 60, python: 60 });
+    expect(root.settings.reminders.times.length).toBeGreaterThan(0);
+    // idempotente
+    expect(migrateRoot(root).courses.linux.lessons['w1-1'].done).toBe(true);
+    expect(migrateRoot(undefined).active).toBe('linux');
   });
 });

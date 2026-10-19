@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown, SlideInDown, ZoomIn } from 'react-native-reanimated';
 import { evaluate } from '@/engine/check';
 import { Terminal } from '@/engine/terminal';
@@ -10,7 +10,7 @@ import { Button } from './Button';
 import { Chip } from './Chip';
 import { CodeBlock, Inline } from './RichText';
 import { T } from './Text';
-import { colors, fonts, radius } from './theme';
+import { colors, fonts, radius, makeStyles } from './theme';
 
 export interface Result {
   correct: boolean;
@@ -67,6 +67,9 @@ export function QuestionView({ q, seed, mode = 'lesson', onDone, continueLabel =
       case 'match': return <Match q={q} seed={seed} locked={!!checked} setReady={setReady} getRef={getAnswerRef} />;
       case 'fill': return <Fill q={q} seed={seed} locked={!!checked} setReady={setReady} getRef={getAnswerRef} />;
       case 'output': return <Output q={q} seed={seed} locked={!!checked} setReady={setReady} getRef={getAnswerRef} />;
+      case 'pycode':
+      case 'pyout':
+        return null;
     }
   })();
 
@@ -94,7 +97,7 @@ export function QuestionView({ q, seed, mode = 'lesson', onDone, continueLabel =
           <Button label="Comprobar" disabled={!ready} onPress={check} />
         </View>
       ) : (
-        <Animated.View entering={SlideInDown.duration(260)} style={[styles.feedback, { backgroundColor: checked.correct ? '#0F3B2C' : '#43202A', borderTopColor: checked.correct ? colors.green : colors.rose }]}>
+        <Animated.View entering={SlideInDown.duration(260)} style={[styles.feedback, { backgroundColor: checked.correct ? colors.okBg : colors.badBg, borderTopColor: checked.correct ? colors.green : colors.rose }]}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
             <Animated.View entering={ZoomIn.delay(80)}>
               <T style={{ fontSize: 28 }}>{checked.correct ? '✅' : '❌'}</T>
@@ -128,6 +131,8 @@ function describeCorrect(q: Question): string | null {
     case 'fill': return q.answers.join(' · ');
     case 'match': return null;
     case 'output': return null;
+    case 'pycode': return q.solution;
+    case 'pyout': return null;
   }
 }
 
@@ -398,7 +403,7 @@ function Output({ q, seed, locked, setReady, getRef }: SubProps & { q: Extract<Q
   );
 }
 
-const styles = StyleSheet.create({
+const styles = makeStyles(() => ({
   option: { paddingVertical: 14, paddingHorizontal: 16, borderRadius: radius.md, borderWidth: 2 },
   feedback: { padding: 16, gap: 12, borderTopWidth: 3 },
   cmdBox: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.termBg, borderRadius: radius.md, borderWidth: 1, borderColor: colors.line, paddingHorizontal: 14, paddingVertical: 4 },
@@ -409,6 +414,6 @@ const styles = StyleSheet.create({
   codeLine: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', padding: 14, borderRadius: radius.md, backgroundColor: colors.termBg, borderWidth: 1, borderColor: colors.line, gap: 2 },
   blank: { minWidth: 56, minHeight: 34, paddingHorizontal: 8, borderRadius: 8, borderWidth: 1.5, borderStyle: 'dashed', borderColor: colors.faint, alignItems: 'center', justifyContent: 'center', marginHorizontal: 4 },
   matchCell: { minHeight: 54, paddingHorizontal: 10, paddingVertical: 10, borderRadius: radius.md, backgroundColor: colors.card, borderWidth: 2, borderColor: colors.line, justifyContent: 'center' },
-});
+}));
 
 export { Chip };

@@ -18,7 +18,8 @@ export const CATEGORY_LABEL: Record<Category, string> = {
 };
 
 export const LEVEL_LABEL = ['', 'Básico', 'Intermedio', 'Avanzado', 'Experto'];
-export const LEVEL_COLOR = ['', colors.mint, colors.cyan, colors.violet, colors.rose];
+/** Color por nivel (se evalúa al leer, para respetar el tema activo). */
+export const levelColor = (level: number) => ['', colors.mint, colors.cyan, colors.violet, colors.rose][level] ?? colors.mint;
 
 /** Un comando por entrada (los alias comparten implementación). */
 export function libraryEntries(): { def: CommandDef; aliases: string[] }[] {

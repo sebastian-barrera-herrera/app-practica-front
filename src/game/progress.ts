@@ -2,8 +2,7 @@
  * Estado de progreso del jugador y transiciones puras (testeables).
  * La store de zustand solo envuelve estas funciones y persiste el resultado.
  */
-import type { LevelDef, WorldDef } from '@/content/types';
-import { ACHIEVEMENTS, type Achievement } from './achievements';
+import type { CourseId, WorldDef } from '@/content/types';
 import { dayKey, emptyStreak, touchStreak, type Streak } from './streak';
 import { review, type SrsItem } from './srs';
 import { levelFromXp, lessonXp, starsFor, type XpBreakdown } from './xp';
@@ -29,14 +28,41 @@ export interface ExamRecord {
   lastAt?: number;
 }
 
+export type SoundId = 'campana' | 'gota' | 'zen' | 'pulso' | 'arcade' | 'silencio';
+export type ThemePref = 'system' | 'light' | 'dark';
+
+export interface ReminderSettings {
+  enabled: boolean;
+  /** Horas del recordatorio diario, "HH:MM" (24 h). */
+  times: string[];
+  /** Días de la semana activos, 0 = domingo … 6 = sábado. */
+  days: boolean[];
+  sound: SoundId;
+  vibrate: boolean;
+  /** No avisar si ya cumpliste la meta de hoy. */
+  skipIfDone: boolean;
+  /** Avisos suaves tras varios días sin entrar. */
+  comeback: boolean;
+}
+
 export interface Settings {
   name: string;
+  /** Meta de XP diaria (secundaria; la meta principal es el tiempo). */
   dailyGoal: number;
   haptics: boolean;
+  /** Efectos de sonido dentro de la app. */
+  sfx: boolean;
+  theme: ThemePref;
+  /** Minutos diarios de práctica por curso. */
+  goalMinutes: Record<CourseId, number>;
+  /** Cursos que cuentan para la meta diaria. */
+  courseOn: Record<CourseId, boolean>;
+  reminders: ReminderSettings;
   surpriseEnabled: boolean;
   surprisePerWeek: number;
   windowStart: number;
   windowEnd: number;
+  surpriseSound: SoundId;
   fontScale: number;
   unlockAll: boolean;
   onboarded: boolean;
@@ -62,6 +88,10 @@ export interface Stats {
   examsPassed: number;
 }
 
+/**
+ * Estado de juego «plano» de UN curso: lo global (xp, racha, logros, ajustes…) más el progreso del curso.
+ * La store guarda un estado raíz con un trozo por curso (`root.ts`) y construye esta vista para operar.
+ */
 export interface ProgressState {
   xp: number;
   streak: Streak;
@@ -79,14 +109,30 @@ export interface ProgressState {
   seenCommands: Record<string, number>;
 }
 
+export const defaultReminders = (): ReminderSettings => ({
+  enabled: true,
+  times: ['08:00', '19:30'],
+  days: [true, true, true, true, true, true, true],
+  sound: 'campana',
+  vibrate: true,
+  skipIfDone: true,
+  comeback: true,
+});
+
 export const defaultSettings = (): Settings => ({
   name: '',
   dailyGoal: 50,
   haptics: true,
-  surpriseEnabled: false,
+  sfx: true,
+  theme: 'system',
+  goalMinutes: { linux: 60, python: 60 },
+  courseOn: { linux: true, python: true },
+  reminders: defaultReminders(),
+  surpriseEnabled: true,
   surprisePerWeek: 4,
   windowStart: 10,
   windowEnd: 21,
+  surpriseSound: 'arcade',
   fontScale: 1,
   unlockAll: false,
   onboarded: false,
@@ -114,11 +160,6 @@ export const initialState = (): ProgressState => ({
   sandbox: null,
   seenCommands: {},
 });
-
-export interface Ctx {
-  worlds: WorldDef[];
-  levels: LevelDef[];
-}
 
 // ───────────────────────── consultas ─────────────────────────
 
@@ -192,12 +233,11 @@ export interface LessonOutcome {
   accuracy: number;
   firstTime: boolean;
   levelUp: number | null;
-  newAchievements: Achievement[];
   streak: Streak;
   usedFreeze: boolean;
 }
 
-export function finishLesson(s: ProgressState, r: LessonResult, now: number, ctx: Ctx): LessonOutcome {
+export function finishLesson(s: ProgressState, r: LessonResult, now: number): LessonOutcome {
   const prev = s.lessons[r.lessonId];
   const accuracy = r.quizTotal ? r.quizFirstTry / r.quizTotal : 1;
   const stars = starsFor(accuracy, r.hintsUsed);
@@ -215,8 +255,7 @@ export function finishLesson(s: ProgressState, r: LessonResult, now: number, ctx
   const added = addXp(state, xp.total, now);
   state = added.state;
   const t = touchStreak(prevStreak, now);
-  const ach = unlockAchievements(state, now, ctx);
-  return { state: ach.state, xp, stars, accuracy, firstTime, levelUp: added.levelUp, newAchievements: ach.unlocked, streak: state.streak, usedFreeze: t.usedFreeze };
+  return { state, xp, stars, accuracy, firstTime, levelUp: added.levelUp, streak: state.streak, usedFreeze: t.usedFreeze };
 }
 
 export function answer(s: ProgressState, itemId: string, correct: boolean, now: number, opts: { review?: boolean } = {}): ProgressState {
@@ -259,26 +298,4 @@ export function recordExam(s: ProgressState, id: string, score: number, passMark
     exams: { ...s.exams, [id]: { best: Math.max(prev?.best ?? 0, score), passed: passed || !!prev?.passed, attempts: (prev?.attempts ?? 0) + 1, lastAt: now } },
     stats: { ...s.stats, examsPassed: s.stats.examsPassed + (passed && !prev?.passed ? 1 : 0) },
   };
-}
-
-export function unlockAchievements(s: ProgressState, now: number, ctx: Ctx): { state: ProgressState; unlocked: Achievement[] } {
-  const unlocked: Achievement[] = [];
-  let state = s;
-  const list = ACHIEVEMENTS(ctx.worlds);
-  // las recompensas de XP pueden desbloquear otros logros: repetir hasta estabilizar
-  for (let round = 0; round < 4; round++) {
-    const ach = { ...state.achievements };
-    const batch: Achievement[] = [];
-    for (const a of list) {
-      if (ach[a.id]) continue;
-      if (a.check(state, ctx)) {
-        ach[a.id] = now;
-        batch.push(a);
-      }
-    }
-    if (!batch.length) break;
-    unlocked.push(...batch);
-    state = { ...state, achievements: ach, xp: state.xp + batch.reduce((n, a) => n + a.xp, 0) };
-  }
-  return { state, unlocked };
 }

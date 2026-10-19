@@ -3,6 +3,7 @@ import React, { useEffect } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { REGISTRY } from '@/engine';
 import { useGame } from '@/game/store';
+import { useStudyContext } from '@/lib/studyClock';
 import { Button } from '@/ui/Button';
 import { Card } from '@/ui/Card';
 import { Chip } from '@/ui/Chip';
@@ -10,16 +11,17 @@ import { CodeBlock } from '@/ui/RichText';
 import { Screen } from '@/ui/Screen';
 import { T } from '@/ui/Text';
 import { colors, fonts } from '@/ui/theme';
-import { CATEGORY_LABEL, LEVEL_COLOR, LEVEL_LABEL } from '@/lib/library';
+import { CATEGORY_LABEL, levelColor, LEVEL_LABEL } from '@/lib/library';
 
 export default function CommandSheet() {
+  useStudyContext('linux');
   const { cmd } = useLocalSearchParams<{ cmd: string }>();
   const def = cmd ? REGISTRY.get(cmd) : undefined;
   const aliases = def ? [...REGISTRY.values()].filter((d) => d.run === def.run && d.name !== def.name).map((d) => d.name) : [];
-  const practiced = useGame((s) => (cmd ? s.seenCommands[cmd] ?? 0 : 0));
+  const practiced = useGame((s) => (cmd ? s.courses.linux.seenCommands[cmd] ?? 0 : 0));
 
   useEffect(() => {
-    if (def) useGame.getState().bump({ libraryViews: 1 });
+    if (def) useGame.getState().bump('linux', { libraryViews: 1 });
   }, [def]);
 
   return (
@@ -40,7 +42,7 @@ export default function CommandSheet() {
             <T color={colors.dim}>{def.summary}</T>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 }}>
               <Chip label={CATEGORY_LABEL[def.category]} color={colors.cyan} />
-              {def.level ? <Chip label={LEVEL_LABEL[def.level]} color={LEVEL_COLOR[def.level]} /> : null}
+              {def.level ? <Chip label={LEVEL_LABEL[def.level]} color={levelColor(def.level)} /> : null}
               {def.builtin ? <Chip label="builtin" color={colors.violet} /> : null}
               {def.package ? <Chip label={`apt: ${def.package}`} color={colors.amber} mono /> : null}
               {practiced > 0 ? <Chip label={`usado ${practiced}×`} color={colors.green} /> : null}

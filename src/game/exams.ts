@@ -1,6 +1,6 @@
-import { WORLDS } from '@/content';
+import type { CourseDef } from '@/content';
 import { challengesOfLevel, challengesOfWorld, pickVaried, questionsOfLevel, questionsOfWorld, type QItem } from '@/content/pool';
-import type { Challenge, LevelId, WorldDef } from '@/content/types';
+import type { AnyChallenge, LevelId, WorldDef } from '@/content/types';
 import { seededShuffle } from '@/lib/cmdnorm';
 
 export interface ExamPlan {
@@ -10,7 +10,7 @@ export interface ExamPlan {
   emoji: string;
   color: string;
   questions: QItem[];
-  challenges: Challenge[];
+  challenges: AnyChallenge[];
   /** Fracción mínima para aprobar. */
   passMark: number;
   /** Tiempo total en segundos (0 = sin límite). */
@@ -18,9 +18,9 @@ export interface ExamPlan {
   bonusXp: number;
 }
 
-export function worldExam(world: WorldDef, seed: string): ExamPlan {
-  const questions = pickVaried(questionsOfWorld(world.id), 12, seed);
-  const chs = seededShuffle(challengesOfWorld(world.id), seed).slice(0, 1);
+export function worldExam(course: CourseDef, world: WorldDef, seed: string): ExamPlan {
+  const questions = pickVaried(questionsOfWorld(course.id, world.id), 12, seed);
+  const chs = seededShuffle(challengesOfWorld(course.id, world.id), seed).slice(0, 1);
   return {
     id: `exam-${world.id}`,
     title: `Examen: ${world.title}`,
@@ -41,13 +41,13 @@ const CERT_META: Record<LevelId, { title: string; emoji: string; color: string }
   avanzado: { title: 'Certificación Avanzada', emoji: '🥇', color: '#A78BFA' },
 };
 
-export function certExam(level: LevelId, seed: string): ExamPlan {
+export function certExam(course: CourseDef, level: LevelId, seed: string): ExamPlan {
   const m = CERT_META[level];
-  const questions = pickVaried(questionsOfLevel(level), 24, seed);
-  const chs = seededShuffle(challengesOfLevel(level), seed).slice(0, 2);
+  const questions = pickVaried(questionsOfLevel(course.id, level), 24, seed);
+  const chs = seededShuffle(challengesOfLevel(course.id, level), seed).slice(0, 2);
   return {
     id: `cert-${level}`,
-    title: m.title,
+    title: `${m.title} de ${course.name}`,
     subtitle: `${questions.length} preguntas + ${chs.length} retos · 75 % para aprobar`,
     emoji: m.emoji,
     color: m.color,
@@ -59,6 +59,6 @@ export function certExam(level: LevelId, seed: string): ExamPlan {
   };
 }
 
-export function levelWorlds(level: LevelId): WorldDef[] {
-  return WORLDS.filter((w) => w.level === level);
+export function levelWorlds(course: CourseDef, level: LevelId): WorldDef[] {
+  return course.worlds.filter((w) => w.level === level);
 }

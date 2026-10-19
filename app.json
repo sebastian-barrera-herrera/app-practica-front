@@ -1,19 +1,19 @@
 {
   "expo": {
-    "name": "Linux Dojo",
-    "slug": "linux-dojo",
-    "scheme": "linuxdojo",
-    "version": "1.0.0",
+    "name": "Dev Dojo",
+    "slug": "dev-dojo",
+    "scheme": "devdojo",
+    "version": "2.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "automatic",
     "backgroundColor": "#0B1020",
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.linuxdojo.app"
+      "bundleIdentifier": "com.devdojo.app"
     },
     "android": {
-      "package": "com.linuxdojo.app",
+      "package": "com.devdojo.app",
       "adaptiveIcon": {
         "backgroundColor": "#0B1020",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -46,9 +46,18 @@
       [
         "expo-notifications",
         {
-          "color": "#22D3A6"
+          "color": "#22D3A6",
+          "sounds": [
+            "./assets/sounds/campana.wav",
+            "./assets/sounds/gota.wav",
+            "./assets/sounds/zen.wav",
+            "./assets/sounds/pulso.wav",
+            "./assets/sounds/arcade.wav"
+          ]
         }
-      ]
+      ],
+      "expo-audio",
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true

@@ -7,15 +7,15 @@ import { colors, fonts } from '@/ui/theme';
 import { Frame } from './common';
 
 const PARTS = [
-  { t: 'alumno', color: colors.mint, title: 'Usuario', desc: 'La persona con la que trabajas. Cambia si usas su o sudo.' },
-  { t: '@', color: colors.faint, title: 'Arroba', desc: 'Separa el usuario del equipo: «usuario en equipo».' },
-  { t: 'dojo', color: colors.mint, title: 'Equipo (hostname)', desc: 'El nombre de esta máquina. Muy útil cuando te conectas a varios servidores.' },
-  { t: ':', color: colors.faint, title: 'Dos puntos', desc: 'Separa el equipo de la carpeta actual.' },
-  { t: '~/proyectos', color: colors.cyan, title: 'Carpeta actual', desc: '~ es tu carpeta personal. Aquí estás dentro de «proyectos».' },
-  { t: '$', color: colors.amber, title: 'Símbolo de prompt', desc: '$ = usuario normal. Si ves # eres root (¡cuidado!).' },
-  { t: ' ls', color: colors.text, title: 'Comando', desc: 'Lo que quieres ejecutar. Siempre es la primera palabra.' },
-  { t: ' -l', color: colors.violet, title: 'Opción', desc: 'Modifica el comportamiento. Suelen empezar por guion.' },
-  { t: ' /etc', color: colors.rose, title: 'Argumento', desc: 'Sobre qué actúa el comando: un archivo, una carpeta, un texto…' },
+  { t: 'alumno', get color() { return colors.mint; }, title: 'Usuario', desc: 'La persona con la que trabajas. Cambia si usas su o sudo.' },
+  { t: '@', get color() { return colors.faint; }, title: 'Arroba', desc: 'Separa el usuario del equipo: «usuario en equipo».' },
+  { t: 'dojo', get color() { return colors.mint; }, title: 'Equipo (hostname)', desc: 'El nombre de esta máquina. Muy útil cuando te conectas a varios servidores.' },
+  { t: ':', get color() { return colors.faint; }, title: 'Dos puntos', desc: 'Separa el equipo de la carpeta actual.' },
+  { t: '~/proyectos', get color() { return colors.cyan; }, title: 'Carpeta actual', desc: '~ es tu carpeta personal. Aquí estás dentro de «proyectos».' },
+  { t: '$', get color() { return colors.amber; }, title: 'Símbolo de prompt', desc: '$ = usuario normal. Si ves # eres root (¡cuidado!).' },
+  { t: ' ls', get color() { return colors.text; }, title: 'Comando', desc: 'Lo que quieres ejecutar. Siempre es la primera palabra.' },
+  { t: ' -l', get color() { return colors.violet; }, title: 'Opción', desc: 'Modifica el comportamiento. Suelen empezar por guion.' },
+  { t: ' /etc', get color() { return colors.rose; }, title: 'Argumento', desc: 'Sobre qué actúa el comando: un archivo, una carpeta, un texto…' },
 ];
 
 export function TerminalAnatomy() {

@@ -9,16 +9,16 @@ import { Caption, Chips, Frame, MonoBox, TapLines, TapParts, type Part } from '.
 // ───────────────────────── ls -l ─────────────────────────
 
 const LS_PARTS: Part[] = [
-  { t: '-', color: colors.faint, title: 'Tipo de elemento', desc: '«-» archivo normal · «d» directorio · «l» enlace simbólico.' },
-  { t: 'rwx', color: colors.mint, title: 'Permisos del DUEÑO', desc: 'r leer (4) + w escribir (2) + x ejecutar (1) = 7. El dueño puede todo.' },
-  { t: 'r-x', color: colors.cyan, title: 'Permisos del GRUPO', desc: 'Leer y ejecutar, pero no escribir: 4 + 0 + 1 = 5.' },
-  { t: 'r--', color: colors.rose, title: 'Permisos de OTROS', desc: 'Todos los demás solo pueden leer: 4. En conjunto, este archivo es 754.' },
-  { t: ' 1', color: colors.faint, title: 'Enlaces', desc: 'Número de nombres (enlaces duros) que apuntan a este archivo. Casi siempre 1.' },
-  { t: ' alumno', color: colors.mint, title: 'Usuario propietario', desc: 'El dueño del archivo. Solo él (o root) puede cambiar sus permisos.' },
-  { t: ' devs', color: colors.cyan, title: 'Grupo propietario', desc: 'El grupo al que se aplican los permisos de la segunda tripleta.' },
-  { t: ' 220', color: colors.amber, title: 'Tamaño', desc: 'En bytes. Con ls -lh se muestra legible: 220, 4.0K, 2.3M…' },
-  { t: ' Mar 11 10:02', color: colors.violet, title: 'Última modificación', desc: 'Fecha y hora del último cambio del contenido. ls -lt ordena por esta columna.' },
-  { t: ' script.sh', color: colors.text, title: 'Nombre', desc: 'Lo único que realmente ves en un gestor de archivos… aquí es la última columna.' },
+  { t: '-', get color() { return colors.faint; }, title: 'Tipo de elemento', desc: '«-» archivo normal · «d» directorio · «l» enlace simbólico.' },
+  { t: 'rwx', get color() { return colors.mint; }, title: 'Permisos del DUEÑO', desc: 'r leer (4) + w escribir (2) + x ejecutar (1) = 7. El dueño puede todo.' },
+  { t: 'r-x', get color() { return colors.cyan; }, title: 'Permisos del GRUPO', desc: 'Leer y ejecutar, pero no escribir: 4 + 0 + 1 = 5.' },
+  { t: 'r--', get color() { return colors.rose; }, title: 'Permisos de OTROS', desc: 'Todos los demás solo pueden leer: 4. En conjunto, este archivo es 754.' },
+  { t: ' 1', get color() { return colors.faint; }, title: 'Enlaces', desc: 'Número de nombres (enlaces duros) que apuntan a este archivo. Casi siempre 1.' },
+  { t: ' alumno', get color() { return colors.mint; }, title: 'Usuario propietario', desc: 'El dueño del archivo. Solo él (o root) puede cambiar sus permisos.' },
+  { t: ' devs', get color() { return colors.cyan; }, title: 'Grupo propietario', desc: 'El grupo al que se aplican los permisos de la segunda tripleta.' },
+  { t: ' 220', get color() { return colors.amber; }, title: 'Tamaño', desc: 'En bytes. Con ls -lh se muestra legible: 220, 4.0K, 2.3M…' },
+  { t: ' Mar 11 10:02', get color() { return colors.violet; }, title: 'Última modificación', desc: 'Fecha y hora del último cambio del contenido. ls -lt ordena por esta columna.' },
+  { t: ' script.sh', get color() { return colors.text; }, title: 'Nombre', desc: 'Lo único que realmente ves en un gestor de archivos… aquí es la última columna.' },
 ];
 
 export function LsLong() {
@@ -32,16 +32,16 @@ export function LsLong() {
 // ───────────────────────── anatomía de un script ─────────────────────────
 
 const SCRIPT_PARTS: Part[] = [
-  { t: '#!/bin/bash', color: colors.amber, title: 'Shebang', desc: 'Primera línea: indica con qué intérprete se ejecuta el archivo.' },
-  { t: '# Copia de seguridad', color: colors.faint, title: 'Comentario', desc: 'Todo lo que sigue a # se ignora. Documenta qué hace el script.' },
-  { t: 'origen="$1"', color: colors.mint, title: 'Variable y argumento', desc: '$1 es el primer argumento con el que se lanzó el script. Se guarda en «origen» (sin espacios alrededor del =).' },
-  { t: 'if [ ! -d "$origen" ]; then', color: colors.violet, title: 'Condición', desc: 'Si «origen» NO (!) es un directorio (-d)… Los corchetes necesitan espacios dentro.' },
-  { t: '  echo "No existe $origen"; exit 1', color: colors.rose, title: 'Salir con error', desc: 'Muestra un aviso y termina con código 1 (distinto de 0 = error).' },
-  { t: 'fi', color: colors.violet, title: 'Fin del if', desc: '«fi» es «if» al revés: cierra la condición.' },
-  { t: 'for f in "$origen"/*.txt; do', color: colors.cyan, title: 'Bucle', desc: 'Recorre cada archivo .txt de la carpeta, guardándolo en «f» en cada vuelta.' },
-  { t: '  cp "$f" /tmp/backup/', color: colors.text, title: 'Comando', desc: 'El cuerpo del bucle: copia cada archivo. Las comillas protegen nombres con espacios.' },
-  { t: 'done', color: colors.cyan, title: 'Fin del bucle', desc: 'Cierra el for (do … done).' },
-  { t: 'exit 0', color: colors.green, title: 'Código de salida', desc: '0 = éxito. Quien lance tu script (otro script, cron…) lee este código con $?.' },
+  { t: '#!/bin/bash', get color() { return colors.amber; }, title: 'Shebang', desc: 'Primera línea: indica con qué intérprete se ejecuta el archivo.' },
+  { t: '# Copia de seguridad', get color() { return colors.faint; }, title: 'Comentario', desc: 'Todo lo que sigue a # se ignora. Documenta qué hace el script.' },
+  { t: 'origen="$1"', get color() { return colors.mint; }, title: 'Variable y argumento', desc: '$1 es el primer argumento con el que se lanzó el script. Se guarda en «origen» (sin espacios alrededor del =).' },
+  { t: 'if [ ! -d "$origen" ]; then', get color() { return colors.violet; }, title: 'Condición', desc: 'Si «origen» NO (!) es un directorio (-d)… Los corchetes necesitan espacios dentro.' },
+  { t: '  echo "No existe $origen"; exit 1', get color() { return colors.rose; }, title: 'Salir con error', desc: 'Muestra un aviso y termina con código 1 (distinto de 0 = error).' },
+  { t: 'fi', get color() { return colors.violet; }, title: 'Fin del if', desc: '«fi» es «if» al revés: cierra la condición.' },
+  { t: 'for f in "$origen"/*.txt; do', get color() { return colors.cyan; }, title: 'Bucle', desc: 'Recorre cada archivo .txt de la carpeta, guardándolo en «f» en cada vuelta.' },
+  { t: '  cp "$f" /tmp/backup/', get color() { return colors.text; }, title: 'Comando', desc: 'El cuerpo del bucle: copia cada archivo. Las comillas protegen nombres con espacios.' },
+  { t: 'done', get color() { return colors.cyan; }, title: 'Fin del bucle', desc: 'Cierra el for (do … done).' },
+  { t: 'exit 0', get color() { return colors.green; }, title: 'Código de salida', desc: '0 = éxito. Quien lance tu script (otro script, cron…) lee este código con $?.' },
 ];
 
 export function ScriptAnatomy() {
@@ -216,9 +216,9 @@ export function GlobExpansion() {
 // ───────────────────────── permisos rwx ─────────────────────────
 
 const WHO = [
-  { id: 'u', label: 'Dueño', color: colors.mint },
-  { id: 'g', label: 'Grupo', color: colors.cyan },
-  { id: 'o', label: 'Otros', color: colors.rose },
+  { id: 'u', label: 'Dueño', get color() { return colors.mint; } },
+  { id: 'g', label: 'Grupo', get color() { return colors.cyan; } },
+  { id: 'o', label: 'Otros', get color() { return colors.rose; } },
 ];
 const BITS = ['r', 'w', 'x'] as const;
 const VAL = { r: 4, w: 2, x: 1 } as const;
@@ -335,9 +335,9 @@ function DestPill({ dest, color }: { dest: [string, string]; color: string }) {
 // ───────────────────────── pipes ─────────────────────────
 
 const STAGES = [
-  { cmd: 'ls /etc', lines: ['passwd', 'hosts', 'host.conf', 'fstab', 'resolv.conf', 'nsswitch.conf'], color: colors.mint },
-  { cmd: 'grep conf', lines: ['host.conf', 'resolv.conf', 'nsswitch.conf'], color: colors.cyan },
-  { cmd: 'wc -l', lines: ['3'], color: colors.amber },
+  { cmd: 'ls /etc', lines: ['passwd', 'hosts', 'host.conf', 'fstab', 'resolv.conf', 'nsswitch.conf'], get color() { return colors.mint; } },
+  { cmd: 'grep conf', lines: ['host.conf', 'resolv.conf', 'nsswitch.conf'], get color() { return colors.cyan; } },
+  { cmd: 'wc -l', lines: ['3'], get color() { return colors.amber; } },
 ];
 
 function Packet({ t, phase, x0, w, color }: { t: { value: number }; phase: number; x0: number; w: number; color: string }) {

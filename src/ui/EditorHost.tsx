@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Platform, ScrollView, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { registerEditorHost, type EditorRequest } from '@/lib/editorBus';
 import { Button } from './Button';
 import { T } from './Text';
-import { colors, fonts } from './theme';
+import { darkColors as colors, fonts, makeStyles } from './theme';
 
 export function EditorHost() {
   const [req, setReq] = useState<EditorRequest | null>(null);
@@ -70,7 +70,7 @@ export function EditorHost() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = makeStyles(() => ({
   bar: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 8 },
   help: { padding: 12, borderTopWidth: 1, borderTopColor: colors.line, backgroundColor: colors.bg2 },
-});
+}));

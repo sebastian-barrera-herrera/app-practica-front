@@ -1,14 +1,16 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import Animated, { FadeIn, FadeInRight } from 'react-native-reanimated';
-import { WORLDS, lessonById, worldOfLesson } from '@/content';
+import { courseDef, lessonById, worldOfLesson } from '@/content';
 import type { Step } from '@/content/types';
-import { type LessonOutcome } from '@/game/progress';
-import { useGame } from '@/game/store';
+import { useGame, type FinishOutcome } from '@/game/store';
+import { useStudyContext } from '@/lib/studyClock';
+import { AnyChallengeView } from '@/ui/AnyChallenge';
+import { courseColor } from '@/ui/courseColors';
+import { PyDemoView } from '@/ui/PyDemoView';
 import { Illustration } from '@/illustrations';
 import { Button } from '@/ui/Button';
-import { ChallengeView } from '@/ui/ChallengeView';
 import { ConfirmModal } from '@/ui/ConfirmModal';
 import { DemoView } from '@/ui/DemoView';
 import { LessonSummary } from '@/ui/LessonSummary';
@@ -17,7 +19,7 @@ import { QuestionView } from '@/ui/QuestionView';
 import { RichText } from '@/ui/RichText';
 import { Screen } from '@/ui/Screen';
 import { T } from '@/ui/Text';
-import { colors } from '@/ui/theme';
+import { colors, makeStyles } from '@/ui/theme';
 
 interface Item {
   key: string;
@@ -44,19 +46,21 @@ export default function LessonScreen() {
 function Player({ lessonId }: { lessonId: string }) {
   const lesson = lessonById(lessonId)!;
   const world = worldOfLesson(lessonId)!;
+  const course = courseDef(world.course);
   const store = useGame;
+  useStudyContext(course.id);
   const [queue, setQueue] = useState<Item[]>(() => lesson.steps.map((step, i) => ({ key: String(i), step, srsId: step.type === 'quiz' ? `${lesson.id}#${i}` : undefined })));
   const [pos, setPos] = useState(0);
-  const [outcome, setOutcome] = useState<LessonOutcome | null>(null);
+  const [outcome, setOutcome] = useState<FinishOutcome | null>(null);
   const [confirm, setConfirm] = useState(false);
   const [demoDone, setDemoDone] = useState(false);
   const stats = useRef({ quizTotal: 0, quizFirstTry: 0, practices: 0, hintsUsed: 0 });
   const total = useMemo(() => queue.length, [queue.length]);
 
   const finish = useCallback(() => {
-    const out = store.getState().finishLesson({ lessonId: lesson.id, ...stats.current });
+    const out = store.getState().finishLesson(course.id, { lessonId: lesson.id, ...stats.current });
     setOutcome(out);
-  }, [lesson.id, store]);
+  }, [lesson.id, store, course.id]);
 
   const next = useCallback(() => {
     setDemoDone(false);
@@ -65,11 +69,11 @@ function Player({ lessonId }: { lessonId: string }) {
   }, [pos, queue.length, finish]);
 
   const nextLessonId = useMemo(() => {
-    const wi = WORLDS.findIndex((w) => w.id === world.id);
+    const wi = course.worlds.findIndex((w) => w.id === world.id);
     const li = world.lessons.findIndex((l) => l.id === lesson.id);
     if (li + 1 < world.lessons.length) return world.lessons[li + 1].id;
-    return WORLDS[wi + 1]?.lessons[0]?.id ?? null;
-  }, [world, lesson.id]);
+    return course.worlds[wi + 1]?.lessons[0]?.id ?? null;
+  }, [world, lesson.id, course]);
 
   if (outcome) {
     return (
@@ -95,7 +99,7 @@ function Player({ lessonId }: { lessonId: string }) {
           <T style={{ fontSize: 22 }} color={colors.dim}>✕</T>
         </Pressable>
         <View style={{ flex: 1 }}>
-          <ProgressBar value={pos / total} color={world.color} height={12} />
+          <ProgressBar value={pos / total} color={world.color || courseColor(course.id)} height={12} />
         </View>
         <T v="tiny" color={colors.dim}>{pos + 1}/{total}</T>
       </View>
@@ -140,7 +144,7 @@ function Player({ lessonId }: { lessonId: string }) {
                 stats.current.quizTotal += 1;
                 if (r.correct) stats.current.quizFirstTry += 1;
               }
-              if (item.srsId && !item.retry) store.getState().answer(item.srsId, r.correct);
+              if (item.srsId && !item.retry) store.getState().answer(course.id, item.srsId, r.correct);
               if (!r.correct && !item.retry) {
                 // la repetimos un poco más adelante
                 setQueue((q) => {
@@ -154,15 +158,31 @@ function Player({ lessonId }: { lessonId: string }) {
             }}
           />
         )}
-        {step.type === 'practice' && (
-          <ChallengeView
+        {step.type === 'pydemo' && (
+          <StepScroll footer={<Button label="Continuar" kind={demoDone ? 'primary' : 'secondary'} onPress={next} />}>
+            <View style={{ gap: 16 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <T style={{ fontSize: 30 }}>▶️</T>
+                <T v="h1" style={{ flex: 1 }}>{step.title ?? 'Mira cómo funciona'}</T>
+              </View>
+              <PyDemoView cells={step.cells} setup={step.setup} intro={step.intro} onComplete={() => setDemoDone(true)} />
+            </View>
+          </StepScroll>
+        )}
+        {(step.type === 'practice' || step.type === 'pypractice') && (
+          <AnyChallengeView
+            course={course.id}
             challenge={step.challenge}
-            onRun={(line) => store.getState().trackCommands([line], false)}
+            onRun={(line) => {
+              const g = store.getState();
+              if (course.id === 'linux') g.trackCommands('linux', [line], false);
+              else g.bump(course.id, { commands: 1 });
+            }}
             onSolved={(info) => {
               stats.current.practices += 1;
               stats.current.hintsUsed += info.hintsUsed + (info.usedSolution ? 2 : 0);
-              store.getState().solveChallenge(step.challenge.id, info.commands);
-              if (info.ctrlC) store.getState().bump({ ctrlC: 1 });
+              store.getState().solveChallenge(course.id, step.challenge.id, info.commands);
+              if (info.ctrlC) store.getState().bump(course.id, { ctrlC: 1 });
               next();
             }}
           />
@@ -196,6 +216,6 @@ function StepScroll({ children, footer }: { children: React.ReactNode; footer: R
   );
 }
 
-const styles = StyleSheet.create({
+const styles = makeStyles(() => ({
   top: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 16, paddingVertical: 12 },
-});
+}));

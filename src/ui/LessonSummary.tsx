@@ -2,7 +2,7 @@ import React from 'react';
 import { ScrollView, View } from 'react-native';
 import Animated, { FadeInDown, ZoomIn } from 'react-native-reanimated';
 import type { Lesson } from '@/content/types';
-import type { LessonOutcome } from '@/game/progress';
+import type { FinishOutcome } from '@/game/store';
 import { levelTitle } from '@/game/xp';
 import { Button } from './Button';
 import { Card } from './Card';
@@ -12,7 +12,7 @@ import { Mascot } from './Mascot';
 import { T } from './Text';
 import { colors } from './theme';
 
-export function LessonSummary({ lesson, outcome, hasNext, onNext, onBack }: { lesson: Lesson; outcome: LessonOutcome; hasNext: boolean; onNext: () => void; onBack: () => void }) {
+export function LessonSummary({ lesson, outcome, hasNext, onNext, onBack }: { lesson: Lesson; outcome: FinishOutcome; hasNext: boolean; onNext: () => void; onBack: () => void }) {
   return (
     <View style={{ flex: 1 }}>
       {outcome.stars >= 2 && <Confetti />}

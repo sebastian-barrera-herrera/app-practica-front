@@ -6,11 +6,11 @@ import { colors, fonts, radius } from '@/ui/theme';
 import { Frame } from './common';
 
 const LAYERS = [
-  { emoji: '🧑', title: 'Tú', sub: 'escribes: ls', color: colors.mint },
-  { emoji: '🖥️', title: 'Terminal', sub: 'la ventana con teclado y pantalla', color: colors.cyan },
-  { emoji: '🐚', title: 'Shell (bash)', sub: 'interpreta lo que escribes', color: colors.violet },
-  { emoji: '🧠', title: 'Kernel (Linux)', sub: 'manda sobre el hardware', color: colors.amber },
-  { emoji: '💾', title: 'Hardware', sub: 'CPU · memoria · disco', color: colors.rose },
+  { emoji: '🧑', title: 'Tú', sub: 'escribes: ls', get color() { return colors.mint; } },
+  { emoji: '🖥️', title: 'Terminal', sub: 'la ventana con teclado y pantalla', get color() { return colors.cyan; } },
+  { emoji: '🐚', title: 'Shell (bash)', sub: 'interpreta lo que escribes', get color() { return colors.violet; } },
+  { emoji: '🧠', title: 'Kernel (Linux)', sub: 'manda sobre el hardware', get color() { return colors.amber; } },
+  { emoji: '💾', title: 'Hardware', sub: 'CPU · memoria · disco', get color() { return colors.rose; } },
 ];
 
 export function ShellVsKernel() {

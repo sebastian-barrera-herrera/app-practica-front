@@ -2,7 +2,7 @@ import React from 'react';
 import { Pressable, View, type ViewStyle } from 'react-native';
 import { tap } from '@/lib/haptics';
 import { T } from './Text';
-import { colors, radius } from './theme';
+import { colors, ink, radius } from './theme';
 
 export function Chip({ label, color = colors.mint, onPress, active, style, mono, dim }: { label: string; color?: string; onPress?: () => void; active?: boolean; style?: ViewStyle; mono?: boolean; dim?: boolean }) {
   const inner = (
@@ -12,7 +12,7 @@ export function Chip({ label, color = colors.mint, onPress, active, style, mono,
         style,
       ]}
     >
-      <T v="tiny" bold color={active ? '#04120D' : dim ? colors.dim : color} style={mono ? { fontFamily: 'JetBrainsMono_700Bold' } : undefined}>
+      <T v="tiny" bold color={active ? '#04120D' : dim ? colors.dim : ink(color)} style={mono ? { fontFamily: 'JetBrainsMono_700Bold' } : undefined}>
         {label}
       </T>
     </View>

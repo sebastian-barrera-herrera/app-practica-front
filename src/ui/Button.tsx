@@ -1,9 +1,9 @@
 import React from 'react';
-import { Pressable, StyleSheet, View, type ViewStyle } from 'react-native';
+import { Pressable, View, type ViewStyle } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { tap } from '@/lib/haptics';
 import { T } from './Text';
-import { colors, radius } from './theme';
+import { colors, radius, makeStyles } from './theme';
 
 interface Props {
   label: string;
@@ -57,8 +57,8 @@ export function Button({ label, onPress, kind = 'primary', icon, disabled, small
   );
 }
 
-const styles = StyleSheet.create({
+const styles = makeStyles(() => ({
   base: { paddingVertical: 14, paddingHorizontal: 20, borderRadius: radius.lg, borderBottomWidth: 4, alignItems: 'center', justifyContent: 'center' },
   small: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: radius.md, borderBottomWidth: 3 },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
-});
+}));

@@ -1,110 +1,181 @@
-/** Store global (zustand) con persistencia en AsyncStorage. */
+/** Store global (zustand) con persistencia en AsyncStorage. Guarda el estado raíz (global + un trozo por curso). */
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { create } from 'zustand';
-import { createJSONStorage, persist } from 'zustand/middleware';
-import { LEVELS, WORLDS } from '@/content';
-import {
-  addXp, answer as answerFn, finishLesson as finishLessonFn, initialState, recordExam as recordExamFn,
-  solveChallenge as solveChallengeFn, trackCommands as trackCommandsFn, unlockAchievements,
-  type Ctx, type LessonOutcome, type LessonResult, type ProgressState, type Settings,
-} from './progress';
+import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware';
+import { COURSE_LIST, courseDef, type CourseDef } from '@/content';
+import type { CourseId } from '@/content/types';
 import type { Achievement } from './achievements';
+import {
+  addXp, answer as answerFn, finishLesson as finishLessonFn, recordExam as recordExamFn,
+  solveChallenge as solveChallengeFn, trackCommands as trackCommandsFn,
+  type LessonOutcome, type LessonResult, type ProgressState, type Settings,
+} from './progress';
+import {
+  addStudySeconds, flat, initialRoot, mergeSettings, migrateRoot, ROOT_VERSION, unflat, unlockAchievements, withCourse,
+  type RootState, type StudyResult,
+} from './root';
 
-const ctx = (): Ctx => ({ worlds: WORLDS, levels: LEVELS });
+export type FinishOutcome = LessonOutcome & { newAchievements: Achievement[] };
+export type StudyOutcome = StudyResult & { newAchievements: Achievement[] };
 
 export interface Actions {
-  finishLesson: (r: LessonResult) => LessonOutcome;
-  answer: (itemId: string, correct: boolean, opts?: { review?: boolean }) => void;
-  solveChallenge: (id: string, commands: number) => void;
-  trackCommands: (lines: string[], sandbox: boolean) => void;
-  awardXp: (n: number) => { levelUp: number | null };
-  recordExam: (id: string, score: number, passMark: number, bonusXp: number) => { passed: boolean; newAchievements: Achievement[]; levelUp: number | null };
+  setActive: (course: CourseId) => void;
+  finishLesson: (course: CourseId, r: LessonResult) => FinishOutcome;
+  answer: (course: CourseId, itemId: string, correct: boolean, opts?: { review?: boolean }) => void;
+  solveChallenge: (course: CourseId, id: string, commands: number) => void;
+  trackCommands: (course: CourseId, lines: string[], sandbox: boolean) => void;
+  awardXp: (course: CourseId, n: number) => { levelUp: number | null };
+  recordExam: (course: CourseId, id: string, score: number, passMark: number, bonusXp: number) => { passed: boolean; newAchievements: Achievement[]; levelUp: number | null };
   setSettings: (patch: Partial<Settings>) => void;
-  bump: (patch: Partial<ProgressState['stats']>) => Achievement[];
-  setStat: (key: keyof ProgressState['stats'], value: number) => Achievement[];
+  bump: (course: CourseId, patch: Partial<ProgressState['stats']>) => Achievement[];
+  setStat: (course: CourseId, key: keyof ProgressState['stats'], value: number) => Achievement[];
   checkAchievements: () => Achievement[];
-  setSandbox: (snap: unknown | null) => void;
-  setDaily: (day: string, done: boolean) => void;
+  setSandbox: (course: CourseId, snap: unknown | null) => void;
+  setDaily: (course: CourseId, day: string, done: boolean) => void;
   markSurprise: (patch: Partial<ProgressState['surprise']>) => void;
+  addStudy: (course: CourseId, seconds: number) => StudyOutcome;
+  /** Sustituye el progreso (sincronización con la nube). */
+  replaceRoot: (root: RootState) => void;
+  setOwner: (owner: string | null) => void;
   resetAll: () => void;
 }
 
-export type Store = ProgressState & Actions;
+export type Store = RootState & Actions;
+
+/** Lee el progreso de la versión de un solo curso («linux-dojo-progress-v1») la primera vez. */
+const legacyAwareStorage: StateStorage = {
+  getItem: async (name) => {
+    const v = await AsyncStorage.getItem(name);
+    if (v !== null) return v;
+    return AsyncStorage.getItem('linux-dojo-progress-v1');
+  },
+  setItem: (name, value) => AsyncStorage.setItem(name, value),
+  removeItem: (name) => AsyncStorage.removeItem(name),
+};
+
+const ROOT_KEYS = Object.keys(initialRoot()) as (keyof RootState)[];
+
+const now = () => Date.now();
 
 export const useGame = create<Store>()(
   persist(
-    (set, get) => ({
-      ...initialState(),
-      finishLesson: (r) => {
-        const out = finishLessonFn(get(), r, Date.now(), ctx());
-        set(out.state);
-        return out;
-      },
-      answer: (itemId, correct, opts) => set(answerFn(get(), itemId, correct, Date.now(), opts)),
-      solveChallenge: (id, commands) => set(solveChallengeFn(get(), id, commands, Date.now())),
-      trackCommands: (lines, sandbox) => set(trackCommandsFn(get(), lines, { sandbox })),
-      awardXp: (n) => {
-        const r = addXp(get(), n, Date.now());
-        const u = unlockAchievements(r.state, Date.now(), ctx());
-        set(u.state);
-        return { levelUp: r.levelUp };
-      },
-      recordExam: (id, score, passMark, bonusXp) => {
-        const now = Date.now();
-        let s = recordExamFn(get(), id, score, passMark, now);
-        const passed = score >= passMark;
-        const r = addXp(s, passed ? bonusXp : Math.round(bonusXp * 0.15), now);
-        s = r.state;
-        const u = unlockAchievements(s, now, ctx());
-        set(u.state);
-        return { passed, newAchievements: u.unlocked, levelUp: r.levelUp };
-      },
-      setSettings: (patch) => set({ settings: { ...get().settings, ...patch } }),
-      bump: (patch) => {
-        const st = { ...get().stats };
-        for (const [k, v] of Object.entries(patch)) (st as any)[k] += v as number;
-        const u = unlockAchievements({ ...get(), stats: st }, Date.now(), ctx());
-        set(u.state);
+    (set, get) => {
+      /** Aplica una transición sobre la raíz, desbloquea logros y marca la modificación. */
+      const commit = (root: RootState, touch = true): Achievement[] => {
+        const u = unlockAchievements(root, now(), COURSE_LIST);
+        set({ ...u.root, updatedAt: touch ? now() : u.root.updatedAt });
         return u.unlocked;
-      },
-      setStat: (key, value) => {
-        const st = { ...get().stats, [key]: Math.max(get().stats[key], value) };
-        const u = unlockAchievements({ ...get(), stats: st }, Date.now(), ctx());
-        set(u.state);
-        return u.unlocked;
-      },
-      checkAchievements: () => {
-        const u = unlockAchievements(get(), Date.now(), ctx());
-        if (u.unlocked.length) set(u.state);
-        return u.unlocked;
-      },
-      setSandbox: (snap) => set({ sandbox: snap }),
-      setDaily: (day, done) => set({ daily: { day, done } }),
-      markSurprise: (patch) => set({ surprise: { ...get().surprise, ...patch } }),
-      resetAll: () => set({ ...initialState() }),
-    }),
+      };
+      const state = (): RootState => get();
+
+      return {
+        ...initialRoot(),
+
+        setActive: (course) => set({ active: course }),
+
+        finishLesson: (course, r) => {
+          const t = now();
+          const { root, result } = withCourse(state(), course, (s) => finishLessonFn(s, r, t));
+          const newAchievements = commit(root);
+          return { ...result, newAchievements };
+        },
+
+        answer: (course, itemId, correct, opts) => {
+          const { root } = withCourse(state(), course, (s) => ({ state: answerFn(s, itemId, correct, now(), opts) }));
+          commit(root);
+        },
+
+        solveChallenge: (course, id, commands) => {
+          const { root } = withCourse(state(), course, (s) => ({ state: solveChallengeFn(s, id, commands, now()) }));
+          commit(root);
+        },
+
+        trackCommands: (course, lines, sandbox) => {
+          const { root } = withCourse(state(), course, (s) => ({ state: trackCommandsFn(s, lines, { sandbox }) }));
+          commit(root);
+        },
+
+        awardXp: (course, n) => {
+          const t = now();
+          const { root, result } = withCourse(state(), course, (s) => {
+            const r = addXp(s, n, t);
+            return { state: r.state, levelUp: r.levelUp };
+          });
+          commit(root);
+          return { levelUp: result.levelUp };
+        },
+
+        recordExam: (course, id, score, passMark, bonusXp) => {
+          const t = now();
+          const { root, result } = withCourse(state(), course, (s) => {
+            let st = recordExamFn(s, id, score, passMark, t);
+            const passed = score >= passMark;
+            const r = addXp(st, passed ? bonusXp : Math.round(bonusXp * 0.15), t);
+            st = r.state;
+            return { state: st, passed, levelUp: r.levelUp };
+          });
+          const newAchievements = commit(root);
+          return { passed: result.passed, newAchievements, levelUp: result.levelUp };
+        },
+
+        setSettings: (patch) => {
+          const cur = get().settings;
+          set({ settings: mergeSettings({ ...cur, ...patch }), updatedAt: now() });
+        },
+
+        bump: (course, patch) => {
+          const root = state();
+          const s = flat(root, course);
+          const st = { ...s.stats };
+          for (const [k, v] of Object.entries(patch)) (st as any)[k] += v as number;
+          return commit(unflat(root, course, { ...s, stats: st }));
+        },
+
+        setStat: (course, key, value) => {
+          const root = state();
+          const s = flat(root, course);
+          const st = { ...s.stats, [key]: Math.max(s.stats[key], value) };
+          return commit(unflat(root, course, { ...s, stats: st }));
+        },
+
+        checkAchievements: () => {
+          const u = unlockAchievements(state(), now(), COURSE_LIST);
+          if (u.unlocked.length) set({ ...u.root, updatedAt: now() });
+          return u.unlocked;
+        },
+
+        // el laboratorio se guarda a menudo y no se sincroniza: no cuenta como modificación
+        setSandbox: (course, snap) => {
+          const root = state();
+          set({ courses: { ...root.courses, [course]: { ...root.courses[course], sandbox: snap } } });
+        },
+
+        setDaily: (course, day, done) => {
+          const root = state();
+          set({ courses: { ...root.courses, [course]: { ...root.courses[course], daily: { day, done } } }, updatedAt: now() });
+        },
+
+        markSurprise: (patch) => set({ surprise: { ...get().surprise, ...patch }, updatedAt: now() }),
+
+        addStudy: (course, seconds) => {
+          const r = addStudySeconds(state(), course, seconds, now());
+          const newAchievements = commit(r.root);
+          return { ...r, newAchievements };
+        },
+
+        replaceRoot: (root) => set({ ...root }),
+        setOwner: (owner) => set({ owner }),
+        resetAll: () => set({ ...initialRoot(), updatedAt: now() }),
+      };
+    },
     {
-      name: 'linux-dojo-progress-v1',
-      storage: createJSONStorage(() => AsyncStorage),
-      version: 1,
-      partialize: (s) => {
-        const { finishLesson, answer, solveChallenge, trackCommands, awardXp, recordExam, setSettings, bump, setStat, checkAchievements, setSandbox, setDaily, markSurprise, resetAll, ...data } = s;
-        void finishLesson; void answer; void solveChallenge; void trackCommands; void awardXp; void recordExam; void setSettings; void bump; void setStat; void checkAchievements; void setSandbox; void setDaily; void markSurprise; void resetAll;
-        return data;
-      },
-      merge: (persisted, current) => {
-        const p = (persisted ?? {}) as Partial<ProgressState>;
-        const base = initialState();
-        return {
-          ...current,
-          ...p,
-          settings: { ...base.settings, ...(p.settings ?? {}) },
-          stats: { ...base.stats, ...(p.stats ?? {}) },
-          streak: { ...base.streak, ...(p.streak ?? {}) },
-          surprise: { ...base.surprise, ...(p.surprise ?? {}) },
-        };
-      },
+      name: 'dev-dojo-progress-v2',
+      version: ROOT_VERSION,
+      storage: createJSONStorage(() => legacyAwareStorage),
+      partialize: (s) => Object.fromEntries(ROOT_KEYS.map((k) => [k, s[k]])) as unknown as Store,
+      migrate: (persisted) => migrateRoot(persisted) as unknown as Store,
+      merge: (persisted, current) => ({ ...current, ...migrateRoot(persisted) }),
     },
   ),
 );
@@ -117,4 +188,14 @@ export function useHydrated(): boolean {
     return unsub;
   }, []);
   return h;
+}
+
+/**
+ * Vista plana del curso activo (o del indicado) + su definición. Es la forma habitual de leer el juego desde las pantallas:
+ * `const { s, course } = useCourse()` → `s.lessons`, `s.settings`, `course.worlds`…
+ */
+export function useCourse(id?: CourseId): { id: CourseId; course: CourseDef; s: ProgressState; root: RootState } {
+  const root = useGame();
+  const cid = id ?? root.active;
+  return useMemo(() => ({ id: cid, course: courseDef(cid), s: flat(root, cid), root }), [root, cid]);
 }

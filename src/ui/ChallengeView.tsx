@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Keyboard, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Keyboard, Platform, Pressable, ScrollView, View } from 'react-native';
 import Animated, { FadeIn, SlideInDown, ZoomIn } from 'react-native-reanimated';
 import type { Challenge } from '@/content/types';
 import { evaluate } from '@/engine/check';
@@ -11,7 +11,7 @@ import { Confetti } from './Confetti';
 import { CodeBlock, Inline, RichText } from './RichText';
 import { TerminalView } from './TerminalView';
 import { T } from './Text';
-import { colors, radius } from './theme';
+import { colors, radius, makeStyles } from './theme';
 
 export interface SolvedInfo {
   commands: number;
@@ -167,10 +167,10 @@ export function ChallengeView({ challenge, onSolved, onRun, continueLabel = 'Con
   );
 }
 
-const styles = StyleSheet.create({
+const styles = makeStyles(() => ({
   head: { paddingHorizontal: 16, paddingVertical: 10, backgroundColor: colors.bg, borderBottomWidth: 1, borderBottomColor: colors.line },
   hintBox: { gap: 4, padding: 10, borderRadius: radius.md, backgroundColor: colors.amber + '14', borderWidth: 1, borderColor: colors.amber + '55' },
   pill: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, backgroundColor: colors.card2, borderWidth: 1, borderColor: colors.line },
-  msg: { position: 'absolute', top: 6, right: 10, backgroundColor: 'rgba(11,16,32,0.9)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 },
-  done: { position: 'absolute', left: 0, right: 0, bottom: 0, padding: 16, gap: 12, backgroundColor: '#0F3B2C', borderTopWidth: 3, borderTopColor: colors.green, borderTopLeftRadius: 20, borderTopRightRadius: 20 },
-});
+  msg: { position: 'absolute', top: 6, right: 10, backgroundColor: colors.card, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 },
+  done: { position: 'absolute', left: 0, right: 0, bottom: 0, padding: 16, gap: 12, backgroundColor: colors.okBg, borderTopWidth: 3, borderTopColor: colors.green, borderTopLeftRadius: 20, borderTopRightRadius: 20 },
+}));

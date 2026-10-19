@@ -1,20 +1,21 @@
 import { router } from 'expo-router';
 import React, { useMemo } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import Animated, { Easing, FadeInDown, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
-import { LEVELS, WORLDS } from '@/content';
+import type { CourseDef } from '@/content';
 import type { WorldDef } from '@/content/types';
 import { lessonDone, lessonUnlocked, nextLesson, worldComplete, worldProgress, worldUnlocked } from '@/game/progress';
-import { useGame } from '@/game/store';
+import { useCourse } from '@/game/store';
+import { CourseHeader, CourseSwitcher } from '@/ui/CourseSwitcher';
+import { courseColor } from '@/ui/courseColors';
 import { tap, warn } from '@/lib/haptics';
 import { Card } from '@/ui/Card';
 import { Mascot } from '@/ui/Mascot';
 import { ProgressBar } from '@/ui/ProgressBar';
 import { Screen } from '@/ui/Screen';
-import { StatsHeader } from '@/ui/StatsHeader';
 import { T } from '@/ui/Text';
 import { Button } from '@/ui/Button';
-import { colors, radius } from '@/ui/theme';
+import { colors, ink, radius, makeStyles } from '@/ui/theme';
 
 function Pulse({ color, children }: { color: string; children: React.ReactNode }) {
   const s = useSharedValue(1);
@@ -47,8 +48,9 @@ function Node({ emoji, state, color, title, stars, onPress, offset, delay }: { e
   );
 }
 
-function WorldSection({ w, wi }: { w: WorldDef; wi: number }) {
-  const s = useGame();
+function WorldSection({ w, wi, course }: { w: WorldDef; wi: number; course: CourseDef }) {
+  const { s } = useCourse(course.id);
+  const WORLDS = course.worlds;
   const unlocked = worldUnlocked(s, WORLDS, wi);
   const prog = worldProgress(s, w);
   const complete = worldComplete(s, w);
@@ -61,7 +63,7 @@ function WorldSection({ w, wi }: { w: WorldDef; wi: number }) {
             <T style={{ fontSize: 30 }}>{w.emoji}</T>
           </View>
           <View style={{ flex: 1, gap: 4 }}>
-            <T v="tiny" color={w.color} bold>ZONA {w.index}</T>
+            <T v="tiny" color={ink(w.color)} bold>ZONA {w.index}</T>
             <T v="h2">{w.title}</T>
             <T v="small" color={colors.dim}>{w.subtitle}</T>
           </View>
@@ -106,7 +108,7 @@ function WorldSection({ w, wi }: { w: WorldDef; wi: number }) {
             stars={s.challenges[w.boss.id]?.solved ? 3 : undefined}
             delay={w.lessons.length * 50}
             offset={Math.sin(w.lessons.length * 1.15) * 54}
-            onPress={() => (complete || s.settings.unlockAll ? router.push({ pathname: '/session/[mode]', params: { mode: `boss-${w.id}` } }) : warn())}
+            onPress={() => (complete || s.settings.unlockAll ? router.push({ pathname: '/session/[mode]', params: { mode: `boss-${w.id}`, course: course.id } }) : warn())}
           />
         )}
         <Node
@@ -117,7 +119,7 @@ function WorldSection({ w, wi }: { w: WorldDef; wi: number }) {
           stars={exam?.passed ? (exam.best >= 0.95 ? 3 : exam.best >= 0.85 ? 2 : 1) : undefined}
           delay={(w.lessons.length + 1) * 50}
           offset={Math.sin((w.lessons.length + 1) * 1.15) * 54}
-          onPress={() => (complete || s.settings.unlockAll ? router.push({ pathname: '/session/[mode]', params: { mode: `exam-${w.id}` } }) : warn())}
+          onPress={() => (complete || s.settings.unlockAll ? router.push({ pathname: '/session/[mode]', params: { mode: `exam-${w.id}`, course: course.id } }) : warn())}
         />
       </View>
     </View>
@@ -125,65 +127,82 @@ function WorldSection({ w, wi }: { w: WorldDef; wi: number }) {
 }
 
 export default function Roadmap() {
-  const s = useGame();
+  const { s, course } = useCourse();
+  const col = courseColor(course.id);
+  const WORLDS = course.worlds;
   // eslint-disable-next-line react-hooks/exhaustive-deps -- solo depende de las lecciones completadas
-  const next = useMemo(() => nextLesson(s, WORLDS), [s.lessons]);
+  const next = useMemo(() => nextLesson(s, WORLDS), [s.lessons, course.id]);
   const total = WORLDS.reduce((n, w) => n + w.lessons.length, 0);
   const doneCount = WORLDS.reduce((n, w) => n + w.lessons.filter((l) => s.lessons[l.id]?.done).length, 0);
   return (
     <Screen>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40, gap: 16 }}>
-        <StatsHeader />
-        <Card accent={colors.mint} elevated>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-            <Mascot size={86} mood={next ? 'happy' : 'cheer'} />
-            <View style={{ flex: 1, gap: 6 }}>
-              {next ? (
-                <>
-                  <T v="tiny" color={colors.mint} bold>CONTINÚA TU RUTA</T>
-                  <T v="h3">{next.world.lessons[next.lessonIndex].emoji} {next.world.lessons[next.lessonIndex].title}</T>
-                  <T v="tiny" color={colors.dim}>{doneCount}/{total} lecciones · ~{next.world.lessons[next.lessonIndex].minutes} min</T>
-                </>
-              ) : (
-                <>
-                  <T v="h3">¡Ruta completa! 🎉</T>
-                  <T v="small" color={colors.dim}>Repasa, practica en la terminal libre o prepara las certificaciones.</T>
-                </>
-              )}
+        <View style={{ paddingTop: 8, gap: 12 }}>
+          <CourseSwitcher />
+          <CourseHeader course={course} title={`Ruta de ${course.name}`} subtitle={course.tagline} />
+        </View>
+        {WORLDS.length === 0 ? (
+          <Card accent={col}>
+            <View style={{ alignItems: 'center', gap: 8, paddingVertical: 16 }}>
+              <Mascot size={110} mood="think" />
+              <T v="h2">Ruta de {course.name} en camino</T>
+              <T center color={colors.dim}>Estamos terminando las lecciones de este curso. Mientras tanto puedes seguir con el otro.</T>
             </View>
-          </View>
-          {next && (
-            <Button
-              style={{ marginTop: 12 }}
-              label="Empezar lección"
-              onPress={() => router.push({ pathname: '/lesson/[id]', params: { id: next.world.lessons[next.lessonIndex].id } })}
-            />
-          )}
-        </Card>
-        {LEVELS.map((lv) => (
-          <View key={lv.id} style={{ gap: 12 }}>
-            <View style={[styles.levelBar, { borderColor: lv.color + '66', backgroundColor: lv.color + '14' }]}>
-              <T style={{ fontSize: 22 }}>{lv.emoji}</T>
-              <View style={{ flex: 1 }}>
-                <T v="h3" color={lv.color}>{lv.title}</T>
-                <T v="tiny" color={colors.dim}>{lv.subtitle}</T>
+          </Card>
+        ) : (
+          <Card accent={col} elevated>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <Mascot size={86} mood={next ? 'happy' : 'cheer'} />
+              <View style={{ flex: 1, gap: 6 }}>
+                {next ? (
+                  <>
+                    <T v="tiny" color={col} bold>CONTINÚA TU RUTA</T>
+                    <T v="h3">{next.world.lessons[next.lessonIndex].emoji} {next.world.lessons[next.lessonIndex].title}</T>
+                    <T v="tiny" color={colors.dim}>{doneCount}/{total} lecciones · ~{next.world.lessons[next.lessonIndex].minutes} min</T>
+                  </>
+                ) : (
+                  <>
+                    <T v="h3">¡Ruta completa! 🎉</T>
+                    <T v="small" color={colors.dim}>Repasa, practica en el laboratorio o prepara las certificaciones.</T>
+                  </>
+                )}
               </View>
             </View>
-            {WORLDS.map((w, wi) => (w.level === lv.id ? <WorldSection key={w.id} w={w} wi={wi} /> : null))}
-            {!WORLDS.some((w) => w.level === lv.id) && (
-              <Card>
-                <T v="small" color={colors.dim}>Próximamente: más zonas en este nivel.</T>
-              </Card>
+            {next && (
+              <Button
+                style={{ marginTop: 12 }}
+                color={col}
+                label="Empezar lección"
+                onPress={() => router.push({ pathname: '/lesson/[id]', params: { id: next.world.lessons[next.lessonIndex].id } })}
+              />
             )}
-          </View>
-        ))}
+          </Card>
+        )}
+        {WORLDS.length > 0 &&
+          course.levels.map((lv) => (
+            <View key={lv.id} style={{ gap: 12 }}>
+              <View style={[styles.levelBar, { borderColor: lv.color + '66', backgroundColor: lv.color + '14' }]}>
+                <T style={{ fontSize: 22 }}>{lv.emoji}</T>
+                <View style={{ flex: 1 }}>
+                  <T v="h3" color={ink(lv.color)}>{lv.title}</T>
+                  <T v="tiny" color={colors.dim}>{lv.subtitle}</T>
+                </View>
+              </View>
+              {WORLDS.map((w, wi) => (w.level === lv.id ? <WorldSection key={w.id} w={w} wi={wi} course={course} /> : null))}
+              {!WORLDS.some((w) => w.level === lv.id) && (
+                <Card>
+                  <T v="small" color={colors.dim}>Próximamente: más zonas en este nivel.</T>
+                </Card>
+              )}
+            </View>
+          ))}
       </ScrollView>
     </Screen>
   );
 }
 
-const styles = StyleSheet.create({
+const styles = makeStyles(() => ({
   node: { width: 76, height: 76, borderRadius: 38, alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderBottomWidth: 6 },
   worldEmoji: { width: 56, height: 56, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', borderWidth: 2 },
   levelBar: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: radius.lg, borderWidth: 1 },
-});
+}));

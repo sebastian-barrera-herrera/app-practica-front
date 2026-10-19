@@ -3,13 +3,14 @@ import { Dimensions, StyleSheet, View } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
 import { colors } from './theme';
 
-const PALETTE = [colors.mint, colors.cyan, colors.amber, colors.rose, colors.violet, colors.orange];
+const palette = () => [colors.mint, colors.cyan, colors.amber, colors.rose, colors.violet, colors.orange];
 
 function Piece({ i, w, h }: { i: number; w: number; h: number }) {
   const t = useSharedValue(0);
   const cfg = useMemo(() => {
+    const pal = palette();
     const r = (n: number) => ((Math.sin(i * 12.9898 + n * 78.233) * 43758.5453) % 1 + 1) % 1;
-    return { x: r(1) * w, drift: (r(2) - 0.5) * 120, delay: r(3) * 500, dur: 1800 + r(4) * 1400, size: 6 + r(5) * 8, color: PALETTE[i % PALETTE.length], rot: (r(6) - 0.5) * 900 };
+    return { x: r(1) * w, drift: (r(2) - 0.5) * 120, delay: r(3) * 500, dur: 1800 + r(4) * 1400, size: 6 + r(5) * 8, color: pal[i % pal.length], rot: (r(6) - 0.5) * 900 };
   }, [i, w]);
   useEffect(() => {
     t.value = withDelay(cfg.delay, withTiming(1, { duration: cfg.dur, easing: Easing.in(Easing.quad) }));

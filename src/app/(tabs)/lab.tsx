@@ -3,10 +3,13 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { Terminal, restoreTerminal } from '@/engine';
-import { useGame } from '@/game/store';
+import { useCourse, useGame } from '@/game/store';
 import { openEditor } from '@/lib/editorBus';
+import { useStudyContext } from '@/lib/studyClock';
 import { Card } from '@/ui/Card';
 import { ConfirmModal } from '@/ui/ConfirmModal';
+import { CourseHeader, CourseSwitcher } from '@/ui/CourseSwitcher';
+import { PyLab } from '@/ui/PyLab';
 import { Screen } from '@/ui/Screen';
 import { TerminalView } from '@/ui/TerminalView';
 import { T } from '@/ui/Text';
@@ -28,13 +31,20 @@ let live: Terminal | null = null;
 function build(): Terminal {
   const g = useGame.getState();
   const cols = g.settings.terminalCols;
-  const snap = g.sandbox;
+  const snap = g.courses.linux.sandbox;
   const t = snap ? restoreTerminal(snap, { cols }) : new Terminal({ cols, lab: true });
   t.setEditor(openEditor);
   return t;
 }
 
-export default function TerminalTab() {
+export default function LabTab() {
+  const { course } = useCourse();
+  return course.lab.kind === 'terminal' ? <TerminalLab /> : <PyLab />;
+}
+
+function TerminalLab() {
+  const { course } = useCourse('linux');
+  useStudyContext('linux');
   const [term, setTerm] = useState<Terminal>(() => (live ??= build()));
   const [confirm, setConfirm] = useState(false);
   const [ideas, setIdeas] = useState(false);
@@ -44,7 +54,7 @@ export default function TerminalTab() {
     if (timer.current) clearTimeout(timer.current);
     timer.current = null;
     try {
-      useGame.getState().setSandbox(term.snapshot());
+      useGame.getState().setSandbox('linux', term.snapshot());
     } catch {
       /* si el estado no se puede serializar, se conserva el anterior */
     }
@@ -65,7 +75,7 @@ export default function TerminalTab() {
   }, []);
 
   const reset = () => {
-    useGame.getState().setSandbox(null);
+    useGame.getState().setSandbox('linux', null);
     live = null;
     live = build();
     setTerm(live);
@@ -74,17 +84,23 @@ export default function TerminalTab() {
 
   return (
     <Screen padded={false}>
-      <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-        <View style={{ flex: 1 }}>
-          <T v="h1">Terminal libre</T>
-          <T v="tiny" color={colors.dim}>Tu laboratorio: rompe, borra, prueba. Todo es simulado.</T>
-        </View>
-        <Pressable onPress={() => setIdeas((v) => !v)} hitSlop={8} style={{ padding: 8 }} accessibilityLabel="Ideas">
-          <T style={{ fontSize: 22 }}>💡</T>
-        </Pressable>
-        <Pressable onPress={() => setConfirm(true)} hitSlop={8} style={{ padding: 8 }} accessibilityLabel="Reiniciar laboratorio">
-          <T style={{ fontSize: 22 }}>♻️</T>
-        </Pressable>
+      <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8, gap: 10 }}>
+        <CourseSwitcher />
+        <CourseHeader
+          course={course}
+          title="Terminal libre"
+          subtitle="Tu laboratorio: rompe, borra, prueba. Todo es simulado."
+          right={
+            <View style={{ flexDirection: 'row' }}>
+              <Pressable onPress={() => setIdeas((v) => !v)} hitSlop={8} style={{ padding: 8 }} accessibilityLabel="Ideas">
+                <T style={{ fontSize: 22 }}>💡</T>
+              </Pressable>
+              <Pressable onPress={() => setConfirm(true)} hitSlop={8} style={{ padding: 8 }} accessibilityLabel="Reiniciar laboratorio">
+                <T style={{ fontSize: 22 }}>♻️</T>
+              </Pressable>
+            </View>
+          }
+        />
       </View>
       {ideas && (
         <Animated.View entering={FadeIn} style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
@@ -101,12 +117,12 @@ export default function TerminalTab() {
           key={String(live === term)}
           term={term}
           onRun={(line) => {
-            useGame.getState().trackCommands([line], true);
+            useGame.getState().trackCommands('linux', [line], true);
             useGame.getState().checkAchievements();
             scheduleSave();
           }}
           onSignal={(sig) => {
-            if (sig === 'INT') useGame.getState().bump({ ctrlC: 1 });
+            if (sig === 'INT') useGame.getState().bump('linux', { ctrlC: 1 });
           }}
           banner={['\x1b[2mLaboratorio con usuarios, procesos, servicios, red y paquetes. Prueba "help" o "man ls".\x1b[0m']}
         />

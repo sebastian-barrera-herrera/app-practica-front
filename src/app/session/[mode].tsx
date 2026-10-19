@@ -1,18 +1,21 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
-import { WORLDS, worldById } from '@/content';
+import { courseDef, worldById, type CourseDef } from '@/content';
 import { FAST_TYPES, questionById, type QItem } from '@/content/pool';
-import type { Challenge, Question } from '@/content/types';
+import type { AnyChallenge, CourseId, Question } from '@/content/types';
 import { certExam, worldExam, type ExamPlan } from '@/game/exams';
 import type { Achievement } from '@/game/achievements';
 import { blitzPool, dailyChallenge, reviewSession, surpriseSession } from '@/game/sessions';
+import { flat } from '@/game/root';
 import { dayKey } from '@/game/streak';
 import { useGame } from '@/game/store';
+import { useStudyContext } from '@/lib/studyClock';
+import { AnyChallengeView } from '@/ui/AnyChallenge';
+import { courseColor } from '@/ui/courseColors';
 import { Button } from '@/ui/Button';
 import { Card } from '@/ui/Card';
-import { ChallengeView } from '@/ui/ChallengeView';
 import { Chip } from '@/ui/Chip';
 import { ConfirmModal } from '@/ui/ConfirmModal';
 import { Mascot } from '@/ui/Mascot';
@@ -21,20 +24,26 @@ import { QuestionView, type Result } from '@/ui/QuestionView';
 import { Screen } from '@/ui/Screen';
 import { SessionSummary, type Mistake } from '@/ui/SessionSummary';
 import { T } from '@/ui/Text';
-import { colors, fonts } from '@/ui/theme';
+import { colors, fonts, makeStyles } from '@/ui/theme';
 
 export default function SessionScreen() {
-  const { mode, scope } = useLocalSearchParams<{ mode: string; scope?: string }>();
-  if (mode === 'review') return <ReviewRun />;
-  if (mode === 'surprise') return <SurpriseRun />;
-  if (mode === 'blitz') return <BlitzRun initialScope={scope} />;
-  if (mode === 'daily') return <DailyRun />;
-  if (mode?.startsWith('boss-')) return <BossRun worldId={mode.slice(5)} />;
+  const { mode, scope, course: courseParam } = useLocalSearchParams<{ mode: string; scope?: string; course?: string }>();
+  const active = useGame((s) => s.active);
+  // los exámenes y misiones de una zona saben a qué curso pertenecen; el resto lo indica el parámetro `course`
+  const worldCourse = mode?.startsWith('boss-') || mode?.startsWith('exam-') ? worldById(mode.slice(mode.indexOf('-') + 1))?.course : undefined;
+  const cid: CourseId = worldCourse ?? (courseParam === 'python' || courseParam === 'linux' ? courseParam : active);
+  const course = courseDef(cid);
+  useStudyContext(cid);
+  if (mode === 'review') return <ReviewRun course={course} />;
+  if (mode === 'surprise') return <SurpriseRun course={course} />;
+  if (mode === 'blitz') return <BlitzRun course={course} initialScope={scope} />;
+  if (mode === 'daily') return <DailyRun course={course} />;
+  if (mode?.startsWith('boss-')) return <BossRun course={course} worldId={mode.slice(5)} />;
   if (mode?.startsWith('exam-')) {
     const w = worldById(mode.slice(5));
-    if (w) return <ExamRun planOf={() => worldExam(w, String(Date.now()))} />;
+    if (w) return <ExamRun course={course} planOf={() => worldExam(course, w, String(Date.now()))} />;
   }
-  if (mode?.startsWith('cert-')) return <ExamRun planOf={() => certExam(mode.slice(5) as never, String(Date.now()))} />;
+  if (mode?.startsWith('cert-')) return <ExamRun course={course} planOf={() => certExam(course, mode.slice(5) as never, String(Date.now()))} />;
   return (
     <Screen>
       <T>Sesión no encontrada</T>
@@ -99,7 +108,7 @@ function correctText(q: Question): string | null {
 
 // ───────────────────────── repaso espaciado ─────────────────────────
 
-function QuestionRun({ items, title, color, mode, onFinish, srsReview }: { items: QItem[]; title: string; color?: string; mode: 'lesson' | 'exam'; onFinish: (results: { item: QItem; correct: boolean }[]) => void; srsReview?: boolean }) {
+function QuestionRun({ course, items, title, color, mode, onFinish, srsReview }: { course: CourseDef; items: QItem[]; title: string; color?: string; mode: 'lesson' | 'exam'; onFinish: (results: { item: QItem; correct: boolean }[]) => void; srsReview?: boolean }) {
   const [pos, setPos] = useState(0);
   const results = useRef<{ item: QItem; correct: boolean }[]>([]);
   const [confirm, setConfirm] = useState(false);
@@ -114,7 +123,7 @@ function QuestionRun({ items, title, color, mode, onFinish, srsReview }: { items
           mode={mode}
           continueLabel={pos + 1 >= items.length ? 'Terminar' : 'Continuar'}
           onDone={(r: Result) => {
-            useGame.getState().answer(item.id, r.correct, { review: srsReview });
+            useGame.getState().answer(course.id, item.id, r.correct, { review: srsReview });
             results.current.push({ item, correct: r.correct });
             if (pos + 1 >= items.length) onFinish(results.current);
             else setPos(pos + 1);
@@ -126,8 +135,8 @@ function QuestionRun({ items, title, color, mode, onFinish, srsReview }: { items
   );
 }
 
-function ReviewRun() {
-  const plan = useMemo(() => reviewSession(useGame.getState(), Date.now(), 10), []);
+function ReviewRun({ course }: { course: CourseDef }) {
+  const plan = useMemo(() => reviewSession(flat(useGame.getState(), course.id), Date.now(), course, 10), [course]);
   const [res, setRes] = useState<null | { xp: number; correct: number; total: number; mistakes: Mistake[]; ach: Achievement[]; levelUp: number | null }>(null);
   if (!plan.items.length) {
     return (
@@ -162,16 +171,17 @@ function ReviewRun() {
   }
   return (
     <QuestionRun
+      course={course}
       items={plan.items}
       title="Repaso"
-      color={colors.cyan}
+      color={courseColor(course.id)}
       mode="lesson"
       srsReview
       onFinish={(r) => {
         const correct = r.filter((x) => x.correct).length;
         const xp = Math.min(40, correct * 3 + 4);
         const g = useGame.getState();
-        const a = g.awardXp(xp);
+        const a = g.awardXp(course.id, xp);
         const ach = g.checkAchievements();
         setRes({ xp, correct, total: r.length, levelUp: a.levelUp, ach, mistakes: r.filter((x) => !x.correct).map((x) => ({ q: x.item.q.q, correct: correctText(x.item.q), why: x.item.q.why })) });
       }}
@@ -181,8 +191,8 @@ function ReviewRun() {
 
 // ───────────────────────── examen sorpresa ─────────────────────────
 
-function SurpriseRun() {
-  const plan = useMemo(() => surpriseSession(useGame.getState(), Date.now()), []);
+function SurpriseRun({ course }: { course: CourseDef }) {
+  const plan = useMemo(() => surpriseSession(flat(useGame.getState(), course.id), Date.now(), course), [course]);
   const [started, setStarted] = useState(false);
   const [res, setRes] = useState<null | { xp: number; correct: number; total: number; ach: Achievement[]; mistakes: Mistake[] }>(null);
   useEffect(() => {
@@ -210,7 +220,7 @@ function SurpriseRun() {
       <Screen edges={['top', 'bottom']}>
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16 }}>
           <Mascot mood="oops" size={150} />
-          <T v="title" center>¡Examen sorpresa! 🥷</T>
+          <T v="title" center>¡Examen sorpresa de {course.name}! 🥷</T>
           <T color={colors.dim} center>{plan.length} preguntas rápidas de lo que ya aprendiste. Sin pistas. ¿Listo?</T>
           <Button label="Aceptar el reto" onPress={() => setStarted(true)} />
           <Button label="Ahora no" kind="ghost" onPress={() => router.back()} />
@@ -219,6 +229,7 @@ function SurpriseRun() {
     );
   return (
     <QuestionRun
+      course={course}
       items={plan}
       title="Sorpresa"
       color={colors.rose}
@@ -227,8 +238,8 @@ function SurpriseRun() {
         const correct = r.filter((x) => x.correct).length;
         const xp = 15 + correct * 6;
         const g = useGame.getState();
-        g.awardXp(xp);
-        const ach = g.bump({ surprises: 1 });
+        g.awardXp(course.id, xp);
+        const ach = g.bump(course.id, { surprises: 1 });
         setRes({ xp, correct, total: r.length, ach, mistakes: r.filter((x) => !x.correct).map((x) => ({ q: x.item.q.q, correct: correctText(x.item.q), why: x.item.q.why })) });
       }}
     />
@@ -237,10 +248,10 @@ function SurpriseRun() {
 
 // ───────────────────────── prueba rápida ─────────────────────────
 
-function BlitzRun({ initialScope }: { initialScope?: string }) {
+function BlitzRun({ course, initialScope }: { course: CourseDef; initialScope?: string }) {
   const [scope, setScope] = useState<string | null>(initialScope ?? null);
   const [phase, setPhase] = useState<'pick' | 'play' | 'end'>(initialScope ? 'play' : 'pick');
-  const pool = useMemo(() => (scope ? blitzPool(useGame.getState(), scope) : []), [scope]);
+  const pool = useMemo(() => (scope ? blitzPool(flat(useGame.getState(), course.id), scope, course) : []), [scope, course]);
   const [idx, setIdx] = useState(0);
   const [correct, setCorrect] = useState(0);
   const [wrong, setWrong] = useState(0);
@@ -248,7 +259,7 @@ function BlitzRun({ initialScope }: { initialScope?: string }) {
   const [bestCombo, setBestCombo] = useState(0);
   const [score, setScore] = useState(0);
   const [end, setEnd] = useState<null | { xp: number; ach: Achievement[]; record: boolean }>(null);
-  const best = useGame((s) => s.stats.blitzBest);
+  const best = useGame((s) => s.courses[course.id].stats.blitzBest);
   const finish = useCallback(() => {
     setPhase('end');
   }, []);
@@ -258,12 +269,12 @@ function BlitzRun({ initialScope }: { initialScope?: string }) {
     if (phase === 'end' && !end) {
       const g = useGame.getState();
       const xp = Math.min(80, correct * 3 + (bestCombo >= 5 ? 10 : 0));
-      const record = correct > g.stats.blitzBest;
-      g.awardXp(xp);
-      const ach = g.setStat('blitzBest', correct);
+      const record = correct > g.courses[course.id].stats.blitzBest;
+      g.awardXp(course.id, xp);
+      const ach = g.setStat(course.id, 'blitzBest', correct);
       setEnd({ xp, ach, record });
     }
-  }, [phase, end, correct, bestCombo]);
+  }, [phase, end, correct, bestCombo, course.id]);
 
   if (phase === 'pick') {
     return (
@@ -279,7 +290,7 @@ function BlitzRun({ initialScope }: { initialScope?: string }) {
           </View>
           <T v="label" color={colors.dim}>O elige una zona</T>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-            {WORLDS.map((w) => (
+            {course.worlds.map((w) => (
               <Chip key={w.id} label={`${w.emoji} ${w.title}`} color={w.color} onPress={() => { setScope(w.id); setPhase('play'); }} />
             ))}
           </View>
@@ -337,7 +348,7 @@ function BlitzRun({ initialScope }: { initialScope?: string }) {
         seed={`blitz-${idx}`}
         mode="blitz"
         onDone={(r) => {
-          useGame.getState().answer(item.id, r.correct);
+          useGame.getState().answer(course.id, item.id, r.correct);
           if (r.correct) {
             const c = combo + 1;
             setCorrect((n) => n + 1);
@@ -357,7 +368,7 @@ function BlitzRun({ initialScope }: { initialScope?: string }) {
 
 // ───────────────────────── exámenes y certificaciones ─────────────────────────
 
-function ExamRun({ planOf }: { planOf: () => ExamPlan }) {
+function ExamRun({ course, planOf }: { course: CourseDef; planOf: () => ExamPlan }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps -- el plan se genera una sola vez por examen
   const plan = useMemo(planOf, []);
   const [phase, setPhase] = useState<'intro' | 'q' | 'c' | 'end'>('intro');
@@ -378,9 +389,9 @@ function ExamRun({ planOf }: { planOf: () => ExamPlan }) {
     const got = results.current.filter((r) => r.correct).length + solved.current * 3;
     const score = totalPts ? got / totalPts : 0;
     const g = useGame.getState();
-    const r = g.recordExam(plan.id, score, plan.passMark, plan.bonusXp);
+    const r = g.recordExam(course.id, plan.id, score, plan.passMark, plan.bonusXp);
     setEnd({ score, passed: r.passed, xp: r.passed ? plan.bonusXp : Math.round(plan.bonusXp * 0.15), ach: r.newAchievements, levelUp: r.levelUp });
-  }, [phase, end, plan, totalPts]);
+  }, [phase, end, plan, totalPts, course.id]);
 
   if (phase === 'intro') {
     return (
@@ -427,7 +438,7 @@ function ExamRun({ planOf }: { planOf: () => ExamPlan }) {
           levelUp={end.levelUp}
           confetti={end.passed}
           actions={[
-            ...(end.passed ? [] : [{ label: 'Repasar y reintentar', onPress: () => router.replace({ pathname: '/session/[mode]', params: { mode: plan.id.startsWith('cert') ? plan.id : plan.id.replace('exam-', 'exam-') } }) }]),
+            ...(end.passed ? [] : [{ label: 'Repasar y reintentar', onPress: () => router.replace({ pathname: '/session/[mode]', params: { mode: plan.id, course: course.id } }) }]),
             { label: 'Volver', kind: end.passed ? ('primary' as const) : ('ghost' as const), onPress: () => router.back() },
           ]}
         />
@@ -446,7 +457,7 @@ function ExamRun({ planOf }: { planOf: () => ExamPlan }) {
           mode="exam"
           continueLabel="Siguiente"
           onDone={(r) => {
-            useGame.getState().answer(item.id, r.correct);
+            useGame.getState().answer(course.id, item.id, r.correct);
             results.current.push({ item, correct: r.correct });
             if (pos + 1 >= plan.questions.length) {
               if (plan.challenges.length) setPhase('c');
@@ -458,19 +469,20 @@ function ExamRun({ planOf }: { planOf: () => ExamPlan }) {
       </Screen>
     );
   }
-  const ch: Challenge = plan.challenges[cpos];
+  const ch: AnyChallenge = plan.challenges[cpos];
   return (
     <Screen edges={['top', 'bottom']} padded={false}>
       <TopBar pos={plan.questions.length + cpos} total={plan.questions.length + plan.challenges.length} color={plan.color} right={timer} onClose={() => setConfirm(true)} />
       <View style={{ paddingHorizontal: 16, paddingBottom: 6 }}>
         <Chip label={`Reto práctico ${cpos + 1}/${plan.challenges.length}`} color={colors.violet} />
       </View>
-      <ChallengeView
+      <AnyChallengeView
         key={ch.id}
+        course={course.id}
         challenge={ch}
         strict
         continueLabel={cpos + 1 >= plan.challenges.length ? 'Terminar examen' : 'Siguiente reto'}
-        onRun={(line) => useGame.getState().trackCommands([line], false)}
+        onRun={(line) => trackRun(course.id, line, false)}
         onSolved={() => {
           solved.current += 1;
           if (cpos + 1 >= plan.challenges.length) finish();
@@ -487,7 +499,7 @@ function ExamRun({ planOf }: { planOf: () => ExamPlan }) {
 
 // ───────────────────────── reto final / reto diario ─────────────────────────
 
-function ChallengeShell({ challenge, title, xp, onDone, doneLabel }: { challenge: Challenge; title: string; xp: number; onDone: (info: { ach: Achievement[]; levelUp: number | null }) => void; doneLabel: string }) {
+function ChallengeShell({ course, challenge, title, xp, onDone, doneLabel }: { course: CourseDef; challenge: AnyChallenge; title: string; xp: number; onDone: (info: { ach: Achievement[]; levelUp: number | null }) => void; doneLabel: string }) {
   const [confirm, setConfirm] = useState(false);
   return (
     <Screen edges={['top', 'bottom']} padded={false}>
@@ -496,15 +508,16 @@ function ChallengeShell({ challenge, title, xp, onDone, doneLabel }: { challenge
         <T v="h3" style={{ flex: 1 }}>{title}</T>
         <Chip label={`+${xp} XP`} color={colors.amber} />
       </View>
-      <ChallengeView
+      <AnyChallengeView
+        course={course.id}
         challenge={challenge}
         continueLabel={doneLabel}
-        onRun={(line) => useGame.getState().trackCommands([line], false)}
+        onRun={(line) => trackRun(course.id, line, false)}
         onSolved={(info) => {
           const g = useGame.getState();
-          g.solveChallenge(challenge.id, info.commands);
-          if (info.ctrlC) g.bump({ ctrlC: 1 });
-          const a = g.awardXp(Math.max(10, xp - info.hintsUsed * 3 - (info.usedSolution ? 10 : 0)));
+          g.solveChallenge(course.id, challenge.id, info.commands);
+          if (info.ctrlC) g.bump(course.id, { ctrlC: 1 });
+          const a = g.awardXp(course.id, Math.max(10, xp - info.hintsUsed * 3 - (info.usedSolution ? 10 : 0)));
           onDone({ ach: g.checkAchievements(), levelUp: a.levelUp });
         }}
       />
@@ -513,18 +526,20 @@ function ChallengeShell({ challenge, title, xp, onDone, doneLabel }: { challenge
   );
 }
 
-function BossRun({ worldId }: { worldId: string }) {
+function BossRun({ course, worldId }: { course: CourseDef; worldId: string }) {
   const w = worldById(worldId);
   if (!w?.boss) return <Screen><T>Misión no encontrada</T></Screen>;
-  return <ChallengeShell challenge={w.boss} title={`Misión: ${w.title}`} xp={60} doneLabel="Completar misión" onDone={() => router.back()} />;
+  return <ChallengeShell course={course} challenge={w.boss} title={`Misión: ${w.title}`} xp={60} doneLabel="Completar misión" onDone={() => router.back()} />;
 }
 
-function DailyRun() {
-  const d = useMemo(() => dailyChallenge(useGame.getState(), Date.now()), []);
-  const daily = useGame((s) => s.daily);
+function DailyRun({ course }: { course: CourseDef }) {
+  const d = useMemo(() => dailyChallenge(flat(useGame.getState(), course.id), Date.now(), course), [course]);
+  const daily = useGame((s) => s.courses[course.id].daily);
   const already = daily.day === dayKey(Date.now()) && daily.done;
+  if (!d) return <Screen><T>Aún no hay retos disponibles en este curso.</T><Button label="Volver" onPress={() => router.back()} /></Screen>;
   return (
     <ChallengeShell
+      course={course}
       challenge={d.challenge}
       title={already ? 'Reto del día (repetido)' : 'Reto del día'}
       xp={already ? 10 : 30}
@@ -532,8 +547,8 @@ function DailyRun() {
       onDone={() => {
         const g = useGame.getState();
         if (!already) {
-          g.setDaily(dayKey(Date.now()), true);
-          g.bump({ dailySolved: 1 });
+          g.setDaily(course.id, dayKey(Date.now()), true);
+          g.bump(course.id, { dailySolved: 1 });
         }
         router.back();
       }}
@@ -541,8 +556,15 @@ function DailyRun() {
   );
 }
 
-const styles = StyleSheet.create({
+/** Registra una ejecución del alumno (comando en Linux, ejecución de código en Python). */
+function trackRun(course: CourseId, line: string, sandbox: boolean) {
+  const g = useGame.getState();
+  if (course === 'linux') g.trackCommands('linux', [line], sandbox);
+  else g.bump(course, { commands: 1, ...(sandbox ? { sandboxCommands: 1 } : {}) });
+}
+
+const styles = makeStyles(() => ({
   top: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 16, paddingVertical: 12 },
-});
+}));
 
 export { FadeIn, Animated, questionById, FAST_TYPES };

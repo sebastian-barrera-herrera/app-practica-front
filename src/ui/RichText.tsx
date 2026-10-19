@@ -3,7 +3,7 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 import { parseInline, parseRich } from '@/content/richtext';
 import type { Block } from '@/content/types';
 import { T } from './Text';
-import { colors, fonts, radius } from './theme';
+import { colors, fonts, radius, makeStyles } from './theme';
 
 export function Inline({ text, color = colors.text, size = 16 }: { text: string; color?: string; size?: number }) {
   const spans = useMemo(() => parseInline(text), [text]);
@@ -25,10 +25,10 @@ export function Inline({ text, color = colors.text, size = 16 }: { text: string;
 }
 
 const CALLOUT = {
-  tip: { icon: '💡', color: colors.mint, label: 'Consejo' },
-  warn: { icon: '⚠️', color: colors.amber, label: 'Cuidado' },
-  note: { icon: 'ℹ️', color: colors.cyan, label: 'Nota' },
-  key: { icon: '🔑', color: colors.violet, label: 'Clave' },
+  tip: { icon: '💡', get color() { return colors.mint; }, label: 'Consejo' },
+  warn: { icon: '⚠️', get color() { return colors.amber; }, label: 'Cuidado' },
+  note: { icon: 'ℹ️', get color() { return colors.cyan; }, label: 'Nota' },
+  key: { icon: '🔑', get color() { return colors.violet; }, label: 'Clave' },
 };
 
 export function CodeBlock({ lines }: { lines: string[] }) {
@@ -122,10 +122,10 @@ function BlockView({ b, size }: { b: Block; size: number }) {
   }
 }
 
-const styles = StyleSheet.create({
+const styles = makeStyles(() => ({
   code: { backgroundColor: colors.termBg, borderRadius: radius.md, padding: 12, borderWidth: 1, borderColor: colors.line },
   callout: { flexDirection: 'row', gap: 12, padding: 14, borderRadius: radius.md, borderWidth: 1 },
   table: { borderRadius: radius.md, overflow: 'hidden', borderWidth: 1, borderColor: colors.line },
   tr: { flexDirection: 'row', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.line },
   td: { flex: 1, paddingHorizontal: 10, paddingVertical: 8, justifyContent: 'center' },
-});
+}));

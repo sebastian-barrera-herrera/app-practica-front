@@ -1,15 +1,21 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import { FlatList, Pressable, ScrollView, TextInput, View } from 'react-native';
 import type { Category } from '@/engine';
-import { CATEGORY_LABEL, LEVEL_COLOR, LEVEL_LABEL, libraryEntries } from '@/lib/library';
+import { CATEGORY_LABEL, levelColor, LEVEL_LABEL, libraryEntries } from '@/lib/library';
 import { Card } from '@/ui/Card';
 import { Chip } from '@/ui/Chip';
+import { PyLibrary } from '@/ui/PyLibrary';
 import { Screen } from '@/ui/Screen';
 import { T } from '@/ui/Text';
 import { colors, fonts, radius } from '@/ui/theme';
 
-export default function Library() {
+export default function LibraryRoute() {
+  const { course } = useLocalSearchParams<{ course?: string }>();
+  return course === 'python' ? <PyLibrary /> : <Library />;
+}
+
+function Library() {
   const [q, setQ] = useState('');
   const [cat, setCat] = useState<Category | null>(null);
   const all = useMemo(libraryEntries, []);
@@ -66,7 +72,7 @@ export default function Library() {
                 </T>
                 <T v="small" color={colors.dim} numberOfLines={2}>{def.summary}</T>
               </View>
-              {def.level ? <Chip label={LEVEL_LABEL[def.level]} color={LEVEL_COLOR[def.level]} /> : null}
+              {def.level ? <Chip label={LEVEL_LABEL[def.level]} color={levelColor(def.level)} /> : null}
             </View>
           </Card>
         )}

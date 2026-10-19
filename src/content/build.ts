@@ -1,5 +1,5 @@
 /** Constructores compactos para escribir lecciones. */
-import type { Challenge, DemoLine, IllustrationId, Lesson, Question, Step, WorldDef, LevelId } from './types';
+import type { AnyChallenge, Challenge, CourseId, DemoLine, IllustrationId, Lesson, PyChallenge, Question, Step, WorldDef, LevelId } from './types';
 import type { WorldOptions } from '@/engine/world';
 
 export const learn = (title: string, body: string, emoji?: string): Step => ({ type: 'learn', title, body: body.trim(), emoji });
@@ -40,15 +40,27 @@ export function lesson(
       p++;
       return { ...s, challenge: { ...s.challenge, id: s.challenge.id || `${id}-p${p}` } };
     }
+    if (s.type === 'pypractice') {
+      p++;
+      return { ...s, challenge: { ...s.challenge, id: s.challenge.id || `${id}-p${p}` } };
+    }
     return s;
   });
   return { id, title: o.title, summary: o.summary, emoji: o.emoji, commands: o.commands, steps: fixed, minutes: o.minutes ?? Math.max(4, Math.round(steps.length * 0.8)) };
 }
 
+export type PyPracticeInput = Omit<PyChallenge, 'id' | 'lang'> & { id?: string };
+
 export function world(
-  w: Omit<WorldDef, 'boss'> & { boss?: PracticeInput },
+  w: Omit<WorldDef, 'boss' | 'course'> & { course?: CourseId; boss?: PracticeInput | PyPracticeInput },
 ): WorldDef {
-  return { ...w, boss: w.boss ? { ...w.boss, id: w.boss.id ?? `${w.id}-boss` } : undefined };
+  const course: CourseId = w.course ?? 'linux';
+  const boss: AnyChallenge | undefined = w.boss
+    ? course === 'python'
+      ? ({ ...(w.boss as PyPracticeInput), lang: 'py', id: w.boss.id ?? `${w.id}-boss` } as PyChallenge)
+      : ({ ...(w.boss as PracticeInput), id: w.boss.id ?? `${w.id}-boss` } as Challenge)
+    : undefined;
+  return { ...w, course, boss };
 }
 
 export type { LevelId };

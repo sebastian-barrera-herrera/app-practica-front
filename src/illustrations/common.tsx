@@ -16,13 +16,13 @@ export function Frame({ title, children, style }: { title?: string; children: Re
 }
 
 export const palette = {
-  you: colors.mint,
-  term: colors.cyan,
-  shell: colors.violet,
-  kernel: colors.amber,
-  hw: colors.rose,
-  file: colors.dim,
-  dir: colors.cyan,
+  get you() { return colors.mint; },
+  get term() { return colors.cyan; },
+  get shell() { return colors.violet; },
+  get kernel() { return colors.amber; },
+  get hw() { return colors.rose; },
+  get file() { return colors.dim; },
+  get dir() { return colors.cyan; },
 };
 
 /** Caja de código con fuente monoespaciada. */

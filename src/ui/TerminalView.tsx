@@ -1,12 +1,12 @@
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FlatList, Pressable, ScrollView, StyleSheet, TextInput, View, type LayoutChangeEvent, type TextInputInstance } from 'react-native';
+import { FlatList, Pressable, ScrollView, TextInput, View, type LayoutChangeEvent, type TextInputInstance } from 'react-native';
 import { parseAnsi, type Terminal } from '@/engine';
 import type { AnsiSpan } from '@/engine/ansi';
 import { stripAnsi } from '@/engine';
 import { select, tap } from '@/lib/haptics';
 import { Chip } from './Chip';
 import { T } from './Text';
-import { ansi, ansi256, colors, fonts } from './theme';
+import { ansi, ansi256, darkColors as colors, fonts, makeStyles } from './theme';
 
 interface Line {
   id: number;
@@ -470,7 +470,7 @@ export function TerminalView({ term, onRun, onSignal, autoFocus, hideKeys, place
   );
 }
 
-const styles = StyleSheet.create({
+const styles = makeStyles(() => ({
   root: { flex: 1, backgroundColor: colors.termBg },
   screen: { flex: 1 },
   options: { paddingVertical: 6, borderTopWidth: 1, borderTopColor: colors.line, backgroundColor: colors.bg2 },
@@ -482,6 +482,6 @@ const styles = StyleSheet.create({
   key: { minWidth: 34, height: 32, paddingHorizontal: 9, borderRadius: 8, backgroundColor: colors.card2, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.line },
   keySig: { borderColor: colors.rose + '88', backgroundColor: colors.rose + '18' },
   keyNav: { borderColor: colors.cyan + '77', backgroundColor: colors.cyan + '14' },
-});
+}));
 
 export { tap };

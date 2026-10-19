@@ -1,51 +1,54 @@
-/** Construcción de sesiones de práctica: repaso, sorpresa, prueba rápida, reto diario. */
-import { WORLDS, allChallenges } from '@/content';
+/** Construcción de sesiones de práctica de UN curso: repaso, sorpresa, prueba rápida, reto diario. */
+import { allChallenges, type CourseDef } from '@/content';
 import { FAST_TYPES, allQuestions, pickVaried, questionById, type QItem } from '@/content/pool';
-import type { Challenge } from '@/content/types';
+import type { AnyChallenge } from '@/content/types';
 import { seededShuffle } from '@/lib/cmdnorm';
 import type { ProgressState } from './progress';
 import { dueItems } from './srs';
 import { dayKey } from './streak';
 
 /** Preguntas de lecciones ya completadas (o de la primera lección si no hay ninguna). */
-export function learnedQuestions(s: ProgressState): QItem[] {
+export function learnedQuestions(s: ProgressState, course: CourseDef): QItem[] {
   const done = new Set(Object.entries(s.lessons).filter(([, l]) => l.done).map(([id]) => id));
-  const learned = allQuestions().filter((q) => done.has(q.lessonId));
+  const all = allQuestions(course.id);
+  const learned = all.filter((q) => done.has(q.lessonId));
   if (learned.length) return learned;
-  return allQuestions().filter((q) => q.worldId === WORLDS[0].id).slice(0, 12);
+  const first = course.worlds[0]?.id;
+  return all.filter((q) => q.worldId === first).slice(0, 12);
 }
 
-export function reviewSession(s: ProgressState, now: number, max = 10): { items: QItem[]; due: number; fresh: boolean } {
+export function reviewSession(s: ProgressState, now: number, course: CourseDef, max = 10): { items: QItem[]; due: number; fresh: boolean } {
   const ids = dueItems(s.srs, now);
-  const items = ids.map((id) => questionById(id)).filter((x): x is QItem => !!x);
+  const items = ids.map((id) => questionById(id)).filter((x): x is QItem => !!x && x.course === course.id);
   if (items.length >= 3) return { items: items.slice(0, max), due: items.length, fresh: false };
   // nada vencido: repaso libre de lo aprendido, priorizando lo más flojo
-  const learned = learnedQuestions(s);
+  const learned = learnedQuestions(s, course);
   const weak = [...learned].sort((a, b) => (s.srs[a.id]?.box ?? -1) - (s.srs[b.id]?.box ?? -1));
   const merged = [...items, ...weak.filter((w) => !items.includes(w))].slice(0, max);
   return { items: merged, due: items.length, fresh: true };
 }
 
-export function surpriseSession(s: ProgressState, now: number): QItem[] {
-  const pool = learnedQuestions(s).filter((q) => FAST_TYPES.has(q.q.t));
+export function surpriseSession(s: ProgressState, now: number, course: CourseDef): QItem[] {
+  const pool = learnedQuestions(s, course).filter((q) => FAST_TYPES.has(q.q.t));
   return pickVaried(pool, 5, 'surprise-' + now);
 }
 
-export function blitzPool(s: ProgressState, scope: string): QItem[] {
+export function blitzPool(s: ProgressState, scope: string, course: CourseDef): QItem[] {
   let pool: QItem[];
-  if (scope === 'all') pool = allQuestions();
-  else if (scope === 'learned') pool = learnedQuestions(s);
-  else pool = allQuestions().filter((q) => q.worldId === scope);
+  if (scope === 'all') pool = allQuestions(course.id);
+  else if (scope === 'learned') pool = learnedQuestions(s, course);
+  else pool = allQuestions(course.id).filter((q) => q.worldId === scope);
   pool = pool.filter((q) => FAST_TYPES.has(q.q.t));
   return seededShuffle(pool, 'blitz-' + Date.now());
 }
 
-export function dailyChallenge(s: ProgressState, now: number): { challenge: Challenge; worldId: string } {
-  const all = allChallenges();
+export function dailyChallenge(s: ProgressState, now: number, course: CourseDef): { challenge: AnyChallenge; worldId: string } | null {
+  const all = allChallenges(course.id);
   const done = new Set(Object.entries(s.lessons).filter(([, l]) => l.done).map(([id]) => id));
   let pool = all.filter((c) => c.lessonId && done.has(c.lessonId));
-  if (!pool.length) pool = all.filter((c) => c.worldId === WORLDS[0].id && c.lessonId);
-  const pick = seededShuffle(pool, dayKey(now))[0];
+  if (!pool.length) pool = all.filter((c) => c.worldId === course.worlds[0]?.id && c.lessonId);
+  if (!pool.length) return null;
+  const pick = seededShuffle(pool, dayKey(now) + course.id)[0];
   return { challenge: pick.challenge, worldId: pick.worldId };
 }
 

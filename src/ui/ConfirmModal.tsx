@@ -1,8 +1,8 @@
 import React from 'react';
-import { Modal, Pressable, StyleSheet, View } from 'react-native';
+import { Modal, Pressable, View } from 'react-native';
 import { Button } from './Button';
 import { T } from './Text';
-import { colors, radius } from './theme';
+import { colors, radius, makeStyles } from './theme';
 
 export function ConfirmModal({ visible, title, message, confirmLabel = 'Aceptar', cancelLabel = 'Cancelar', danger, onConfirm, onCancel }: { visible: boolean; title: string; message: string; confirmLabel?: string; cancelLabel?: string; danger?: boolean; onConfirm: () => void; onCancel: () => void }) {
   return (
@@ -21,7 +21,7 @@ export function ConfirmModal({ visible, title, message, confirmLabel = 'Aceptar'
   );
 }
 
-const styles = StyleSheet.create({
+const styles = makeStyles(() => ({
   backdrop: { flex: 1, backgroundColor: 'rgba(3,6,16,0.75)', justifyContent: 'center', padding: 24 },
   box: { backgroundColor: colors.card, borderRadius: radius.xl, padding: 22, gap: 10, borderWidth: 1, borderColor: colors.line },
-});
+}));
