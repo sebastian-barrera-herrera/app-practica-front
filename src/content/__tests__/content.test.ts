@@ -4,6 +4,9 @@ import { Terminal } from '@/engine/terminal';
 import { WORLDS, allChallenges } from '../index';
 import type { Question } from '../types';
 
+declare const __dirname: string;
+declare const require: (m: string) => any;
+
 function mkTerm(setup: any = {}) {
   return new Terminal({ instant: true, cols: 80, ...setup });
 }
@@ -38,6 +41,17 @@ async function runSolution(term: Terminal, steps: string[]) {
   }
   await Promise.all(pending);
 }
+
+describe('ilustraciones', () => {
+  test('todas las ilustraciones usadas en las lecciones están implementadas', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const src: string = require('fs').readFileSync(require('path').join(__dirname, '../../illustrations/index.tsx'), 'utf8');
+    const used = new Set<string>();
+    for (const w of WORLDS) for (const l of w.lessons) for (const st of l.steps) if (st.type === 'illustration') used.add(st.id);
+    for (const id of used) expect(src).toMatch(new RegExp(`['"]?${id}['"]?:`));
+    expect(used.size).toBeGreaterThanOrEqual(20);
+  });
+});
 
 describe('estructura del contenido', () => {
   test('ids únicos y metadatos válidos', () => {
