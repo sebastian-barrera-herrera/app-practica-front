@@ -179,7 +179,7 @@ registerNative('sys', (I: Interp, m: PyModule) => {
     path_hooks: new PyList([]),
     path_importer_cache: new PyDict(),
     warnoptions: new PyList([]),
-    builtin_module_names: new PyTuple(['builtins', 'sys', 'math', 'time', 'itertools', '_io'].map((x) => x)),
+    builtin_module_names: new PyTuple(['_io', '_random', '_thread', '_weakref', 'atexit', 'builtins', 'errno', 'gc', 'itertools', 'math', 'posix', 'sys', 'time', 'unicodedata'].map((x) => x)),
     stdlib_module_names: new PyList([]),
     float_info: structSeq('float_info', [
       ['max', new PyFloat(Number.MAX_VALUE)], ['max_exp', 1024], ['max_10_exp', 308], ['min', new PyFloat(2.2250738585072014e-308)],
@@ -188,6 +188,7 @@ registerNative('sys', (I: Interp, m: PyModule) => {
     int_info: structSeq('int_info', [['bits_per_digit', 30], ['sizeof_digit', 4], ['default_max_str_digits', 4300], ['str_digits_check_threshold', 640]]),
     implementation: structSeq('implementation', [['name', 'cpython'], ['version', new PyTuple([3, 13, 0, 'final', 0], versionInfoType)], ['cache_tag', 'cpython-313']]),
     flags: structSeq('flags', [['debug', 0], ['optimize', 0], ['interactive', 0], ['verbose', 0], ['dont_write_bytecode', 1], ['utf8_mode', 1]]),
+    hash_info: structSeq('hash_info', [['width', 64], ['modulus', 2305843009213693951n], ['inf', 314159], ['nan', 0], ['imag', 1000003], ['algorithm', 'siphash13'], ['hash_bits', 64], ['seed_bits', 128], ['cutoff', 0]]),
     thread_info: structSeq('thread_info', [['name', 'pthread'], ['lock', 'mutex+cond'], ['version', null]]),
   });
   mfn(m, 'exit', 'status=, /', (status?: any) => {
@@ -212,6 +213,7 @@ registerNative('sys', (I: Interp, m: PyModule) => {
   mfn(m, 'getrefcount', 'object, /', () => 2);
   mfn(m, 'getdefaultencoding', '', () => 'utf-8');
   mfn(m, 'getfilesystemencoding', '', () => 'utf-8');
+  mfn(m, 'getfilesystemencodeerrors', '', () => 'surrogateescape');
   mfn(m, 'intern', 'string, /', (s: any) => s);
   mfn(m, 'is_finalizing', '', () => false);
   mfn(m, 'exc_info', '', () => {
@@ -245,6 +247,19 @@ registerNative('sys', (I: Interp, m: PyModule) => {
       I.builtins.set('_', v);
     }
     return null;
+  });
+  mfn(m, '_getsource', 'filename', (fn: any) => {
+    const lines = I.sources.get(ops.strValue(fn));
+    if (!lines) return null;
+    const out = lines.map((l) => l + '\n');
+    if (out.length > 0 && out[out.length - 1] === '\n') out.pop();
+    return new PyList(out);
+  });
+  mfn(m, '_getframemodulename', 'depth=', (depth?: any) => {
+    let f = I.frame;
+    let d = depth === undefined ? 0 : Number(depth);
+    while (d > 0 && f) { f = f.back; d--; }
+    return f ? (f.g.get('__name__') ?? null) : null;
   });
   mfn(m, 'get_int_max_str_digits', '', () => 4300);
   mfn(m, 'set_int_max_str_digits', 'maxdigits', () => null);

@@ -16,7 +16,7 @@ import { decodeBytes, encodeStr } from './t_str';
 
 type BB = PyBytes | PyByteArray;
 const isBB = (x: any): x is BB => x instanceof PyBytes || x instanceof PyByteArray;
-const bytesOf = (x: any): ArrayLike<number> => {
+const bytesOf = (x: any): number[] | Uint8Array => {
   if (x instanceof PyBytes) return x.b;
   if (x instanceof PyByteArray) return x.b;
   if (x instanceof PyObject && x.cls === memoryViewType) return (x as any).src;
@@ -84,7 +84,7 @@ function find(hay: ArrayLike<number>, needle: ArrayLike<number>, start: number, 
   return -1;
 }
 
-function sub(x: any): ArrayLike<number> {
+function sub(x: any): number[] | Uint8Array {
   const iv = ops.intValue(x);
   if (iv !== undefined) {
     const n = Number(iv);

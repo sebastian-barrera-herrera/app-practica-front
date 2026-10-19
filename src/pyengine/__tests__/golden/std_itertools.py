@@ -1,0 +1,10 @@
+import itertools as it
+print(list(it.islice(it.count(10, 5), 4)), list(it.chain([1], "ab", (2,))), list(it.chain.from_iterable([[1, 2], [3]])), list(it.repeat("x", 3)))
+print(list(it.accumulate([1, 2, 3, 4])), list(it.accumulate([1, 2, 3], lambda a, b: a * b)), list(it.accumulate([1, 2], initial=10)))
+print(list(it.product("ab", [1, 2])), list(it.product([0, 1], repeat=2)), list(it.permutations("abc", 2)), list(it.combinations("abcd", 2)), list(it.combinations_with_replacement("ab", 2)))
+print([(k, list(g)) for k, g in it.groupby("aabbbc")], [(k, list(g)) for k, g in it.groupby([1, 3, 2, 4, 5], key=lambda x: x % 2)])
+print(list(it.zip_longest("ab", [1, 2, 3], fillvalue="-")), list(it.takewhile(lambda x: x < 3, [1, 2, 5, 1])), list(it.dropwhile(lambda x: x < 3, [1, 2, 5, 1])))
+print(list(it.compress("abcd", [1, 0, 1, 0])), list(it.filterfalse(None, [0, 1, 2])), list(it.starmap(pow, [(2, 3), (3, 2)])), list(it.pairwise([1, 2, 3, 4])), list(it.batched(range(7), 3)))
+a, b = it.tee([1, 2, 3])
+print(list(a), list(b), list(it.islice("abcdef", 1, 5, 2)), list(it.cycle("ab"))[:0], next(it.cycle("ab")))
+print(repr(it.count(3)), repr(it.repeat(1, 2)), sum(1 for _ in it.combinations(range(10), 3)), type(it.chain()).__name__)

@@ -307,6 +307,13 @@ for (const t of [dictKeysType, dictValuesType, dictItemsType]) {
 
 // ───────────────────────── mappingproxy ─────────────────────────
 
+mappingProxyType.dict!.set('__new__', mkNative('__new__', 'cls, mapping', (cls: any, m: any) => {
+  if (!(m instanceof PyDict) && typeOf(m).lookup('__getitem__') === undefined) throw typeError(`mappingproxy() argument must be a mapping, not ${typeOf(m).name}`);
+  const mp = new PyObject(cls);
+  (mp as any).target = m;
+  return mp;
+}, { owner: 'mappingproxy' }));
+
 const tgt = (x: any): PyDict => (x as any).target as PyDict;
 defMethods(mappingProxyType, {
   __repr__: ['self', (m: any) => `mappingproxy(${ops.repr(tgt(m))})`],

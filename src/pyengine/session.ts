@@ -97,7 +97,9 @@ export class PySession implements PySessionApi {
         if (r.need) {
           I.skipChars = 0;
           const w = I.written;
+          I.onWrite = o.onOutput ?? null;
           I.write(r.need, false);
+          I.onWrite = null;
           emitted += I.written - w;
         }
         const line = await o.onInput!(r.need);
@@ -144,6 +146,7 @@ export class PySession implements PySessionApi {
       I.onWrite = null;
       setActive(prev);
     }
+    I.flushFiles();
     res.stdout = I.outChunks.join('');
     res.stderr = I.errChunks.join('');
     return { result: res };
@@ -253,12 +256,14 @@ export class PySession implements PySessionApi {
 
   readFile(path: string): string | undefined {
     const I = this.I;
+    I.flushFiles();
     const n = I.vfs.get(I.vfs.abs(path));
     if (!n || n.kind !== 'file') return undefined;
     return decodeUtf8(n.data);
   }
 
   snapshotFiles(): Record<string, string> {
+    this.I.flushFiles();
     return this.I.vfs.snapshot(decodeUtf8);
   }
 

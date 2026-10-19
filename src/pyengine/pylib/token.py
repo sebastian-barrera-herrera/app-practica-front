@@ -1,0 +1,5 @@
+"""token (stub con las constantes habituales)."""
+ENDMARKER, NAME, NUMBER, STRING, NEWLINE, INDENT, DEDENT, OP = 0, 1, 2, 3, 4, 5, 6, 54
+COMMENT, NL = 64, 65
+tok_name = {ENDMARKER: 'ENDMARKER', NAME: 'NAME', NUMBER: 'NUMBER', STRING: 'STRING', NEWLINE: 'NEWLINE',
+            INDENT: 'INDENT', DEDENT: 'DEDENT', OP: 'OP', COMMENT: 'COMMENT', NL: 'NL'}

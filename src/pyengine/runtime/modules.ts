@@ -9,7 +9,7 @@ import { importError, makeExc, typeError } from './errors';
 import type { Interp } from './interp';
 import { decodeUtf8 } from './interp';
 import * as ops from './ops';
-import { NATIVE, PYSRC, UNSUPPORTED } from '../stdlib/registry';
+import { NATIVE, PYPKG, PYSRC, UNSUPPORTED } from '../stdlib/registry';
 import { compileSource, runCode } from '../compile';
 import { PySyntaxErr } from '../lexer';
 import { syntaxErrToExc, emitWarnings } from './traceback';
@@ -110,7 +110,10 @@ export function importModule(I: Interp, abs: string): PyModule {
       throw importError(`No module named '${abs}'; '${abs.slice(0, dot)}' is not a package`, abs, E.ModuleNotFoundError);
     }
   }
-  const mod = loadModule(I, abs, parent);
+  let mod = loadModule(I, abs, parent);
+  // el módulo puede haberse sustituido a sí mismo en sys.modules (p. ej. `decimal` → `_pydecimal`)
+  const final = modulesGet(I, abs);
+  if (final !== undefined && final !== null && final !== mod) mod = final;
   if (parent) parent.dict!.set(abs.slice(dot + 1), mod);
   return mod;
 }
@@ -171,7 +174,7 @@ export function execSource(I: Interp, abs: string, text: string, filename: strin
   const m = newModule(I, abs);
   const d = m.dict!;
   if (file) d.set('__file__', file);
-  if (isPkg || (hidden && PKG_NAMES.has(abs))) {
+  if (isPkg || (hidden && (PKG_NAMES.has(abs) || PYPKG.has(abs)))) {
     d.set('__path__', new PyList(pkgDir ? [pkgDir] : []));
     d.set('__package__', abs);
   }
@@ -199,3 +202,29 @@ void PyTuple;
 void strType;
 void typeError;
 export type { Code };
+
+/** importlib.reload: vuelve a ejecutar el código del módulo sobre el mismo objeto */
+export function reloadModule(I: Interp, mod: PyModule): PyModule {
+  const name = mod.name;
+  const src = PYSRC[name];
+  if (NATIVE[name] && !src) return mod;
+  const d = mod.dict!;
+  const file = d.get('__file__');
+  let text: string;
+  let filename: string;
+  if (src) {
+    text = src();
+    filename = '<frozen ' + name + '>';
+  } else if (typeof file === 'string' && I.vfs.isFile(file)) {
+    text = decodeUtf8(I.vfs.readFile(file));
+    filename = file;
+  } else throw importError(`module ${name} not in sys.modules`, name);
+  try {
+    const unit = compileSource(I, text, { filename, hidden: !!src });
+    runCode(I, unit.code, d);
+  } catch (e) {
+    if (e instanceof PySyntaxErr) throw syntaxErrToExc(e, filename, text);
+    throw e;
+  }
+  return mod;
+}

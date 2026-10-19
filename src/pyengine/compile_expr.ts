@@ -14,7 +14,7 @@ import {
 } from './runtime/objects';
 import { Ellipsis } from './runtime/builtin_types';
 import { E } from './runtime/exc_types';
-import { bytesType, functionType, listType, tupleType, typeOf, Ellipsis as EllipsisV } from './runtime/builtin_types';
+import { bytesType, dictType, functionType, listType, tupleType, typeOf, Ellipsis as EllipsisV } from './runtime/builtin_types';
 import { Interp } from './runtime/interp';
 import * as ops from './runtime/ops';
 import * as rt from './runtime/rt';
@@ -186,6 +186,14 @@ export abstract class ExprCompiler {
         // espacio de nombres (clase / módulo)
         if (fs.kind === 'class') {
           return (f) => {
+            if (f.ns!.cls !== dictType) {
+              // espacio de nombres personalizado (p. ej. `_EnumDict`): se respeta __getitem__
+              try {
+                return ops.getitem(f.ns, name);
+              } catch (err) {
+                if (!(err instanceof PyBaseException && ops.isInstance(err, E.KeyError))) throw err;
+              }
+            }
             let e = f.ns!.m.get(name);
             if (e !== undefined) return e.v;
             e = f.g.m.get(name);
@@ -197,6 +205,12 @@ export abstract class ExprCompiler {
           };
         }
         return (f) => {
+          const ns = f.ns;
+          if (ns !== f.g && ns !== null) {
+            // exec(código, globales, locales) con diccionarios distintos
+            const le = ns.m.get(name);
+            if (le !== undefined) return le.v;
+          }
           let e = f.g.m.get(name);
           if (e !== undefined) return e.v;
           e = f.b.m.get(name);
@@ -242,15 +256,20 @@ export abstract class ExprCompiler {
         if (fs.kind === 'class') {
           return (f, v) => {
             const d = f.ns!;
+            if (d.cls !== dictType) {
+              ops.setitem(d, name, v);
+              return;
+            }
             const e = d.m.get(name);
             if (e !== undefined) e.v = v;
             else d.m.set(name, { k: name, v });
           };
         }
         return (f, v) => {
-          const e = f.g.m.get(name);
+          const d = f.ns !== null && f.fn === null && f.code.kind !== 'function' && f.code.kind !== 'lambda' && f.code.kind !== 'genexp' ? f.ns : f.g;
+          const e = d.m.get(name);
           if (e !== undefined) e.v = v;
-          else f.g.m.set(name, { k: name, v });
+          else d.m.set(name, { k: name, v });
         };
     }
   }
@@ -284,7 +303,16 @@ export abstract class ExprCompiler {
       default: {
         const isClass = fs.kind === 'class' && res === 'name';
         return (f) => {
-          const d = isClass ? f.ns! : f.g;
+          const d = isClass ? f.ns! : fs.kind === 'module' && f.ns !== null ? f.ns : f.g;
+          if (isClass && d.cls !== dictType) {
+            try {
+              ops.delitem(d, name);
+            } catch (err) {
+              if (err instanceof PyBaseException && ops.isInstance(err, E.KeyError)) { f.pos = n; throw nameError(name); }
+              throw err;
+            }
+            return;
+          }
           if (!d.m.delete(name)) { f.pos = n; throw nameError(name); }
         };
       }

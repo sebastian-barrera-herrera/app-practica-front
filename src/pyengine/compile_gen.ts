@@ -506,7 +506,7 @@ export abstract class GenCompiler extends StmtCompiler {
 
   genReturn(n: Return): GEx {
     if (this.fs.kind !== 'function' && this.fs.kind !== 'lambda') this.syntaxError("'return' outside function", n);
-    if (this.fs.isAsync && this.fs.isGen && n.value) this.syntaxError("'return' with value in async generator", n);
+    if (this.fs.isAsync && this.fs.scope.hasYield && n.value) this.syntaxError("'return' with value in async generator", n);
     const v = n.value ? this.genExpr(n.value) : null;
     return function* (f) {
       f.ret = v ? yield* v(f) : null;
@@ -534,7 +534,7 @@ export abstract class GenCompiler extends StmtCompiler {
     const orelse = n.orelse.length > 0 ? this.genBlock(n.orelse) : null;
     return function* (f) {
       for (;;) {
-        if (++I.steps > I.nextCheck) I.tickSlow();
+        if (++I.steps > I.nextCheck) { f.pos = n; I.tickSlow(); }
         const c = t.g ? ops.truthy(yield* t.g(f)) : t.s!(f);
         if (!c) break;
         const r = yield* body(f);
@@ -563,7 +563,7 @@ export abstract class GenCompiler extends StmtCompiler {
       f.pos = iterNode;
       const it = ops.getIter(src);
       for (;;) {
-        if (++I.steps > I.nextCheck) I.tickSlow();
+        if (++I.steps > I.nextCheck) { f.pos = n; I.tickSlow(); }
         f.pos = iterNode;
         const v = it.next();
         if (v === undefined) break;
@@ -597,7 +597,7 @@ export abstract class GenCompiler extends StmtCompiler {
       const anext = typeOf(ait).lookup('__anext__');
       if (anext === undefined) throw typeError("'async for' received an object from __aiter__ that does not implement __anext__: " + typeOf(ait).name);
       for (;;) {
-        if (++I.steps > I.nextCheck) I.tickSlow();
+        if (++I.steps > I.nextCheck) { f.pos = n; I.tickSlow(); }
         let v: any;
         try {
           f.pos = iterNode;
@@ -849,7 +849,7 @@ export abstract class GenCompiler extends StmtCompiler {
           if (anext === undefined) throw typeError("'async for' received an object from __aiter__ that does not implement __anext__: " + typeOf(it).name);
         } else it = i === 0 ? src : ops.getIter(src);
         for (;;) {
-          if (++I.steps > I.nextCheck) I.tickSlow();
+          if (++I.steps > I.nextCheck) { f.pos = n; I.tickSlow(); }
           let v: any;
           if (isAsync) {
             try {

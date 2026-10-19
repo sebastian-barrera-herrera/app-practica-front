@@ -30,8 +30,10 @@ export function parseSig(sig: string): ParsedSig {
     if (part === '*') { afterStar = true; continue; }
     if (part.startsWith('**')) { r.varkw = true; continue; }
     if (part.startsWith('*')) { r.varargs = true; afterStar = true; continue; }
-    const opt = part.endsWith('=');
-    const name = opt ? part.slice(0, -1) : part;
+    // `nombre=` o `nombre=valor` (el valor es solo documentación: llega `undefined` si no se pasó)
+    const eq = part.indexOf('=');
+    const opt = eq >= 0;
+    const name = opt ? part.slice(0, eq) : part;
     if (afterStar) {
       r.kwonly.push(name);
       r.kwonlyRequired.push(!opt);

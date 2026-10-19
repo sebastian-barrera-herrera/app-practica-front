@@ -103,6 +103,11 @@ void NeedInput;
 def('len', 'obj, /', (x: any) => ops.lenOf(x));
 def('repr', 'obj, /', (x: any) => ops.repr(x));
 def('ascii', 'obj, /', (x: any) => ops.ascii(x));
+def('open', '*args, **kw', (args: any, kw: any) => {
+  const { importModule } = require('./modules') as typeof import('./modules');
+  const io = importModule(interp(), 'io');
+  return callObj(io.dict!.get('open'), tupleArr(args).slice(), kwMap(kw));
+});
 def('abs', 'x, /', (x: any) => {
   if (typeof x === 'number') return x < 0 ? -x : x === 0 ? 0 : x;
   if (x instanceof PyFloat) return new PyFloat(Math.abs(x.v));

@@ -27,6 +27,7 @@ function prop(t: PyType, name: string, get: (x: any) => any, set?: (x: any, v: a
   p.fget = mkNative(name, 'self', get, { method: true });
   if (set) p.fset = mkNative(name, 'self, value', (x: any, v: any) => { set(x, v); return null; }, { method: true });
   if (del) p.fdel = mkNative(name, 'self', (x: any) => { del(x); return null; }, { method: true });
+  p.owner = t;
   t.dict!.set(name, p);
 }
 
@@ -82,7 +83,10 @@ prop(FN, '__annotations__', (f: PyFunction) => {
 }, (f: PyFunction, v) => { f.annotations = v; });
 prop(FN, '__code__', (f: PyFunction) => makeCodeObject(f.code));
 prop(FN, '__builtins__', (f: PyFunction) => f.builtins);
-prop(FN, '__type_params__', () => new PyTuple([]));
+prop(FN, '__type_params__', (f: PyFunction) => (f.dict && f.dict.get('__type_params__')) || new PyTuple([]), (f: PyFunction, v) => {
+  if (!f.dict) f.dict = new PyDict();
+  f.dict.set('__type_params__', v);
+});
 
 // ───────────────────────── code ─────────────────────────
 
@@ -235,6 +239,10 @@ defMethods(PR, {
     return null;
   }],
   __set_name__: ['self, owner, name', (p: any, _o: any, n: any) => { pp(p).name = n; return null; }],
+});
+prop(PR, '__objclass__', (p) => {
+  if (pp(p).owner) return pp(p).owner;
+  throw attributeError("'property' object has no attribute '__objclass__'");
 });
 prop(PR, 'fget', (p) => pp(p).fget);
 prop(PR, 'fset', (p) => pp(p).fset);

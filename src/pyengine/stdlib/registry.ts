@@ -8,6 +8,8 @@ export type NativeInit = (I: Interp, m: PyModule) => void;
 
 export const NATIVE: Record<string, NativeInit> = {};
 export const PYSRC: Record<string, () => string> = {};
+/** módulos escritos en Python que son paquetes (tienen `__path__`) */
+export const PYPKG = new Set<string>();
 export const UNSUPPORTED: Record<string, string> = {
   subprocess: 'no se pueden lanzar procesos',
   socket: 'no hay acceso a la red',
@@ -42,6 +44,7 @@ export const UNSUPPORTED: Record<string, string> = {
 export function registerNative(name: string, init: NativeInit): void {
   NATIVE[name] = init;
 }
-export function registerPy(name: string, src: () => string): void {
+export function registerPy(name: string, src: () => string, pkg = false): void {
   PYSRC[name] = src;
+  if (pkg) PYPKG.add(name);
 }

@@ -31,6 +31,7 @@ function prop(t: PyType, name: string, get: (e: PyBaseException) => any, set?: (
   p.name = name;
   p.fget = mkNative(name, 'self', (e: any) => get(ex(e)), { method: true });
   if (set) p.fset = mkNative(name, 'self, value', (e: any, v: any) => { set(ex(e), v); return null; }, { method: true });
+  p.owner = t;
   t.dict!.set(name, p);
 }
 
@@ -93,7 +94,7 @@ defMethods(B, {
 });
 prop(B, 'args', (e) => new PyTuple(e.args.slice()), (e, v) => { e.args = ops.iterToArray(v); });
 prop(B, '__traceback__', (e) => {
-  const o = e.extra && e.extra.tbOverride;
+  const o = e.extra ? e.extra.tbOverride : undefined;
   if (o !== undefined) return o;
   return rt.tracebackOf(e);
 }, (e, v) => { extra(e).tbOverride = v; });

@@ -297,6 +297,8 @@ defMethods(intType, {
   is_integer: ['self', () => true],
   as_integer_ratio: ['self', (a: any) => new PyTuple([iv(a), 1])],
   to_bytes: ['self, length=1, byteorder="big", *, signed=', (a: any, length: any, order: any, signed: any) => {
+    length = length === undefined ? 1 : length;
+    order = order === undefined ? 'big' : order;
     const len = ops.toIndexNum(length);
     if (len < 0) throw valueError('length argument must be non-negative');
     const big = order === 'big';
@@ -319,6 +321,7 @@ defMethods(intType, {
 });
 intType.dict!.set('__doc__', 'int([x]) -> integer\nint(x, base=10) -> integer');
 intType.dict!.set('from_bytes', new PyClassMethod(classMethodType, mkNative('from_bytes', 'cls, bytes, byteorder="big", *, signed=', (cls: any, bs: any, order: any, signed: any) => {
+  order = order === undefined ? 'big' : order;
   let arr: ArrayLike<number>;
   if (bs instanceof PyBytes) arr = bs.b;
   else if (bs instanceof PyByteArray) arr = bs.b;

@@ -387,7 +387,7 @@ export abstract class StmtCompiler extends ExprCompiler {
     const orelse = n.orelse.length > 0 ? this.block(n.orelse) : null;
     return (f) => {
       for (;;) {
-        if (++I.steps > I.nextCheck) I.tickSlow();
+        if (++I.steps > I.nextCheck) { f.pos = n; I.tickSlow(); }
         if (!t(f)) break;
         const r = body(f);
         if (r !== undefined) {
@@ -421,7 +421,7 @@ export abstract class StmtCompiler extends ExprCompiler {
         const step = it.step;
         if (step > 0) {
           for (let i = it.start; i < stop; i += step) {
-            if (++I.steps > I.nextCheck) I.tickSlow();
+            if (++I.steps > I.nextCheck) { f.pos = n; I.tickSlow(); }
             if (simpleSlot >= 0) f.l[simpleSlot] = i;
             else set(f, i);
             r = body(f);
@@ -433,7 +433,7 @@ export abstract class StmtCompiler extends ExprCompiler {
           }
         } else {
           for (let i = it.start; i > stop; i += step) {
-            if (++I.steps > I.nextCheck) I.tickSlow();
+            if (++I.steps > I.nextCheck) { f.pos = n; I.tickSlow(); }
             if (simpleSlot >= 0) f.l[simpleSlot] = i;
             else set(f, i);
             r = body(f);
@@ -450,7 +450,7 @@ export abstract class StmtCompiler extends ExprCompiler {
       if (it instanceof PyList && it.cls === listType) {
         const a = it.a;
         for (let i = 0; i < a.length; i++) {
-          if (++I.steps > I.nextCheck) I.tickSlow();
+          if (++I.steps > I.nextCheck) { f.pos = n; I.tickSlow(); }
           const v = a[i];
           if (simpleSlot >= 0) f.l[simpleSlot] = v;
           else set(f, v);
@@ -466,7 +466,7 @@ export abstract class StmtCompiler extends ExprCompiler {
       f.pos = iterNode;
       const iter = ops.getIter(it);
       for (;;) {
-        if (++I.steps > I.nextCheck) I.tickSlow();
+        if (++I.steps > I.nextCheck) { f.pos = n; I.tickSlow(); }
         f.pos = iterNode;
         const v = iter.next();
         if (v === undefined) break;

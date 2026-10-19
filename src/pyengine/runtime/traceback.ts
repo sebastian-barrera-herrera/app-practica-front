@@ -138,7 +138,7 @@ function visibleEntries(e: PyBaseException): TbEntry[] {
   const out: TbEntry[] = [];
   for (let i = e.tb.length - 1; i >= 0; i--) {
     const t = e.tb[i];
-    if (t.code.hidden || t.code.inlined) continue;
+    if ((t.code.hidden && !(globalThis as any).__PY_SHOW_HIDDEN__) || t.code.inlined) continue;
     out.push(t);
   }
   return out;

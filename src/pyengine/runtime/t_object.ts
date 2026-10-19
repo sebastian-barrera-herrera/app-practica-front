@@ -180,6 +180,7 @@ dictProp.fset = mkNative('__dict__', 'self, value', (o: any, v: any) => {
   return null;
 }, { method: true });
 
+dictProp.owner = O;
 O.dict!.set('__dict__', dictProp);
 
 // ───────────────────────── type ─────────────────────────
@@ -417,6 +418,7 @@ function tprop(name: string, get: (t: PyType) => any, set?: (t: PyType, v: any) 
   p.name = name;
   p.fget = mkNative(name, 'self', get, { method: true });
   if (set) p.fset = mkNative(name, 'self, value', (t: any, v: any) => { set(t, v); return null; }, { method: true });
+  p.owner = T;
   T.dict!.set(name, p);
 }
 tprop('__name__', (t) => t.name, (t, v) => {
@@ -513,14 +515,16 @@ defGetter(unionType, '__args__', (u: any) => u.dict.get('__args__'));
 
 // ───────────────────────── alias genéricos: list[int] ─────────────────────────
 
-export function makeGenericAlias(origin: any, args: any): any {
-  const g = new PyObject(genericAliasType);
+export function makeGenericAlias(origin: any, args: any, cls: PyType = genericAliasType): any {
+  const g = new PyObject(cls);
   g.dict = new PyDict();
   g.dict.set('__origin__', origin);
   g.dict.set('__args__', args instanceof PyTuple ? args : new PyTuple([args]));
   return g;
 }
 
+genericAliasType.dict!.set('__new__', mkNative('__new__', 'cls, origin, args', (cls: any, origin: any, args: any) => makeGenericAlias(origin, args, cls), { owner: 'GenericAlias' }));
+genericAliasType.dict!.set('__init__', mkNative('__init__', 'self, *a, **k', () => null, { method: true, owner: 'GenericAlias' }));
 defMethods(genericAliasType, {
   __repr__: ['self', (g: any) => {
     const o = g.dict.get('__origin__');
@@ -538,7 +542,7 @@ defMethods(genericAliasType, {
   __or__: ['self, other', (a: any, b: any) => makeUnion(a, b)],
   __ror__: ['self, other', (a: any, b: any) => makeUnion(b, a)],
   __eq__: ['self, other', (a: any, b: any) => {
-    if (!(b instanceof PyObject) || b.cls !== genericAliasType) return NotImplemented;
+    if (!(b instanceof PyObject) || !b.cls.isSubtype(genericAliasType)) return NotImplemented;
     return a.dict.get('__origin__') === b.dict!.get('__origin__') && ops.eqOp(a.dict.get('__args__'), b.dict!.get('__args__'));
   }],
   __hash__: ['self', (g: any) => ops.hashOf(g.dict!.get('__args__'))],

@@ -84,6 +84,8 @@ export class Interp {
   /** futuro `annotations` activo por nombre de archivo */
   strAnnotations = new Set<string>();
   extraFlags: Record<string, any> = {};
+  /** archivos abiertos con datos pendientes de volcar al sistema de archivos virtual */
+  openFiles = new Set<{ flushNow: () => void }>();
   /** funciones que guardan el estado mutable de módulos nativos y devuelven la que lo restaura (reejecución por input) */
   snapHooks: (() => (() => void))[] = [];
 
@@ -102,6 +104,11 @@ export class Interp {
       this.vfs.load(opts.files, (s) => Uint8Array.from(utf8Encode(s)));
     }
     this.nextCheck = Math.min(this.maxSteps, 1024);
+  }
+
+  /** vuelca al sistema de archivos virtual los datos pendientes de los archivos abiertos */
+  flushFiles(): void {
+    for (const f of this.openFiles) f.flushNow();
   }
 
   /** instante virtual actual en ms */

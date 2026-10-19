@@ -93,6 +93,7 @@ export class PyType extends PyObject {
     }
     // __slots__ solo restringe si TODOS los tipos (salvo object) lo declaran
     let allSlots = true;
+    let sawHeapSlots = false;
     let hasDict = false;
     const names = new Set<string>();
     this.getattro = null;
@@ -104,12 +105,13 @@ export class PyType extends PyObject {
       if (this.delattro === null && t.ownDelattro !== null) this.delattro = t.ownDelattro;
       if (t.flags & F_INSTDICT) hasDict = true;
       if (t.name === 'object' && (t.flags & F_BUILTIN)) continue;
-      if (t.flags & F_BUILTIN) { allSlots = false; continue; }
+      if (t.flags & F_BUILTIN) continue; // los tipos nativos sin __dict__ no impiden restringir con __slots__
       if (!t.ownSlots) { allSlots = false; hasDict = true; continue; }
+      sawHeapSlots = true;
       if (t.ownSlots.has('__dict__')) hasDict = true;
       for (const n of t.ownSlots) names.add(n);
     }
-    this.slots = allSlots && this.mro.length > 1 ? names : null;
+    this.slots = allSlots && sawHeapSlots && !hasDict && this.mro.length > 1 ? names : null;
     this.instDict = hasDict;
   }
 
@@ -486,6 +488,8 @@ export class PyProperty extends PyObject {
   fdel: any = null;
   doc: any = null;
   name: string | null = null;
+  /** tipo nativo que define este descriptor (getset_descriptor) */
+  owner: PyType | null = null;
   constructor(cls: PyType) {
     super(cls);
   }
