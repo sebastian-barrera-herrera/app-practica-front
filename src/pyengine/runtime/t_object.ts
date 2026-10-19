@@ -455,6 +455,22 @@ tprop('__bases__', (t) => new PyTuple(t.bases.slice()), (t, v) => {
   for (const b of t.bases) b.subclasses.push(t);
   bumpTypeVersion();
 });
+tprop('__flags__', (t) => {
+  let f = 1 << 12 | 1 << 10 | 1 << 14; // READY | BASETYPE | HAVE_GC
+  if (!(t.flags & F_BUILTIN)) f |= 1 << 9; // HEAPTYPE
+  const am = t.dict!.get('__abstractmethods__');
+  if (am instanceof PySet && am.size > 0) f |= 1 << 20;
+  const sub = (n: string): boolean => t.mro.some((x) => x.name === n && (x.flags & F_BUILTIN) !== 0);
+  if (sub('int')) f |= 1 << 24;
+  if (sub('list')) f |= 1 << 25;
+  if (sub('tuple')) f |= 1 << 26;
+  if (sub('bytes')) f |= 1 << 27;
+  if (sub('str')) f |= 1 << 28;
+  if (sub('dict')) f |= 1 << 29;
+  if (sub('BaseException')) f |= 1 << 30;
+  if (sub('type')) f |= -(2 ** 31);
+  return f;
+});
 tprop('__base__', (t) => (t.bases.length ? t.mro[1] ?? null : null));
 tprop('__mro__', (t) => new PyTuple(t.mro.slice()));
 tprop('__dict__', (t) => {

@@ -9,6 +9,8 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 
 const dir = join(__dirname, '..', 'golden');
+/** Normaliza lo que cambia entre ejecuciones (tiempos, direcciones de memoria). */
+const norm = (t: string): string => t.replace(/(Ran \d+ tests? in )[\d.]+s/g, '$1Xs').replace(/ at 0x[0-9a-f]+>/g, ' at 0xADDR>').replace(/0x[0-9a-f]{8,}/g, '0xADDR');
 const filter = process.argv[2] ?? '';
 const verbose = process.argv.includes('-v');
 const files = readdirSync(dir).filter((f) => f.endsWith('.py') && f.includes(filter)).sort();
@@ -37,6 +39,10 @@ async function main(): Promise<void> {
       continue;
     }
     const ms = Date.now() - t0;
+    r.stdout = norm(r.stdout);
+    r.stderr = norm(r.stderr);
+    py.stdout = norm(py.stdout);
+    py.stderr = norm(py.stderr);
     const same = r.stdout === py.stdout && r.stderr === py.stderr;
     if (!same) {
       fails++;

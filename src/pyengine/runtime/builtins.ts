@@ -21,7 +21,9 @@ import { sortItems, CallableIter, PyEnumerate } from './t_seq';
 import { toFloatValue } from './t_num';
 import { bigAbs } from './fmt';
 import { PyIter } from './objects';
-import { compileSource, runCode } from '../compile';
+import { compileModule, compileSource, runCode } from '../compile';
+import { parseSource } from '../parser';
+import { isAstNode, moduleToPy, pyToModule } from './astconv';
 import { PySyntaxErr } from '../lexer';
 import { syntaxErrToExc, emitWarnings } from './traceback';
 import { intAdd, intCmp, intSign, toBig, normBig, type PyInt } from './numeric';
@@ -420,13 +422,29 @@ function localsDict(f: any): PyDict {
 }
 def('eval', 'source, globals=, locals=, /', (s: any, g?: any, l?: any) => runSource('eval', s, g, l));
 def('exec', 'source, globals=, locals=, /, *, closure=', (s: any, g?: any, l?: any) => { runSource('exec', s, g, l); return null; });
-def('compile', 'source, filename, mode, flags=, dont_inherit=, optimize=', (src: any, filename: any, mode: any) => {
+const PyCF_ONLY_AST = 0x400;
+def('compile', 'source, filename, mode, flags=, dont_inherit=, optimize=, *, _feature_version=', (src: any, filename: any, mode: any, flags?: any) => {
   const I = interp();
-  const text = srcOf(src, 'compile');
-  const fname = asStr(filename);
+  const fname = ops.isStr(filename) ? asStr(filename) : decodeUtf8(Uint8Array.from((filename as PyBytes).b as any));
   const m = asStr(mode);
   if (m !== 'exec' && m !== 'eval' && m !== 'single') throw valueError("compile() mode must be 'exec', 'eval' or 'single'");
+  const fl = flags === undefined ? 0 : Number(flags);
+  const wantAst = (fl & PyCF_ONLY_AST) !== 0;
+  if (isAstNode(I, src)) {
+    if (wantAst) return src;
+    const mod = pyToModule(I, src, m);
+    const unit = compileModule(I, mod, [], [], { filename: fname, mode: m === 'eval' ? 'eval' : 'exec' });
+    const o = new PyObject(require('./builtin_types').codeType);
+    (o as any).code = unit.code;
+    return o;
+  }
+  const text = srcOf(src, 'compile');
   try {
+    if (wantAst) {
+      const parsed = parseSource(m === 'eval' ? text.trim() : text, m === 'eval' ? 'eval' : 'exec');
+      I.sources.set(fname, parsed.src.split('\n'));
+      return moduleToPy(I, parsed.module, parsed.src.split('\n'), m);
+    }
     const unit = compileSource(I, text, { filename: fname, mode: m === 'eval' ? 'eval' : 'exec' });
     const o = new PyObject(require('./builtin_types').codeType);
     (o as any).code = unit.code;

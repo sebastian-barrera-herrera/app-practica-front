@@ -245,7 +245,12 @@ export function compileSource(I: Interp, source: string, o: CompileOptions): Com
   const parsed = parseSource(source, mode);
   const lines = parsed.src.split('\n');
   I.sources.set(o.filename, lines);
-  const mod = parsed.module;
+  return compileModule(I, parsed.module, lines, parsed.warnings, o);
+}
+
+/** Compila un módulo ya analizado (o construido a partir de un árbol de `ast`) */
+export function compileModule(I: Interp, mod: Module, lines: string[], warnings: ParseWarning[], o: CompileOptions): CompiledUnit {
+  const mode = o.mode ?? 'exec';
   const table = buildScopes(mod, mode === 'eval' ? 'eval' : 'module');
   const fut = checkFuture(mod);
   const env: CompileEnv = {
@@ -278,7 +283,7 @@ export function compileSource(I: Interp, source: string, o: CompileOptions): Com
   code.qualname = '<module>';
   void typeOf;
   void listType;
-  return { code, warnings: parsed.warnings, lines };
+  return { code, warnings, lines };
 }
 
 /** Ejecuta un Code de módulo/exec/eval con los diccionarios dados */

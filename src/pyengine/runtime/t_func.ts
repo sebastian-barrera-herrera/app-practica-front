@@ -11,6 +11,7 @@ import {
   generatorType, getSetDescrType, methodDescriptorType, moduleType, nativeFunctionType, noneType, objectType, propertyType, staticMethodType,
   superType, tracebackType, typeOf, wrapperDescrType,
 } from './builtin_types';
+import type { Pos } from '../ast';
 import { E } from './exc_types';
 import { attributeError, makeExc, stopIteration, typeError, valueError } from './errors';
 import { callObj, genClose, genResume, genThrow } from './call';
@@ -119,7 +120,40 @@ prop(codeType, 'co_flags', (c) => {
 prop(codeType, 'co_code', () => new (require('./objects').PyBytes)(new Uint8Array(0), require('./builtin_types').bytesType));
 prop(codeType, 'co_consts', () => new PyTuple([]));
 prop(codeType, 'co_names', () => new PyTuple([]));
+/** índice de una posición en la tabla de la función (se usa como «instrucción» en tb_lasti y co_positions) */
+function internPos(c: Code, pos: Pos | null): number {
+  if (pos === null) return 0;
+  if (c.plist === undefined) { c.plist = [null]; c.pmap = new Map(); }
+  let i = c.pmap!.get(pos);
+  if (i === undefined) { i = c.plist.length; c.plist.push(pos); c.pmap!.set(pos, i); }
+  return i;
+}
+
+/** columna UTF-8 (bytes) de una columna UTF-16 */
+function utf8Col(line: string | undefined, col: number): number {
+  if (line === undefined) return col;
+  let b = 0;
+  const n = Math.min(col, line.length);
+  for (let i = 0; i < n; i++) {
+    const ch = line.charCodeAt(i);
+    if (ch < 0x80) b += 1;
+    else if (ch < 0x800) b += 2;
+    else if (ch >= 0xd800 && ch < 0xdc00) { b += 4; i++; } else b += 3;
+  }
+  return b + Math.max(0, col - line.length);
+}
+
 defMethods(codeType, {
+  co_positions: ['self', (c: any) => {
+    const k = cod(c);
+    const lines = interp().sources.get(k.filename);
+    const out: any[] = [];
+    for (const p of k.plist ?? [null]) {
+      if (p === null) out.push(new PyTuple([null, null, null, null]));
+      else out.push(new PyTuple([p.line, p.endLine, utf8Col(lines?.[p.line - 1], p.col), utf8Col(lines?.[p.endLine - 1], p.endCol)]));
+    }
+    return ops.getIter(new PyList(out));
+  }],
   __repr__: ['self', (c: any) => `<code object ${cod(c).name} at ${interp().hexId(c)}, file "${cod(c).filename}", line ${cod(c).firstLine}>`],
 });
 
@@ -404,14 +438,24 @@ prop(frameType, 'f_locals', (o) => {
   return d;
 });
 defMethods(frameType, {
+  clear: ['self', (o: any) => {
+    const f = fr(o);
+    for (let x: any = interp().frame; x; x = x.back) if (x === f) throw makeExc(E.RuntimeError, ['cannot clear an executing frame']);
+    for (let i = 0; i < f.l.length; i++) f.l[i] = undefined;
+    return null;
+  }],
   __repr__: ['self', (o: any) => `<frame at ${interp().hexId(o)}, file '${fr(o).code.filename}', line ${fr(o).pos ? fr(o).pos!.line : fr(o).code.firstLine}, code ${fr(o).code.name}>`],
 });
 
 const tbo = (x: any): PyTraceback => x as PyTraceback;
 prop(tracebackType, 'tb_frame', (t) => (tbo(t).entry.frame ? makeFrameObject(tbo(t).entry.frame!) : null));
 prop(tracebackType, 'tb_lineno', (t) => (tbo(t).entry.pos ? tbo(t).entry.pos!.line : tbo(t).entry.code.firstLine));
-prop(tracebackType, 'tb_next', (t) => tbo(t).nextTb);
-prop(tracebackType, 'tb_lasti', () => 0);
+prop(tracebackType, 'tb_next', (t) => tbo(t).nextTb, (t, v) => {
+  if (v !== null && !(v instanceof PyTraceback)) throw typeError('expected traceback object or None, got \'' + typeOf(v).name + '\'');
+  for (let x: PyTraceback | null = v; x !== null; x = x.nextTb) if (x === t) throw valueError('traceback loop detected');
+  tbo(t).nextTb = v;
+});
+prop(tracebackType, 'tb_lasti', (t) => 2 * internPos(tbo(t).entry.code, tbo(t).entry.pos));
 
 // ───────────────────────── generadores y corrutinas ─────────────────────────
 

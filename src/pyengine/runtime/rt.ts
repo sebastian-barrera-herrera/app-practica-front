@@ -127,13 +127,18 @@ export function withEnter(mgr: any, isAsync: boolean): { ctx: WithCtx; value: an
   return { ctx: { exit, mgr }, value };
 }
 
+const TB_CACHE = new WeakMap<PyBaseException, { len: number; head: PyTraceback | null }>();
+
 export function tracebackOf(e: PyBaseException): any {
   if (e.tb.length === 0) return null;
+  const c = TB_CACHE.get(e);
+  if (c !== undefined && c.len === e.tb.length) return c.head;
   // la lista está de lo más interno a lo más externo; la cadena empieza por el marco más externo
   let next: PyTraceback | null = null;
   for (let i = 0; i < e.tb.length; i++) {
     next = new PyTraceback(tracebackType, e.tb[i], next);
   }
+  TB_CACHE.set(e, { len: e.tb.length, head: next });
   return next;
 }
 

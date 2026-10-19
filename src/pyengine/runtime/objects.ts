@@ -191,6 +191,9 @@ export const SIG_CONTINUE = 2;
 export const SIG_RETURN = 3;
 
 export interface Code {
+  /** posiciones internadas para `tb_lasti` / `co_positions()` (índice 0 = sin posición) */
+  plist?: (Pos | null)[];
+  pmap?: Map<Pos, number>;
   name: string;
   qualname: string;
   filename: string;
