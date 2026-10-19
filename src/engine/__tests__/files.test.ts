@@ -1,4 +1,4 @@
-import { mk, out, seq, sh } from './helpers';
+import { mk, out, sh } from './helpers';
 
 describe('archivos y directorios', () => {
   test('ls: formatos básicos', async () => {

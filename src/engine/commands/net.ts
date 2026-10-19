@@ -34,7 +34,6 @@ defineCommand('ping', {
   const rand = fakeRand(host + sys.clock.now);
   const size = o.val('s') ? parseInt(o.val('s')!, 10) : 56;
   const name = isIp(host) ? host : host;
-  const shown = r.site?.ptr && !isIp(host) ? r.ip : r.ip;
   c.out(`PING ${host} (${r.ip}) ${size}(${size + 28}) bytes of data.\n`);
   const interactive = c.io.tty && !c.sh.bg && o.val('c') === undefined;
   const count = o.val('c') ? parseInt(o.val('c')!, 10) : interactive ? Infinity : 4;
@@ -1041,7 +1040,7 @@ defineCommand('python3', {
       if (sm) { c.out(sm[2] + '\n'); return 0; }
       if (/^[\d\s+\-*/().%]+$/.test(expr.replace(/\*\*/g, '^'))) {
         try {
-          // eslint-disable-next-line no-new-func
+           
           c.out(String(Function(`"use strict"; return (${expr})`)()) + '\n');
           return 0;
         } catch { /* sigue */ }

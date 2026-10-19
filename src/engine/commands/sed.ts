@@ -281,7 +281,6 @@ function runSed(cmds: Cmd[], lines: string[], opts: { quiet: boolean; separate?:
     }
   };
   flatten(cmds);
-  let i = 0;
   const total = lines.length;
   let appendQueue: string[] = [];
   let lineIdx = 0;
@@ -336,7 +335,6 @@ function runSed(cmds: Cmd[], lines: string[], opts: { quiet: boolean; separate?:
     substituted = false;
     let deleted = false;
     let restart = false;
-    i = 0;
     let guard = 0;
     const execList = (list: Cmd[]): 'next' | 'del' | 'quit' | void => {
       for (let k = 0; k < list.length; k++) {

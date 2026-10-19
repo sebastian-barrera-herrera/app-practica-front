@@ -358,6 +358,7 @@ function BlitzRun({ initialScope }: { initialScope?: string }) {
 // ───────────────────────── exámenes y certificaciones ─────────────────────────
 
 function ExamRun({ planOf }: { planOf: () => ExamPlan }) {
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- el plan se genera una sola vez por examen
   const plan = useMemo(planOf, []);
   const [phase, setPhase] = useState<'intro' | 'q' | 'c' | 'end'>('intro');
   const [pos, setPos] = useState(0);

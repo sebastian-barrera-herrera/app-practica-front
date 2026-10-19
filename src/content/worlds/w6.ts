@@ -1,5 +1,5 @@
 import { all, any, jobState, not, out, outRe, procRunning, ran, service, used } from '@/engine/check';
-import { demo, fill, illus, learn, lesson, match, mc, multi, order, practice, predict, tf, typeCmd, world } from '../build';
+import { demo, fill, illus, learn, lesson, match, mc, order, practice, tf, typeCmd, world } from '../build';
 
 const HOG: [string, string, number, number][] = [['alumno', 'python3 /opt/miner.py', 99, 8]];
 

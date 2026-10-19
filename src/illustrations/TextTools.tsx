@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Pressable, View, type LayoutChangeEvent } from 'react-native';
-import Animated, { FadeIn, FadeInDown, Easing, useAnimatedStyle, useSharedValue, withRepeat, withSpring, withTiming, ZoomIn } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInDown, Easing, useAnimatedStyle, useSharedValue, withRepeat, withTiming, ZoomIn } from 'react-native-reanimated';
 import { select, tap } from '@/lib/haptics';
 import { T } from '@/ui/Text';
 import { colors, fonts, radius } from '@/ui/theme';

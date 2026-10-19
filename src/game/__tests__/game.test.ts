@@ -4,6 +4,9 @@ import { emptyStreak, touchStreak, dayKey, streakAlive } from '../streak';
 import { review, dueItems, mastery, INTERVALS, DAY } from '../srs';
 import { levelFromXp, levelProgress, xpForLevel, starsFor, lessonXp } from '../xp';
 
+import { blitzPool, dailyChallenge, learnedQuestions, reviewSession, shouldOfferSurprise, surpriseSession } from '../sessions';
+import { certExam, worldExam } from '../exams';
+
 const ctx: Ctx = { worlds: WORLDS, levels: LEVELS };
 const T0 = new Date(2026, 2, 14, 12, 0, 0).getTime();
 
@@ -104,9 +107,6 @@ describe('progreso', () => {
     expect(x.levelUp).toBe(2);
   });
 });
-
-import { blitzPool, dailyChallenge, learnedQuestions, reviewSession, shouldOfferSurprise, surpriseSession } from '../sessions';
-import { certExam, worldExam } from '../exams';
 
 describe('sesiones', () => {
   test('repaso, sorpresa, blitz, diario', () => {

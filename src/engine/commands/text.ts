@@ -1096,7 +1096,7 @@ defineCommand('bc', {
         .replace(/\bs\(/g, 'Math.sin(').replace(/\bc\(/g, 'Math.cos(').replace(/\bl\(/g, 'Math.log(').replace(/\be\(/g, 'Math.exp(')
         .replace(/[A-Za-z_]\w*/g, (id) => (id.startsWith('Math') || id === 'sin' || id === 'cos' || id === 'log' || id === 'exp' || id === 'sqrt' ? id : vars.has(id) ? String(vars.get(id)) : '0'));
       if (!/^[\d\s+\-*/%().,eEMathsqrtincolgxp*]*$/.test(js)) throw new Error('syntax error');
-      // eslint-disable-next-line no-new-func
+       
       return Function(`"use strict"; return (${js})`)() as number;
     };
     try {

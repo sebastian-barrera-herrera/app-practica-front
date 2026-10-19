@@ -36,6 +36,7 @@ export function ChallengeView({ challenge, onSolved, onRun, continueLabel = 'Con
     const t = new Terminal({ cols: 44, ...(challenge.setup ?? {}) });
     t.setEditor(openEditor);
     return t;
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `nonce` reinicia el terminal a propósito
   }, [challenge, nonce]);
   const [hints, setHints] = useState(0);
   const [solution, setSolution] = useState(false);

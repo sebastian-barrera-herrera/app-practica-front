@@ -31,11 +31,13 @@
     "zustand": "^5.0.15"
   },
   "devDependencies": {
+    "@types/jest": "30.0.0",
     "@types/react": "~19.3.0",
-    "typescript": "~6.0.3",
+    "eslint": "^9.0.0",
+    "eslint-config-expo": "~58.0.4",
     "jest": "~30.5.2",
     "jest-expo": "~58.0.11",
-    "@types/jest": "30.0.0"
+    "typescript": "~6.0.3"
   },
   "scripts": {
     "start": "expo start",
@@ -45,7 +47,8 @@
     "typecheck": "tsc --noEmit",
     "test": "jest",
     "export:web": "expo export --platform web",
-    "build:apk": "eas build -p android --profile preview"
+    "build:apk": "eas build -p android --profile preview",
+    "lint": "expo lint"
   },
   "private": true,
   "jest": {

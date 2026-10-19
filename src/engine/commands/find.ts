@@ -4,7 +4,6 @@ import { basename, dirname } from '../path';
 import { defineCommand, parseOpts, type Ctx } from '../registry';
 import { globMatch, makeRegex } from '../regex';
 import { type FsNode, collate } from '../vfs';
-import { sizeSuffix } from './util';
 
 // ───────────────────────── find ─────────────────────────
 

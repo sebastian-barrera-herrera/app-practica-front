@@ -18,6 +18,7 @@ export default function Achievements() {
     return all
       .map((a) => ({ a, at: s.achievements[a.id], p: s.achievements[a.id] ? 1 : a.progress ? Math.min(1, a.progress(s, ctx)) : 0 }))
       .sort((x, y) => (x.at ? 0 : 1) - (y.at ? 0 : 1) || (y.at ?? 0) - (x.at ?? 0) || y.p - x.p);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- depende solo de las porciones relevantes del estado
   }, [s.achievements, s.lessons, s.stats, s.xp, s.streak, s.exams]);
   const got = list.filter((x) => x.at).length;
 

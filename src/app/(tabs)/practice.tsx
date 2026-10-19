@@ -39,8 +39,10 @@ const go = (mode: string) => router.push({ pathname: '/session/[mode]', params: 
 export default function Practice() {
   const s = useGame();
   const now = Date.now();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- solo se recalcula cuando cambian las lecciones
   const learned = useMemo(() => learnedQuestions(s).length, [s.lessons]);
   const anyLesson = Object.values(s.lessons).some((l) => l.done);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- solo se recalcula cuando cambian srs/lecciones
   const rev = useMemo(() => reviewSession(s, now), [s.srs, s.lessons]);
   const today = dayKey(now);
   const dailyDone = s.daily.day === today && s.daily.done;

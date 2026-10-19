@@ -1,5 +1,5 @@
 import { all, any, exists, groupExists, mode, not, out, outEq, outRe, owner, ran, used, userExists } from '@/engine/check';
-import { demo, fill, illus, learn, lesson, match, mc, multi, order, practice, predict, tf, typeCmd, world } from '../build';
+import { demo, fill, illus, learn, lesson, match, mc, multi, order, practice, predict, tf, world } from '../build';
 
 export const w5 = world({
   id: 'w5',

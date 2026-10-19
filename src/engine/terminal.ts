@@ -7,9 +7,8 @@ import { stripAnsi } from './format';
 import { isIncomplete } from './parser';
 import { REGISTRY, type IO, type Stdin } from './registry';
 import { ExitEx, Runtime, Shell, ShellError, SignalEx, SHELL_BUILTINS, TimeoutEx, type Job } from './shell';
-import { VFS } from './vfs';
+import { VFS , collate } from './vfs';
 import { applyFiles, createWorld, LAB_FILES, type World, type WorldOptions } from './world';
-import { collate } from './vfs';
 import { basename } from './path';
 
 export interface Chunk {

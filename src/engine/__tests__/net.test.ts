@@ -1,5 +1,4 @@
 import { mk, out, sh } from './helpers';
-import type { Terminal } from '../terminal';
 
 describe('red e internet simulada', () => {
   test('ping a DNS públicos y resolución', async () => {

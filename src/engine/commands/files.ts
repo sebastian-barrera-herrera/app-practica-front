@@ -1,13 +1,12 @@
 /** Comandos de archivos y directorios. */
 import {
-  C, color, columns, humanSize, isoFull, lsDate, modeString, padStart, padEnd, table, dateString,
+  C, color, columns, hash32, humanSize, isoFull, lsDate, modeString, padStart, padEnd, table, dateString,
   visibleLength,
 } from '../format';
 import { basename, dirname, join, normalize, relative, resolve } from '../path';
 import { defineCommand, parseOpts, type Ctx } from '../registry';
 import { type FsNode, collate, FsError, utf8Length } from '../vfs';
 import { applyMode, joinLines, readInputs, splitLines } from './util';
-import { hash32 } from '../format';
 import { globMatch } from '../regex';
 
 // ───────────────────────── ls ─────────────────────────

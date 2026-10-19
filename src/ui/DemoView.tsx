@@ -60,9 +60,9 @@ export function DemoView({ lines, setup, intro, onComplete }: { lines: DemoLine[
 
   const runAll = useCallback(async () => {
     while (countRef.current < lines.length) {
-      // eslint-disable-next-line no-await-in-loop
+       
       await runNext();
-      // eslint-disable-next-line no-await-in-loop
+       
       await new Promise((r) => setTimeout(r, 250));
     }
   }, [lines.length, runNext]);

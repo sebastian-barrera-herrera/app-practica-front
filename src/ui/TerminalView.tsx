@@ -365,6 +365,7 @@ export function TerminalView({ term, onRun, onSignal, autoFocus, hideKeys, place
     [doTab, term, input, cont.length, tr, insertAtCursor, onSignal],
   );
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- se recalcula al cambiar el historial o las líneas del terminal
   const promptSpans = useMemo(() => (busy ? [] : parseAnsi(cont.length ? '> ' : term.prompt())), [busy, term, cont.length, tr.lines.length, term.history.length]);
 
   return (

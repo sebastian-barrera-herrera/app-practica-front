@@ -126,6 +126,7 @@ function WorldSection({ w, wi }: { w: WorldDef; wi: number }) {
 
 export default function Roadmap() {
   const s = useGame();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- solo depende de las lecciones completadas
   const next = useMemo(() => nextLesson(s, WORLDS), [s.lessons]);
   const total = WORLDS.reduce((n, w) => n + w.lessons.length, 0);
   const doneCount = WORLDS.reduce((n, w) => n + w.lessons.filter((l) => s.lessons[l.id]?.done).length, 0);

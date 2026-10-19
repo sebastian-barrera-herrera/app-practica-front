@@ -1,4 +1,4 @@
-import { mk, out, seq, sh } from './helpers';
+import { mk, out, sh } from './helpers';
 
 describe('shell básico', () => {
   test('echo, comillas y variables', async () => {

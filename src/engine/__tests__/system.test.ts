@@ -1,6 +1,6 @@
 import { evaluate, exists, cwd, out as outCheck, ran, used, content, all, mode, pkg, service } from '../check';
 import { restoreTerminal } from '../terminal';
-import { mk, out, seq, sh } from './helpers';
+import { mk, out, sh } from './helpers';
 
 describe('procesos', () => {
   test('ps y kill de procesos del sistema', async () => {

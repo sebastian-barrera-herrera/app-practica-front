@@ -44,7 +44,7 @@ async function runSolution(term: Terminal, steps: string[]) {
 
 describe('ilustraciones', () => {
   test('todas las ilustraciones usadas en las lecciones están implementadas', () => {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+     
     const src: string = require('fs').readFileSync(require('path').join(__dirname, '../../illustrations/index.tsx'), 'utf8');
     const used = new Set<string>();
     for (const w of WORLDS) for (const l of w.lessons) for (const st of l.steps) if (st.type === 'illustration') used.add(st.id);

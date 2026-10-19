@@ -299,11 +299,17 @@ defineCommand('set', {
     }
     if (x === '-o' || x === '+o') {
       const name = a.shift();
-      if (name === 'pipefail') x === '-o' ? c.sh.opts.add('pipefail') : c.sh.opts.delete('pipefail');
+      if (name === 'pipefail') {
+        if (x === '-o') c.sh.opts.add('pipefail');
+        else c.sh.opts.delete('pipefail');
+      }
       continue;
     }
     if (/^[-+][a-zA-Z]+$/.test(x)) {
-      for (const ch of x.slice(1)) x[0] === '-' ? c.sh.opts.add(ch) : c.sh.opts.delete(ch);
+      for (const ch of x.slice(1)) {
+        if (x[0] === '-') c.sh.opts.add(ch);
+        else c.sh.opts.delete(ch);
+      }
       continue;
     }
     c.sh.positional = [x, ...a.splice(0)];

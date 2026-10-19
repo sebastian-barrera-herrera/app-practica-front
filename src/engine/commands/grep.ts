@@ -2,7 +2,7 @@
 import { C, color } from '../format';
 import { defineCommand, parseOpts, type Ctx } from '../registry';
 import { globMatch, makeRegex } from '../regex';
-import { readInputs, splitLines } from './util';
+import { splitLines } from './util';
 import { basename } from '../path';
 
 interface Src {
