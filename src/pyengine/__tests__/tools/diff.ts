@@ -4,7 +4,8 @@
  */
 import { PySession } from '../../index';
 import { spawnSync } from 'child_process';
-import { readdirSync, readFileSync, existsSync } from 'fs';
+import { readdirSync, readFileSync, existsSync, mkdtempSync, copyFileSync, rmSync } from 'fs';
+import { tmpdir } from 'os';
 import { join } from 'path';
 
 const dir = join(__dirname, '..', 'golden');
@@ -18,9 +19,13 @@ async function main(): Promise<void> {
     const src = readFileSync(join(dir, f), 'utf8');
     const stdinFile = join(dir, f.replace(/\.py$/, '.in'));
     const stdin = existsSync(stdinFile) ? readFileSync(stdinFile, 'utf8') : '';
-    const py = spawnSync('python3', ['-X', 'utf8', f], { cwd: dir, input: stdin, encoding: 'utf8', env: { ...process.env, PYTHONHASHSEED: '0', PYTHONDONTWRITEBYTECODE: '1' } });
-    py.stdout = py.stdout.split(dir + '/').join('');
-    py.stderr = py.stderr.split(dir + '/').join('');
+    // cada prueba corre en un directorio limpio (los archivos que crea no se arrastran a otras ejecuciones)
+    const work = mkdtempSync(join(tmpdir(), 'pygolden-'));
+    copyFileSync(join(dir, f), join(work, f));
+    const py = spawnSync('python3', ['-X', 'utf8', f], { cwd: work, input: stdin, encoding: 'utf8', env: { ...process.env, PYTHONHASHSEED: '0', PYTHONDONTWRITEBYTECODE: '1' } });
+    rmSync(work, { recursive: true, force: true });
+    py.stdout = py.stdout.split(work + '/').join('').split(work).join('/home/alumno');
+    py.stderr = py.stderr.split(work + '/').join('').split(work).join('/home/alumno');
     const s = new PySession({ stdin: stdin === '' ? [] : stdin.replace(/\n$/, '').split('\n') });
     const t0 = Date.now();
     let r: any;

@@ -243,8 +243,11 @@ export function callObj(fn: any, args: any[], kw: Kw | null = null): any {
   const t = typeOf(fn);
   const c = t.lookup('__call__');
   if (c === undefined) throw typeError(`'${t.name}' object is not callable`);
-  args.unshift(fn);
-  return callObj(c, args, kw);
+  if (c instanceof PyFunction || c instanceof NativeFunction) {
+    args.unshift(fn);
+    return callObj(c, args, kw);
+  }
+  return callObj(ops.descrGet(c, fn, t), args, kw);
 }
 
 // ───────────────────────── generadores ─────────────────────────

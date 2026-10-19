@@ -105,8 +105,11 @@ export function typeCall(t: PyType, args: any[], kw: Kw | null, skipMeta = false
   if (meta !== typeType && !skipMeta) {
     const mc = meta.lookup('__call__');
     if (mc !== undefined && mc !== TYPE_CALL.f) {
-      args.unshift(t);
-      return callObj(mc, args, kw);
+      if (mc instanceof PyFunction || mc instanceof NativeFunction) {
+        args.unshift(t);
+        return callObj(mc, args, kw);
+      }
+      return callObj(descrGet(mc, t, meta), args, kw);
     }
   }
   if (t === typeType && args.length === 1 && kw === null) return typeOf(args[0]);
@@ -145,10 +148,7 @@ function abstractError(t: PyType, am: PySet): PyBaseException {
   const names = am.items().map((x) => String(x)).sort();
   const q = names.map((n) => `'${n}'`);
   const word = names.length === 1 ? 'method' : 'methods';
-  let list: string;
-  if (q.length === 1) list = q[0];
-  else if (q.length === 2) list = `${q[0]} and ${q[1]}`;
-  else list = q.slice(0, -1).join(', ') + ', and ' + q[q.length - 1];
+  const list = q.join(', ');
   return typeError(`Can't instantiate abstract class ${t.name} without an implementation for abstract ${word} ${list}`);
 }
 

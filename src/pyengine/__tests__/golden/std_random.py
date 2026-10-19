@@ -1,0 +1,10 @@
+import random
+random.seed(42)
+print(random.random(), random.randint(1, 100), random.choice("abcdef"), random.randrange(0, 50, 5), random.uniform(1, 2))
+xs = list(range(10)); random.shuffle(xs); print(xs)
+print(random.sample(range(100), 5), random.choices(["a", "b", "c"], k=5), random.choices("abc", weights=[1, 0, 0], k=3), random.gauss(0, 1), random.getrandbits(16))
+random.seed("hola"); print(random.random(), random.randint(0, 9))
+random.seed(1234567890123456789); print(random.random())
+r = random.Random(7); print(r.random(), r.randint(1, 6), r.shuffle([1, 2, 3]), r.sample("abcdef", 3), r.triangular(0, 10), r.betavariate(2, 3), r.expovariate(2))
+st = random.getstate(); a = random.random(); random.setstate(st); print(a == random.random())
+random.seed(0); print([random.randint(1, 6) for _ in range(10)], random.normalvariate(10, 2), random.lognormvariate(0, 1), random.randbytes(3))

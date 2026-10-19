@@ -6,5 +6,5 @@ print([(k, list(g)) for k, g in it.groupby("aabbbc")], [(k, list(g)) for k, g in
 print(list(it.zip_longest("ab", [1, 2, 3], fillvalue="-")), list(it.takewhile(lambda x: x < 3, [1, 2, 5, 1])), list(it.dropwhile(lambda x: x < 3, [1, 2, 5, 1])))
 print(list(it.compress("abcd", [1, 0, 1, 0])), list(it.filterfalse(None, [0, 1, 2])), list(it.starmap(pow, [(2, 3), (3, 2)])), list(it.pairwise([1, 2, 3, 4])), list(it.batched(range(7), 3)))
 a, b = it.tee([1, 2, 3])
-print(list(a), list(b), list(it.islice("abcdef", 1, 5, 2)), list(it.cycle("ab"))[:0], next(it.cycle("ab")))
+print(list(a), list(b), list(it.islice("abcdef", 1, 5, 2)), list(it.islice(it.cycle("ab"), 5)), next(it.cycle("ab")))
 print(repr(it.count(3)), repr(it.repeat(1, 2)), sum(1 for _ in it.combinations(range(10), 3)), type(it.chain()).__name__)

@@ -14,6 +14,21 @@ STD = os.path.dirname(os.__file__)
 OUT = os.path.join(ROOT, 'src', 'pyengine', 'stdlib', 'pylib.generated.ts')
 
 
+# Parches mínimos sobre módulos de CPython para igualar los mensajes de la versión en C (que la biblioteca pura no replica).
+PATCHES = {
+    '_pydatetime': [
+        ("raise ValueError('year must be in %d..%d' % (MINYEAR, MAXYEAR), year)", "raise ValueError('year %d is out of range' % year)"),
+        ("raise ValueError('month must be in 1..12', month)", "raise ValueError('month must be in 1..12')"),
+        ("raise ValueError('day must be in 1..%d' % dim, day)", "raise ValueError('day is out of range for month')"),
+        ("raise ValueError('hour must be in 0..23', hour)", "raise ValueError('hour must be in 0..23')"),
+        ("raise ValueError('minute must be in 0..59', minute)", "raise ValueError('minute must be in 0..59')"),
+        ("raise ValueError('second must be in 0..59', second)", "raise ValueError('second must be in 0..59')"),
+        ("raise ValueError('microsecond must be in 0..999999', microsecond)", "raise ValueError('microsecond must be in 0..999999')"),
+        ("raise ValueError('fold must be either 0 or 1', fold)", "raise ValueError('fold must be either 0 or 1')"),
+    ],
+}
+
+
 def minify(src: str) -> str:
     lines = src.splitlines()
     keep = set()
@@ -46,7 +61,13 @@ def main() -> None:
         if not os.path.exists(full):
             print('FALTA', name, full)
             sys.exit(1)
-        src = minify(open(full, encoding='utf8').read())
+        raw = open(full, encoding='utf8').read()
+        for old, new in PATCHES.get(name, []):
+            if old not in raw:
+                print('PARCHE NO APLICABLE', name, old)
+                sys.exit(1)
+            raw = raw.replace(old, new)
+        src = minify(raw)
         total += len(src)
         parts.append(f'registerPy({json.dumps(name)}, () => {json.dumps(src)}, {"true" if pkg else "false"});\n')
     open(OUT, 'w', encoding='utf8').write(''.join(parts))

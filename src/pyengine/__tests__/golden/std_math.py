@@ -1,0 +1,12 @@
+import math
+print(math.sqrt(16), math.pi, math.e, math.floor(-2.5), math.ceil(2.1), math.trunc(-2.9), math.pow(2, 10), math.fabs(-3), math.factorial(20), math.gcd(12, 18), math.lcm(4, 6), math.isqrt(99), math.comb(10, 3), math.perm(5, 2))
+print(math.log(100, 10), math.log10(1000), math.log2(8), math.log(math.e), math.exp(1), math.sin(math.pi / 2), math.cos(0), math.atan2(1, 1), math.hypot(3, 4), math.degrees(math.pi), math.radians(180))
+print(math.isclose(0.1 + 0.2, 0.3), math.isnan(float("nan")), math.isinf(float("inf")), math.fsum([0.1] * 10), math.prod([1, 2, 3, 4]), math.copysign(3, -0.0), math.fmod(-7, 3), math.modf(3.75), math.frexp(8), math.ldexp(1, 4), math.dist((0, 0), (3, 4)))
+print(math.inf, -math.inf, math.nan, math.tau, math.floor(3), math.ceil(-0.5), math.gamma(5), math.erf(0.5), math.lgamma(10))
+try: math.sqrt(-1)
+except ValueError as e: print(e)
+try: math.log(0)
+except ValueError as e: print(e)
+try: math.factorial(-1)
+except ValueError as e: print(e)
+print(round(math.sqrt(2), 10), 10 ** -2, divmod(7.5, 2), 7.5 // 2, -7.5 % 2, 2 ** 0.5, (-8) ** (1 / 3))

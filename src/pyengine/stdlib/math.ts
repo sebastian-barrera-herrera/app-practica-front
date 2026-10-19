@@ -126,37 +126,205 @@ function fsum(xs: number[]): number {
   return hi;
 }
 
-function lgamma(x: number): number {
-  if (x <= 0 && Number.isInteger(x)) return Infinity;
-  if (x < 0.5) return Math.log(Math.PI / Math.abs(Math.sin(Math.PI * x))) - lgamma(1 - x);
-  x -= 1;
-  const g = 7;
-  const c = [0.99999999999980993, 676.5203681218851, -1259.1392167224028, 771.32342877765313, -176.61502916214059, 12.507343278686905, -0.13857109526572012, 9.9843695780195716e-6, 1.5056327351493116e-7];
-  let a = c[0];
-  const t = x + g + 0.5;
-  for (let i = 1; i < g + 2; i++) a += c[i] / (x + i);
-  return 0.5 * Math.log(2 * Math.PI) + (x + 0.5) * Math.log(t) - t + Math.log(a);
+// gamma y lgamma: misma aproximación de Lanczos que mathmodule.c de CPython (N=13, g=6.0246800407767296)
+const LANCZOS_G = 6.024680040776729583740234375;
+const LANCZOS_GMH = 5.524680040776729583740234375;
+const LANCZOS_NUM = [23531376880.410759688572007674451636754734846804940, 42919803642.649098768957899047001988850926355848959,
+  35711959237.355668049440185451547166705960488635843, 17921034426.037209699919755754458931112671403265390,
+  6039542586.3520280050642916443072979210699388420708, 1439720407.3117216736632230727949123939715485786772,
+  248874557.86205415651146038641322942321632125127801, 31426415.585400194380614231628318205362874684987640,
+  2876370.6289353724412254090516208496135991145378768, 186056.26539522349504029498971604569928220784236328,
+  8071.6720023658162106380029022722506138218516325024, 210.82427775157934587250973392071336271166969580291,
+  2.5066282746310002701649081771338373386264310793408];
+const LANCZOS_DEN = [0, 39916800, 120543840, 150917976, 105258076, 45995730, 13339535, 2637558, 357423, 32670, 1925, 66, 1];
+const LOGPI = 1.144729885849400174143427351353058711647294812915311571513623071472137769884826079783623270275489708;
+const GAMMA_INTEGRAL = [1.0, 1.0, 2.0, 6.0, 24.0, 120.0, 720.0, 5040.0, 40320.0, 362880.0, 3628800.0, 39916800.0, 479001600.0,
+  6227020800.0, 87178291200.0, 1307674368000.0, 20922789888000.0, 355687428096000.0, 6402373705728000.0,
+  121645100408832000.0, 2432902008176640000.0, 51090942171709440000.0, 1124000727777607680000.0];
+
+function lanczosSum(x: number): number {
+  let num = 0;
+  let den = 0;
+  if (x < 5) {
+    for (let i = 12; i >= 0; i--) {
+      num = num * x + LANCZOS_NUM[i];
+      den = den * x + LANCZOS_DEN[i];
+    }
+  } else {
+    for (let i = 0; i < 13; i++) {
+      num = num / x + LANCZOS_NUM[i];
+      den = den / x + LANCZOS_DEN[i];
+    }
+  }
+  return num / den;
+}
+
+function sinpi(x: number): number {
+  const y = Math.abs(x) % 2;
+  const n = Math.round(3 * y);
+  let r: number;
+  switch (n) {
+    case 0: r = Math.sin(Math.PI * y); break;
+    case 1: r = Math.cos(Math.PI * (0.5 - y)); break;
+    case 2: r = Math.sin(Math.PI * (1 - y)); break;
+    case 3: r = -Math.cos(Math.PI * (y - 1.5)); break;
+    default: r = Math.sin(Math.PI * (y - 2)); break;
+  }
+  return (x < 0 || Object.is(x, -0) ? -1 : 1) * r;
+}
+
+/** Devuelve NaN con `err` = 'domain' o 'range' para que el llamador lance el error de Python. */
+function tgamma(x: number): { v: number; err?: 'domain' | 'range' } {
+  if (!isFinite(x)) return x !== x || x > 0 ? { v: x } : { v: NaN, err: 'domain' };
+  if (x === 0) return { v: Object.is(x, -0) ? -Infinity : Infinity, err: 'domain' };
+  if (x === Math.floor(x)) {
+    if (x < 0) return { v: NaN, err: 'domain' };
+    if (x <= 23) return { v: GAMMA_INTEGRAL[x - 1] };
+  }
+  const absx = Math.abs(x);
+  if (absx < 1e-20) {
+    const r = 1 / x;
+    return isFinite(r) ? { v: r } : { v: r, err: 'range' };
+  }
+  if (absx > 200) {
+    if (x < 0) return { v: 0 / sinpi(x) };
+    return { v: Infinity, err: 'range' };
+  }
+  const y = absx + LANCZOS_GMH;
+  let z: number;
+  if (absx > LANCZOS_GMH) {
+    const q = y - absx;
+    z = q - LANCZOS_GMH;
+  } else {
+    const q = y - LANCZOS_GMH;
+    z = q - absx;
+  }
+  z = z * LANCZOS_G / y;
+  let r: number;
+  if (x < 0) {
+    r = -Math.PI / sinpi(absx) / absx * Math.exp(y) / lanczosSum(absx);
+    r -= z * r;
+    if (absx < 140) r /= Math.pow(y, absx - 0.5);
+    else {
+      const sp = Math.pow(y, absx / 2 - 0.25);
+      r /= sp;
+      r /= sp;
+    }
+  } else {
+    r = lanczosSum(absx) / Math.exp(y);
+    r += z * r;
+    if (absx < 140) r *= Math.pow(y, absx - 0.5);
+    else {
+      const sp = Math.pow(y, absx / 2 - 0.25);
+      r *= sp;
+      r *= sp;
+    }
+  }
+  return isFinite(r) ? { v: r } : { v: r, err: 'range' };
+}
+
+function lgammaC(x: number): { v: number; err?: 'domain' | 'range' } {
+  if (!isFinite(x)) return x !== x ? { v: x } : { v: Infinity };
+  if (x === Math.floor(x) && x <= 2) {
+    if (x <= 0) return { v: Infinity, err: 'domain' };
+    return { v: 0 };
+  }
+  const absx = Math.abs(x);
+  if (absx < 1e-20) return { v: -Math.log(absx) };
+  let r = Math.log(lanczosSum(absx)) - LANCZOS_G;
+  r += (absx - 0.5) * (Math.log(absx + LANCZOS_GMH) - 1);
+  if (x < 0) r = LOGPI - Math.log(Math.abs(sinpi(absx))) - Math.log(absx) - r;
+  return isFinite(r) ? { v: r } : { v: r, err: 'range' };
+}
+
+// erf/erfc: algoritmo de fdlibm (s_erf.c), el mismo que usa la libm de Linux
+const ERX = 8.45062911510467529297e-01;
+const EFX = 1.28379167095512586316e-01;
+const EFX8 = 1.02703333676410069053e+00;
+const PP = [1.28379167095512558561e-01, -3.25042107247001499370e-01, -2.84817495755985104766e-02, -5.77027029648944159157e-03, -2.37630166566501626084e-05];
+const QQ = [1, 3.97917223959155352819e-01, 6.50222499887672944485e-02, 5.08130628187576562776e-03, 1.32494738004321644526e-04, -3.96022827877536812320e-06];
+const PA = [-2.36211856075265944077e-03, 4.14856118683748331666e-01, -3.72207876035701323847e-01, 3.18346619901161753674e-01, -1.10894694282396677476e-01, 3.54783043256182359371e-02, -2.16637559486879084300e-03];
+const QA = [1, 1.06420880400844228286e-01, 5.40397917702171048937e-01, 7.18286544141962662868e-02, 1.26171219808761642112e-01, 1.36370839120290507362e-02, 1.19844998467991074170e-02];
+const RA = [-9.86494403484714822705e-03, -6.93858572707181764372e-01, -1.05586262253232909814e+01, -6.23753324503260060396e+01, -1.62396669462573470355e+02, -1.84605092906711035994e+02, -8.12874355063065934246e+01, -9.81432934416914548592e+00];
+const SA = [1, 1.96512716674392571292e+01, 1.37657754143519042600e+02, 4.34565877475229228821e+02, 6.45387271733267880336e+02, 4.29008140027567833386e+02, 1.08635005541779435134e+02, 6.57024977031928170135e+00, -6.04244152148580987438e-02];
+const RB = [-9.86494292470009928597e-03, -7.99283237680523006574e-01, -1.77579549177547519889e+01, -1.60636384855821916062e+02, -6.37566443368389627722e+02, -1.02509513161107724954e+03, -4.83519191608651397019e+02];
+const SB = [1, 3.03380607434824582924e+01, 3.25792512996573918826e+02, 1.53672958608443695994e+03, 3.19985821950859553908e+03, 2.55305040643316442583e+03, 4.74528541206955367215e+02, -2.24409524465858183362e+01];
+
+function poly(c: number[], x: number): number {
+  let r = c[c.length - 1];
+  for (let i = c.length - 2; i >= 0; i--) r = c[i] + x * r;
+  return r;
+}
+
+const F64 = new Float64Array(1);
+const U32 = new Uint32Array(F64.buffer);
+function hiWord(x: number): number {
+  F64[0] = x;
+  return U32[1] | 0;
+}
+function lowZero(x: number): number {
+  F64[0] = x;
+  U32[0] = 0;
+  return F64[0];
+}
+
+function erfTail(ax: number, hi: number, lowCut: number): number {
+  const s = 1 / (ax * ax);
+  let R: number;
+  let S: number;
+  if (hi < lowCut) { R = poly(RA, s); S = poly(SA, s); } else { R = poly(RB, s); S = poly(SB, s); }
+  const z = lowZero(ax);
+  return Math.exp(-z * z - 0.5625) * Math.exp((z - ax) * (z + ax) + R / S);
 }
 
 function erf(x: number): number {
-  // Abramowitz-Stegun 7.1.26 refinada con serie para |x| pequeño
-  const ax = Math.abs(x);
-  if (ax < 2.5) {
-    let sum = ax;
-    let term = ax;
-    for (let n = 1; n < 100; n++) {
-      term *= -ax * ax / n;
-      const add = term / (2 * n + 1);
-      sum += add;
-      if (Math.abs(add) < 1e-17) break;
+  if (x !== x) return x;
+  if (!isFinite(x)) return x > 0 ? 1 : -1;
+  const hx = hiWord(x);
+  const ix = hx & 0x7fffffff;
+  if (ix < 0x3feb0000) {
+    if (ix < 0x3e300000) {
+      if (ix < 0x00800000) return 0.125 * (8.0 * x + EFX8 * x);
+      return x + EFX * x;
     }
-    return Math.sign(x) * (2 / Math.sqrt(Math.PI)) * sum;
+    const z = x * x;
+    return x + x * (poly(PP, z) / poly(QQ, z));
   }
-  // fracción continua para colas
-  let f = 0;
-  for (let k = 60; k >= 1; k--) f = k / 2 / (ax + f);
-  const erfc = Math.exp(-ax * ax) / Math.sqrt(Math.PI) / (ax + f);
-  return Math.sign(x) * (1 - erfc);
+  if (ix < 0x3ff40000) {
+    const s = Math.abs(x) - 1;
+    const pq = poly(PA, s) / poly(QA, s);
+    return hx >= 0 ? ERX + pq : -ERX - pq;
+  }
+  if (ix >= 0x40180000) return hx >= 0 ? 1 - 1e-300 : 1e-300 - 1;
+  const ax = Math.abs(x);
+  const r = erfTail(ax, ix, 0x4006db6e);
+  return hx >= 0 ? 1 - r / ax : r / ax - 1;
+}
+
+function erfc(x: number): number {
+  if (x !== x) return x;
+  if (!isFinite(x)) return x > 0 ? 0 : 2;
+  const hx = hiWord(x);
+  const ix = hx & 0x7fffffff;
+  if (ix < 0x3feb0000) {
+    if (ix < 0x3c700000) return 1 - x;
+    const z = x * x;
+    const y = poly(PP, z) / poly(QQ, z);
+    if (hx < 0x3fd00000) return 1 - (x + x * y);
+    return 0.5 - (x * y + (x - 0.5));
+  }
+  if (ix < 0x3ff40000) {
+    const s = Math.abs(x) - 1;
+    const pq = poly(PA, s) / poly(QA, s);
+    return hx >= 0 ? 1 - ERX - pq : 1 + (ERX + pq);
+  }
+  if (ix < 0x403c0000) {
+    const ax = Math.abs(x);
+    if (hx < 0 && ix >= 0x40180000) return 2 - 1e-300;
+    const r = erfTail(ax, ix, 0x4006db6d);
+    return hx > 0 ? r / ax : 2 - r / ax;
+  }
+  return hx > 0 ? 0 : 2 - 1e-300;
 }
 
 registerNative('math', (I: Interp, m: PyModule) => {
@@ -376,16 +544,19 @@ registerNative('math', (I: Interp, m: PyModule) => {
     return normBig(r);
   });
   mfn(m, 'gamma', 'x, /', (a: any) => {
-    const x = fl(a);
-    if (x <= 0 && Number.isInteger(x)) domain();
-    if (Number.isInteger(x) && x < 171) { let r = 1; for (let i = 2; i < x; i++) r *= i; return F(r); }
-    const r = x < 0.5 ? Math.PI / (Math.sin(Math.PI * x) * Math.exp(lgamma(1 - x))) : Math.exp(lgamma(x));
-    if (!isFinite(r)) range();
-    return F(r);
+    const r = tgamma(fl(a));
+    if (r.err === 'domain') domain();
+    if (r.err === 'range') range();
+    return F(r.v);
   });
-  mfn(m, 'lgamma', 'x, /', (a: any) => F(lgamma(fl(a))));
+  mfn(m, 'lgamma', 'x, /', (a: any) => {
+    const r = lgammaC(fl(a));
+    if (r.err === 'domain') domain();
+    if (r.err === 'range') range();
+    return F(r.v);
+  });
   mfn(m, 'erf', 'x, /', (a: any) => F(erf(fl(a))));
-  mfn(m, 'erfc', 'x, /', (a: any) => F(1 - erf(fl(a))));
+  mfn(m, 'erfc', 'x, /', (a: any) => F(erfc(fl(a))));
   mfn(m, 'nextafter', 'x, y, /', (a: any, b: any) => {
     const x = fl(a);
     const y = fl(b);

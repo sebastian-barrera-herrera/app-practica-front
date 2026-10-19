@@ -435,7 +435,26 @@ tprop('__module__', (t) => {
   const m = t.dict!.get('__module__');
   return m !== undefined ? m : t.module;
 }, (t, v) => { t.dict!.set('__module__', v); t.module = typeof v === 'string' ? v : t.module; bumpTypeVersion(); });
-tprop('__bases__', (t) => new PyTuple(t.bases.slice()));
+tprop('__bases__', (t) => new PyTuple(t.bases.slice()), (t, v) => {
+  if (t.flags & F_BUILTIN) throw typeError(`cannot set '__bases__' attribute of immutable type '${t.name}'`);
+  if (!(v instanceof PyTuple)) throw typeError(`can only assign tuple to ${t.name}.__bases__, not ${typeOf(v).name}`);
+  if (v.a.length === 0) throw typeError(`can only assign non-empty tuple to ${t.name}.__bases__, not ()`);
+  for (const b of v.a) {
+    if (!(b instanceof PyType)) throw typeError(`${t.name}.__bases__ must be tuple of classes, not '${typeOf(b).name}'`);
+    if (b.isSubtype(t)) throw typeError('a __bases__ item causes an inheritance cycle');
+  }
+  const old = t.bases;
+  for (const b of old) { const i = b.subclasses.indexOf(t); if (i >= 0) b.subclasses.splice(i, 1); }
+  t.bases = v.a.slice();
+  try { recomputeSubtree(t); } catch (e) {
+    t.bases = old;
+    for (const b of old) b.subclasses.push(t);
+    recomputeSubtree(t);
+    throw e;
+  }
+  for (const b of t.bases) b.subclasses.push(t);
+  bumpTypeVersion();
+});
 tprop('__base__', (t) => (t.bases.length ? t.mro[1] ?? null : null));
 tprop('__mro__', (t) => new PyTuple(t.mro.slice()));
 tprop('__dict__', (t) => {
@@ -452,6 +471,10 @@ tprop('__abstractmethods__', (t) => {
   if (e === undefined) throw attributeError('__abstractmethods__', '__abstractmethods__', t);
   return e.v;
 }, (t, v) => { t.dict!.set('__abstractmethods__', v); bumpTypeVersion(); });
+tprop('__type_params__', (t) => t.dict!.get('__type_params__') ?? new PyTuple([]), (t, v) => {
+  if (!(v instanceof PyTuple)) throw typeError(`__type_params__ must be set to a tuple, not ${typeOf(v).name}`);
+  t.dict!.set('__type_params__', v);
+});
 tprop('__annotations__', (t) => {
   let a = t.dict!.get('__annotations__');
   if (a === undefined) { a = new PyDict(); t.dict!.set('__annotations__', a); }

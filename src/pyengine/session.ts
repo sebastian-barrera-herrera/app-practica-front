@@ -10,6 +10,7 @@ import { installBuiltins } from './runtime/builtins';
 import { importModule, newModule } from './runtime/modules';
 import { compileSource, runCode } from './compile';
 import { PySyntaxErr } from './lexer';
+import { PyList } from './runtime/objects';
 import { Aborted, NeedInput, StepLimit, makeExc } from './runtime/errors';
 import { PyBaseException, PyDict, PyModule } from './runtime/objects';
 import { E } from './runtime/exc_types';
@@ -71,7 +72,11 @@ export class PySession implements PySessionApi {
     const I = this.I;
     const mode = o.mode ?? 'exec';
     const filename = o.filename ?? (mode === 'repl' ? '<stdin>' : 'main.py');
-    if (mode === 'exec') this.lastSrc = code;
+    if (mode === 'exec') {
+      this.lastSrc = code;
+      const argv = I.sysModule?.dict?.get('argv');
+      if (o.filename && argv instanceof PyList && argv.a.length === 1 && argv.a[0] === 'main.py') argv.a[0] = o.filename;
+    }
     const restore = o.onInput ? this.snapshot() : null;
     const startPos = I.stdinPos;
     const baseOut = I.allOut;

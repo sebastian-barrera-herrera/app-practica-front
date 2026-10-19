@@ -163,11 +163,11 @@ export function buildClass(f: Frame, name: string, qualname: string, body: Code,
   let origBases: any[] | null = null;
   for (let i = 0; i < bases.length; i++) {
     const b = bases[i];
-    if (!(b instanceof PyType) && b instanceof PyObject) {
-      const me = typeOf(b).lookup('__mro_entries__');
+    if (!(b instanceof PyType)) {
+      const me = ops.getAttrOpt(b, '__mro_entries__');
       if (me !== undefined) {
         if (origBases === null) { origBases = bases.slice(); realBases = bases.slice(0, i); }
-        const r = callObj(me, [b, new PyTuple(bases)]);
+        const r = callObj(me, [new PyTuple(bases)]);
         if (!(r instanceof PyTuple)) throw typeError('__mro_entries__ must return a tuple');
         for (const x of r.a) realBases.push(x);
         continue;

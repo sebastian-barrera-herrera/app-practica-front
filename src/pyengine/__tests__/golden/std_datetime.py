@@ -1,0 +1,20 @@
+from datetime import date, time, datetime, timedelta, timezone
+d = date(2024, 3, 15)
+print(d, repr(d), d.year, d.weekday(), d.isoweekday(), d.isoformat(), d + timedelta(days=20), d - date(2024, 1, 1), d.replace(day=1), d.strftime("%d/%m/%Y %A %B %j"))
+dt = datetime(2024, 3, 15, 10, 30, 45, 123456)
+print(dt, repr(dt), dt.date(), dt.time(), dt.isoformat(), dt.strftime("%Y-%m-%d %H:%M:%S.%f %p %I"), dt + timedelta(hours=20), dt.timestamp(), dt.hour, dt.microsecond)
+print(datetime.strptime("2024-12-25 08:15", "%Y-%m-%d %H:%M"), datetime.fromisoformat("2024-05-01T12:00:00"), date.fromisoformat("2024-02-29"), datetime.fromtimestamp(0))
+td = timedelta(days=1, hours=2, minutes=30)
+print(td, repr(td), td.total_seconds(), td * 2, td / 2, td // timedelta(hours=1), -td, abs(-td), timedelta(seconds=90061), str(timedelta(0)), timedelta(days=-1, seconds=3600))
+print(date(2024, 1, 31) < date(2024, 2, 1), sorted([date(2024, 5, 1), date(2023, 1, 1)]), (datetime(2024, 3, 1) - datetime(2024, 2, 1)).days, date.today() > date(2000, 1, 1))
+utc = timezone.utc
+a = datetime(2024, 1, 1, 12, tzinfo=utc)
+b = a.astimezone(timezone(timedelta(hours=5, minutes=30)))
+print(a, b, a == b, b.utcoffset(), b.tzname(), a.isoformat(), time(9, 5), time(23, 59, 59).isoformat(), date(2024, 12, 31).timetuple().tm_yday)
+try: date(2023, 2, 29)
+except ValueError as e: print(e)
+try: datetime.strptime("x", "%Y")
+except ValueError as e: print(e)
+import calendar
+print(calendar.isleap(2024), calendar.monthrange(2024, 2), calendar.month_name[3], calendar.day_abbr[0])
+print(calendar.month(2024, 2))
