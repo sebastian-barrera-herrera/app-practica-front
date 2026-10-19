@@ -47,16 +47,12 @@ class Compiler extends GenCompiler {
         doc = list[0].value.value as string;
         list = list.slice(1);
       }
-      if (isGen) {
-        const g = this.genBlock(list);
-        genBody = (f) => g(f);
-      } else body = this.block(list);
+      if (isGen) genBody = this.genBody(list);
+      else body = this.block(list);
     } else if (node.k === 'Lambda') {
       const ret: Stmt = { k: 'Return', value: node.body, line: node.line, col: node.col, endLine: node.endLine, endCol: node.endCol };
-      if (isGen) {
-        const g = this.genBlock([ret]);
-        genBody = (f) => g(f);
-      } else body = this.block([ret]);
+      if (isGen) genBody = this.genBody([ret]);
+      else body = this.block([ret]);
     } else if (isComp || isGenExp) {
       if (isGenExp || isGen) genBody = this.genComp(node, scope);
       else body = this.syncComp(node);

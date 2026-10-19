@@ -6,7 +6,7 @@ import type { Expr, ExceptHandler, Stmt, Try, With, For, While, If, Assign, AugA
 import { Scope } from './scope';
 import { Suspend } from './suspend';
 import {
-  AGYield, Frame, PyBaseException, PyGenerator, PyList, PySet, PyDict, PyObject, PyTuple, SIG_BREAK, SIG_CONTINUE, SIG_RETURN,
+  AGYield, Cell, Frame, PyBaseException, PyGenerator, PyList, PySet, PyDict, PyObject, PyTuple, SIG_BREAK, SIG_CONTINUE, SIG_RETURN,
   type Ev, type Ex,
 } from './runtime/objects';
 import { E } from './runtime/exc_types';
@@ -72,25 +72,6 @@ export function* delegate(it: any, awaiting: boolean): Generator<any, any, any> 
       } else throw e;
     }
   }
-}
-
-/** objeto esperable → iterador sobre el que delegar */
-export function awaitableIter(x: any): any {
-  if (x instanceof PyGenerator && x.cls === coroutineType) return x;
-  const t = typeOf(x);
-  const aw = t.lookup('__await__');
-  if (aw === undefined) {
-    // generador marcado con types.coroutine
-    if (x instanceof PyGenerator && x.frame.code.name && (x.frame.code as any).isCoroutineFlag) return x;
-    throw typeError(`'await' expects an awaitable, not '${t.name}'`.replace("'await' expects an awaitable, not", 'object') .replace(/^object '(.*)'$/, "object $1 can't be used in 'await' expression"));
-  }
-  const it = callObj(aw, [x]);
-  if (it instanceof PyGenerator && it.cls === coroutineType) {
-    throw typeError(`__await__() returned a coroutine`);
-  }
-  const itt = typeOf(it);
-  if (!(it instanceof PyGenerator) && itt.lookup('__next__') === undefined) throw typeError(`__await__() returned non-iterator of type '${itt.name}'`);
-  return it;
 }
 
 function awaitMsgError(x: any): never {
@@ -344,35 +325,37 @@ export abstract class GenCompiler extends StmtCompiler {
           return ops.formatValue(x, sp);
         };
       }
-      case 'ListComp': case 'SetComp': case 'DictComp': {
+      case 'ListComp': case 'SetComp': case 'DictComp': case 'GeneratorExp': {
         const sc = this.table.byNode.get(n)!;
-        const first = n.generators[0].iter;
-        const firstG = this.suspends(first) ? this.genExpr(first) : null;
-        const firstS = firstG ? null : this.expr(first);
-        const { code, freeNames } = this.compileFunctionLike(n, sc, '<comp>', this.qualnameFor('<comp>'));
-        const getCells = this.closureBuilder(freeNames);
-        const I = this.I;
-        void I;
-        return function* (f) {
-          const src = firstG ? yield* firstG(f) : firstS!(f);
-          f.pos = first;
-          const l = new Array(code.nlocals);
-          l[0] = sc.isCoroutine ? src : ops.getIter(src);
-          for (const s of code.cellParams) { const c = new (require('./runtime/objects').Cell)(); c.v = l[s]; l[s] = c; }
-          for (const s of code.cellVars) l[s] = new (require('./runtime/objects').Cell)();
-          const fr = new Frame(code, l, f.g, f.b, f.back, getCells ? getCells(f) : null, null);
-          if (sc.isCoroutine) {
+        const g0 = n.generators[0];
+        const firstG = this.suspends(g0.iter) ? this.genExpr(g0.iter) : null;
+        if (sc.isCoroutine && n.k !== 'GeneratorExp') {
+          const firstS = firstG ? null : this.expr(g0.iter);
+          const { code, freeNames } = this.compileFunctionLike(n, sc, '<comp>', this.qualnameFor('<comp>'));
+          const getCells = this.closureBuilder(freeNames);
+          return function* (f) {
+            const src = firstG ? yield* firstG(f) : firstS!(f);
+            f.pos = g0.iter;
+            const l = new Array(code.nlocals);
+            l[0] = src;
+            for (const s of code.cellParams) { const c = new Cell(); c.v = l[s]; l[s] = c; }
+            for (const s of code.cellVars) l[s] = new Cell();
+            const fr = new Frame(code, l, f.g, f.b, f.back, getCells ? getCells(f) : null, null);
             const g = new PyGenerator(coroutineType, fr, code.name, code.qualname);
             fr.gen = g;
             return yield* delegate(g, true);
-          }
-          return null;
+          };
+        }
+        if (!firstG) return this.syncAsGen(n);
+        // la primera iterable espera: se evalúa en un temporal y la comprensión se compila con él
+        const slot = this.fs.temp();
+        const copy: any = { ...n, generators: [{ ...g0, iter: this.tempRef(slot, g0.iter) }, ...n.generators.slice(1)] };
+        this.table.byNode.set(copy, sc);
+        const ev = this.expr(copy);
+        return function* (f) {
+          f.l[slot] = yield* firstG(f);
+          return ev(f);
         };
-      }
-      case 'GeneratorExp': {
-        const first = n.generators[0].iter;
-        if (this.suspends(first)) return this.genGeneric(n);
-        return this.syncAsGen(n);
       }
       default:
         return this.genGeneric(n);
@@ -389,16 +372,21 @@ export abstract class GenCompiler extends StmtCompiler {
   /** nodo cuyos hijos se evalúan en orden y luego se aplica la operación síncrona */
   genGeneric(n: Expr): GEv {
     const kids = this.childList(n);
+    const target = (k: Expr): Expr => (k.k === 'Starred' ? k.value : k);
     let last = -1;
-    kids.forEach((k, i) => { if (this.suspends(k)) last = i; });
+    kids.forEach((k, i) => { if (this.suspends(target(k))) last = i; });
     if (last < 0) return this.syncAsGen(n);
     const slots: number[] = [];
     for (let i = 0; i <= last; i++) slots.push(this.fs.temp());
-    const evs = kids.slice(0, last + 1).map((k) => (this.suspends(k) ? { g: this.genChild(k), s: null as Ev | null } : { g: null as GEv | null, s: this.expr(k) }));
+    const evs = kids.slice(0, last + 1).map((k) => {
+      const t = target(k);
+      return this.suspends(t) ? { g: this.genExpr(t), s: null as Ev | null } : { g: null as GEv | null, s: this.expr(t) };
+    });
     let idx = 0;
     const replaced = this.mapChildren(n, (c) => {
       const i = idx++;
-      return i <= last ? this.tempRef(slots[i], c) : c;
+      if (i > last) return c;
+      return c.k === 'Starred' ? ({ ...c, value: this.tempRef(slots[i], c.value) } as Expr) : this.tempRef(slots[i], c);
     });
     const rest = this.expr(replaced);
     return function* (f) {
@@ -408,20 +396,6 @@ export abstract class GenCompiler extends StmtCompiler {
       }
       return rest(f);
     };
-  }
-
-  /** evalúa un hijo que puede ser Starred */
-  genChild(k: Expr): GEv {
-    if (k.k === 'Starred') {
-      const inner = this.genExpr(k.value);
-      const node = k;
-      return function* (f) {
-        const v = yield* inner(f);
-        f.pos = node;
-        return new StarMarker(v);
-      };
-    }
-    return this.genExpr(k);
   }
 
   // ───────────── sentencias ─────────────

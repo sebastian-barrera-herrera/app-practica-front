@@ -8,6 +8,8 @@
  */
 import type { Pos } from '../ast';
 import { ckey } from './hash';
+import { hashOf } from './ops';
+import { SetTable } from './settable';
 
 // ───────────────────────── tipos ─────────────────────────
 
@@ -351,8 +353,10 @@ export class PyDict extends PyObject {
 }
 
 export class PySet extends PyObject {
-  /** clave canónica → elemento */
+  /** clave canónica → elemento (pertenencia) */
   m: Map<any, any> = new Map();
+  /** disposición de la tabla de CPython (orden de iteración) */
+  tbl: SetTable = new SetTable();
   frozen: boolean;
   hash: number | undefined = undefined;
   constructor(frozen: boolean, cls?: PyType) {
@@ -361,19 +365,31 @@ export class PySet extends PyObject {
   }
   add(x: any): void {
     const ck = typeof x === 'string' ? x : ckey(x);
-    if (!this.m.has(ck)) this.m.set(ck, x);
+    if (!this.m.has(ck)) {
+      this.m.set(ck, x);
+      this.tbl.insert(hashOf(x), ck, x);
+    }
   }
   has(x: any): boolean {
     return this.m.has(typeof x === 'string' ? x : ckey(x));
   }
   delete(x: any): boolean {
-    return this.m.delete(typeof x === 'string' ? x : ckey(x));
+    const ck = typeof x === 'string' ? x : ckey(x);
+    const v = this.m.get(ck);
+    if (v === undefined && !this.m.has(ck)) return false;
+    this.m.delete(ck);
+    this.tbl.remove(hashOf(v), ck);
+    return true;
+  }
+  clear(): void {
+    this.m.clear();
+    this.tbl.clear();
   }
   get size(): number {
     return this.m.size;
   }
   items(): any[] {
-    return Array.from(this.m.values());
+    return this.tbl.items();
   }
 }
 

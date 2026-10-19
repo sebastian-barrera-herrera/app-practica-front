@@ -293,6 +293,10 @@ export abstract class ExprCompiler {
   // ───────────── expresiones ─────────────
 
   expr(n: Expr): Ev {
+    if ((n as any).k === 'TempRef') {
+      const slot = (n as any).slot as number;
+      return (f) => f.l[slot];
+    }
     switch (n.k) {
       case 'Constant': {
         const v = pyConst(n);
