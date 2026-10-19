@@ -84,6 +84,8 @@ export class Interp {
   /** futuro `annotations` activo por nombre de archivo */
   strAnnotations = new Set<string>();
   extraFlags: Record<string, any> = {};
+  /** funciones que guardan el estado mutable de módulos nativos y devuelven la que lo restaura (reejecución por input) */
+  snapHooks: (() => (() => void))[] = [];
 
   constructor(opts: PyOptions = {}) {
     this.options = opts;

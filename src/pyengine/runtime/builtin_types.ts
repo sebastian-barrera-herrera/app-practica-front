@@ -2,7 +2,7 @@
  * Tipos nativos (objetos `PyType`) del intérprete. Los métodos se registran en los módulos `t_*.ts`.
  */
 import {
-  DICT_TYPE_REF, F_BASETYPE, F_BUILTIN, LIST_TYPE_REF, PyComplex, PyFloat, PyObject, PyType, SET_TYPE_REF, TUPLE_TYPE_REF,
+  Cell, DICT_TYPE_REF, F_BASETYPE, F_BUILTIN, LIST_TYPE_REF, PyComplex, PyFloat, PyObject, PyType, SET_TYPE_REF, TUPLE_TYPE_REF,
 } from './objects';
 
 function mk(name: string, bases: PyType[], flags = F_BASETYPE): PyType {
@@ -112,6 +112,7 @@ DICT_TYPE_REF.t = dictType;
 SET_TYPE_REF.t = setType;
 (PyFloat.prototype as any).cls = floatType;
 (PyComplex.prototype as any).cls = complexType;
+(Cell.prototype as any).cls = cellType;
 
 export function allBuiltinTypes(): PyType[] {
   return all;

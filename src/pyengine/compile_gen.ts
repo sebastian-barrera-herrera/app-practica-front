@@ -419,7 +419,7 @@ export abstract class GenCompiler extends StmtCompiler {
       case 'If': return this.genIf(n);
       case 'While': return this.genWhile(n);
       case 'For': return this.genFor(n);
-      case 'AsyncFor': return this.genAsyncFor(n);
+      case 'AsyncFor': return this.genAsyncFor(n as any);
       case 'With': return this.genWith(n, false);
       case 'AsyncWith': return this.genWith(n, true);
       case 'Try': return this.genTry(n);

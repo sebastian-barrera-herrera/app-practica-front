@@ -187,9 +187,9 @@ export function buildClass(f: Frame, name: string, qualname: string, body: Code,
   // __prepare__
   let ns: PyDict;
   if (meta instanceof PyType) {
-    const prep = meta.lookup('__prepare__');
+    const prep = ops.getAttrOpt(meta, '__prepare__');
     if (prep !== undefined) {
-      const r = callObj(prep, [meta, name, new PyTuple(realBases)], kwr === null ? null : new Map(kwr));
+      const r = callObj(prep, [name, new PyTuple(realBases)], kwr === null ? null : new Map(kwr));
       if (!(r instanceof PyDict)) throw typeError(`${meta.name}.__prepare__() must return a mapping, not ${typeOf(r).name}`);
       ns = r;
     } else ns = new PyDict();

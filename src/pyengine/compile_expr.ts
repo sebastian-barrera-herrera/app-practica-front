@@ -9,9 +9,10 @@ import type {
 import { PySyntaxErr } from './lexer';
 import { Scope, type ScopeTable } from './scope';
 import {
-  Cell, Ellipsis, Frame, NativeFunction, PyBytes, PyComplex, PyDict, PyFloat, PyFunction, PyList, PyObject, PySet, PyTuple, PyType,
+  Cell, Frame, NativeFunction, PyBytes, PyComplex, PyDict, PyFloat, PyFunction, PyList, PyObject, PySet, PyTuple, PyType,
   PyGenerator, SIG_RETURN, type Code, type Ev, type Ex, type Kw, PyBaseException,
 } from './runtime/objects';
+import { Ellipsis } from './runtime/builtin_types';
 import { E } from './runtime/exc_types';
 import { bytesType, functionType, listType, tupleType, typeOf, Ellipsis as EllipsisV } from './runtime/builtin_types';
 import { Interp } from './runtime/interp';

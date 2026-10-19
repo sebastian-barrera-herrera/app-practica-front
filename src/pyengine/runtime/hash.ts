@@ -5,7 +5,7 @@
  * clave primitiva de JS; los objetos con `__hash__`/`__eq__` propios se representan por el primer objeto
  * "igual" ya presente (se consulta `__eq__`), y el resto de objetos por identidad.
  */
-import { PyBox, PyComplex, PyFloat, PyObject, PyTuple, PySet, PyBytes, PyType, PyFunction, NativeFunction } from './objects';
+import { PyBox, PyComplex, PyFloat, PyObject, PyTuple, PySet, PyBytes, PyType, PyFunction, NativeFunction, HOOKS } from './objects';
 import { interp } from './state';
 import * as ops from './ops';
 
@@ -162,3 +162,5 @@ function userKey(o: any): any {
   bucket.push(o);
   return o;
 }
+
+HOOKS.ckey = ckey;

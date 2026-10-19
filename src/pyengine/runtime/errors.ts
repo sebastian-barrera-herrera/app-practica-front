@@ -75,7 +75,18 @@ export class NeedInput {
 }
 
 /** señal interna: se agotó el presupuesto de pasos */
-export class StepLimit {}
+export class StepLimit {
+  line: number | undefined;
+  fn: string | undefined;
+  constructor() {
+    const I = activeOrNull();
+    const f = I ? I.frame : null;
+    if (f) {
+      this.line = f.pos ? f.pos.line : undefined;
+      this.fn = f.code.name;
+    }
+  }
+}
 
 /** señal interna: la ejecución fue abortada desde fuera */
 export class Aborted {}

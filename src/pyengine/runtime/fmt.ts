@@ -33,7 +33,7 @@ export function floatRepr(v: number): string {
 }
 
 /** descompone un double finito no negativo en mantisa entera y exponente binario: x = m * 2^e */
-function decompose(x: number): { m: bigint; e: number } {
+export function decompose(x: number): { m: bigint; e: number } {
   if (x === 0) return { m: 0n, e: 0 };
   const buf = new DataView(new ArrayBuffer(8));
   buf.setFloat64(0, x);
@@ -62,7 +62,7 @@ function divRoundHalfEven(n: bigint, d: bigint): bigint {
 }
 
 /** x ≥ 0 finito → entero redondeado de x·10^f (half-even exacto) */
-function scaledRound(x: number, f: number): bigint {
+export function scaledRound(x: number, f: number): bigint {
   const { m, e } = decompose(x);
   // x * 10^f = m * 2^e * 10^f
   let num = m;

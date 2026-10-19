@@ -20,7 +20,6 @@ import { importFromName, importName, importStar } from './runtime/modules';
 import { ExprCompiler, FnState, type Setter, pyConst } from './compile_expr';
 import { NeedInput, Aborted } from './runtime/errors';
 import { MAXS } from './runtime/numeric';
-import { ownKeysOf } from './runtime/helpers';
 
 const NOEXC = Symbol('noexc');
 
@@ -522,7 +521,7 @@ export abstract class StmtCompiler extends ExprCompiler {
     return (f) => {
       if (t(f)) return undefined;
       const args = msg ? [msg(f)] : [];
-      f.pos = n;
+      f.pos = n.test;
       const e = assertionError('');
       e.args = args;
       throw e;
@@ -1147,6 +1146,5 @@ void PyGenerator;
 void typeOf;
 void makeExc;
 void typeError;
-void ownKeysOf;
 void PyClassMethod;
 void PyType;

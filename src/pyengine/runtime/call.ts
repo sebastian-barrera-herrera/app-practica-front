@@ -304,6 +304,7 @@ export function genResume(g: PyGenerator, mode: 0 | 1, val: any, finished: { don
       g.state = 3;
       finished.done = true;
       finished.value = r.value === undefined ? null : r.value;
+      g.retValue = finished.value;
       return undefined;
     }
     g.state = 1;

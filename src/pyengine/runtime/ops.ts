@@ -6,7 +6,7 @@ import type { BinOpName } from '../ast';
 import {
   BoundMethod, F_BUILTIN, NativeFunction, PyBaseException, PyBox, PyByteArray, PyBytes, PyClassMethod, PyComplex, PyDict, PyFloat, PyFunction,
   PyGenerator, PyList, PyModule, PyObject, PyProperty, PyRange, PySet, PySlice, PyStaticMethod, PySuper, PyTuple, PyType,
-  PyIter, type Kw,
+  PyIter, HOOKS, type Kw,
 } from './objects';
 import {
   NotImplemented, boolType, boundMethodType, classMethodType, dictType, floatType, functionType, intType, listType, moduleType,
@@ -100,9 +100,9 @@ export function newObject(t: PyType): any {
   return new PyObject(t);
 }
 
-export function typeCall(t: PyType, args: any[], kw: Kw | null): any {
+export function typeCall(t: PyType, args: any[], kw: Kw | null, skipMeta = false): any {
   const meta = t.cls;
-  if (meta !== typeType) {
+  if (meta !== typeType && !skipMeta) {
     const mc = meta.lookup('__call__');
     if (mc !== undefined && mc !== TYPE_CALL.f) {
       args.unshift(t);
@@ -519,6 +519,11 @@ function asNum(x: any): Num | undefined {
 
 /** Aritmética entre int/bool/float nativos. Devuelve undefined si algún operando no es numérico. */
 export function numericBinop(op: string, a: any, b: any): any {
+  if (typeof a === 'boolean' && typeof b === 'boolean') {
+    if (op === '&') return a && b;
+    if (op === '|') return a || b;
+    if (op === '^') return a !== b;
+  }
   const x = asNum(a);
   if (x === undefined) return undefined;
   const y = asNum(b);
@@ -1412,3 +1417,5 @@ export function makeSlice(start: any, stop: any, step: any): PySlice {
 
 export { Ellipsis, objectType, noneType, strType, intType, floatType, boolType, functionType, moduleType, propertyType, classMethodType, staticMethodType, superType, tupleType, listType, dictType, setType, frozenSetType, bytesType, byteArrayType, rangeType, complexType };
 export { F_BUILTIN, PySuper, callFunction, indexError, overflowError, intDivmod, strAt, strSlice };
+
+HOOKS.hashOf = hashOf;

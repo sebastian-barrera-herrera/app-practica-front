@@ -7,11 +7,12 @@
  *  - `undefined` nunca es un valor de Python: marca "sin valor" (variable sin asignar, fin de iterador…).
  */
 import type { Pos } from '../ast';
-import { ckey } from './hash';
-import { hashOf } from './ops';
 import { SetTable } from './settable';
 
 // ───────────────────────── tipos ─────────────────────────
+
+/** funciones que dependen de módulos que importan este (se inyectan al cargarlos para evitar ciclos de evaluación) */
+export const HOOKS: { ckey: (k: any) => any; hashOf: (x: any) => number } = { ckey: undefined as any, hashOf: undefined as any };
 
 let TYPE_VERSION = 1;
 export function bumpTypeVersion(): void {
@@ -75,9 +76,11 @@ export class PyType extends PyObject {
   /** (re)calcula el MRO por C3 y los indicadores derivados. Lanza TypeError si es inconsistente. */
   computeMro(): void {
     this.mro = c3(this);
-    this.alloc = null;
+    // un tipo nativo con `alloc` propio lo conserva; los demás lo heredan del primer tipo del MRO que lo tenga
+    if (!(this.flags & F_BUILTIN)) this.alloc = null;
     for (const t of this.mro) {
-      if (t.alloc) { this.alloc = t.alloc; break; }
+      if (this.alloc) break;
+      if (t.alloc) this.alloc = t.alloc;
     }
     this.special = { getattr: false, getattribute: false, setattr: false, delattr: false };
     for (const t of this.mro) {
@@ -134,6 +137,12 @@ export class PyType extends PyObject {
   definer(name: string): PyType | undefined {
     for (const t of this.mro) if (t.dict!.m.has(name)) return t;
     return undefined;
+  }
+
+  /** ¿algún tipo del MRO tiene ese nombre cualificado (`módulo.nombre`)? Útil para ABCs registradas por nombre. */
+  isSubtypeByName(qual: string): boolean {
+    for (const t of this.mro) if (t.module + '.' + t.name === qual) return true;
+    return false;
   }
 
   isSubtype(other: PyType): boolean {
@@ -317,20 +326,20 @@ export class PyDict extends PyObject {
   }
   /** valor o undefined */
   get(key: any): any {
-    const e = this.m.get(typeof key === 'string' ? key : ckey(key));
+    const e = this.m.get(typeof key === 'string' ? key : HOOKS.ckey(key));
     return e === undefined ? undefined : e.v;
   }
   has(key: any): boolean {
-    return this.m.has(typeof key === 'string' ? key : ckey(key));
+    return this.m.has(typeof key === 'string' ? key : HOOKS.ckey(key));
   }
   set(key: any, value: any): void {
-    const ck = typeof key === 'string' ? key : ckey(key);
+    const ck = typeof key === 'string' ? key : HOOKS.ckey(key);
     const e = this.m.get(ck);
     if (e !== undefined) e.v = value;
     else this.m.set(ck, { k: key, v: value });
   }
   delete(key: any): boolean {
-    return this.m.delete(typeof key === 'string' ? key : ckey(key));
+    return this.m.delete(typeof key === 'string' ? key : HOOKS.ckey(key));
   }
   clear(): void {
     this.m.clear();
@@ -364,21 +373,21 @@ export class PySet extends PyObject {
     this.frozen = frozen;
   }
   add(x: any): void {
-    const ck = typeof x === 'string' ? x : ckey(x);
+    const ck = typeof x === 'string' ? x : HOOKS.ckey(x);
     if (!this.m.has(ck)) {
       this.m.set(ck, x);
-      this.tbl.insert(hashOf(x), ck, x);
+      this.tbl.insert(HOOKS.hashOf(x), ck, x);
     }
   }
   has(x: any): boolean {
-    return this.m.has(typeof x === 'string' ? x : ckey(x));
+    return this.m.has(typeof x === 'string' ? x : HOOKS.ckey(x));
   }
   delete(x: any): boolean {
-    const ck = typeof x === 'string' ? x : ckey(x);
+    const ck = typeof x === 'string' ? x : HOOKS.ckey(x);
     const v = this.m.get(ck);
     if (v === undefined && !this.m.has(ck)) return false;
     this.m.delete(ck);
-    this.tbl.remove(hashOf(v), ck);
+    this.tbl.remove(HOOKS.hashOf(v), ck);
     return true;
   }
   clear(): void {
