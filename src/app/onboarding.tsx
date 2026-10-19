@@ -7,6 +7,7 @@ import type { CourseId } from '@/content/types';
 import type { SoundId } from '@/game/progress';
 import { useGame } from '@/game/store';
 import { select } from '@/lib/haptics';
+import { minutesLabel } from '@/lib/format';
 import { ensurePermission, SOUNDS } from '@/lib/notify';
 import { previewSound } from '@/lib/sfx';
 import { Button } from '@/ui/Button';
@@ -134,13 +135,13 @@ export default function Onboarding() {
                   <T v="h3" color={col}>{c.emoji} {c.name}</T>
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
                     {[15, 30, 45, 60, 90, 120].map((m) => (
-                      <Chip key={m} label={m >= 60 ? `${m / 60} h${m % 60 ? ' 30' : ''}` : `${m} min`} color={col} active={minutes[c.id] === m} onPress={() => setMinutes({ ...minutes, [c.id]: m })} />
+                      <Chip key={m} label={minutesLabel(m)} color={col} active={minutes[c.id] === m} onPress={() => setMinutes({ ...minutes, [c.id]: m })} />
                     ))}
                   </View>
                 </Card>
               );
             })}
-            <T v="small" center bold color={colors.amber}>Total: {total >= 60 ? `${Math.floor(total / 60)} h${total % 60 ? ` ${total % 60} min` : ''}` : `${total} min`} al día</T>
+            <T v="small" center bold color={colors.amber}>Total: {minutesLabel(total)} al día</T>
           </Animated.View>
         )}
 

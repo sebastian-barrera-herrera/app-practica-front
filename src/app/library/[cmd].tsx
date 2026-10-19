@@ -4,6 +4,7 @@ import { Pressable, ScrollView, View } from 'react-native';
 import { REGISTRY } from '@/engine';
 import { useGame } from '@/game/store';
 import { useStudyContext } from '@/lib/studyClock';
+import { PyRefSheet } from '@/ui/PyRefSheet';
 import { Button } from '@/ui/Button';
 import { Card } from '@/ui/Card';
 import { Chip } from '@/ui/Chip';
@@ -13,7 +14,12 @@ import { T } from '@/ui/Text';
 import { colors, fonts } from '@/ui/theme';
 import { CATEGORY_LABEL, levelColor, LEVEL_LABEL } from '@/lib/library';
 
-export default function CommandSheet() {
+export default function CommandRoute() {
+  const { cmd, course } = useLocalSearchParams<{ cmd: string; course?: string }>();
+  return course === 'python' ? <PyRefSheet name={cmd} /> : <CommandSheet />;
+}
+
+function CommandSheet() {
   useStudyContext('linux');
   const { cmd } = useLocalSearchParams<{ cmd: string }>();
   const def = cmd ? REGISTRY.get(cmd) : undefined;

@@ -6,9 +6,14 @@ import { Terminal } from '@/engine/terminal';
 import type { Question } from '@/content/types';
 import { cmdMatches, seededShuffle } from '@/lib/cmdnorm';
 import { error as hapticError, select, success as hapticSuccess } from '@/lib/haptics';
+import { pyEngine, pythonStdout } from '@/lib/pyrun';
 import { Button } from './Button';
 import { Chip } from './Chip';
+import { PyCode } from './PyCode';
+import { PyEditor } from './PyEditor';
+import { PyOutput } from './PyOutput';
 import { CodeBlock, Inline } from './RichText';
+import { usePyRunner } from './usePyRunner';
 import { T } from './Text';
 import { colors, fonts, radius, makeStyles } from './theme';
 
@@ -67,9 +72,8 @@ export function QuestionView({ q, seed, mode = 'lesson', onDone, continueLabel =
       case 'match': return <Match q={q} seed={seed} locked={!!checked} setReady={setReady} getRef={getAnswerRef} />;
       case 'fill': return <Fill q={q} seed={seed} locked={!!checked} setReady={setReady} getRef={getAnswerRef} />;
       case 'output': return <Output q={q} seed={seed} locked={!!checked} setReady={setReady} getRef={getAnswerRef} />;
-      case 'pycode':
-      case 'pyout':
-        return null;
+      case 'pycode': return <PyCodeQ q={q} locked={!!checked} setReady={setReady} getRef={getAnswerRef} showHint={showHint} />;
+      case 'pyout': return <PyOut q={q} seed={seed} locked={!!checked} setReady={setReady} getRef={getAnswerRef} />;
     }
   })();
 
@@ -81,7 +85,7 @@ export function QuestionView({ q, seed, mode = 'lesson', onDone, continueLabel =
         <Animated.View entering={FadeInDown.duration(260)} key={seed} style={{ gap: 18 }}>
           {prompt}
           {body}
-          {q.t === 'cmd' && q.hint && !checked ? (
+          {(q.t === 'cmd' || q.t === 'pycode') && q.hint && !checked ? (
             <Pressable onPress={() => setShowHint(true)}>
               {showHint ? <T v="small" color={colors.amber}>💡 {q.hint}</T> : <T v="small" color={colors.dim}>¿Necesitas una pista? Toca aquí</T>}
             </Pressable>
@@ -108,7 +112,7 @@ export function QuestionView({ q, seed, mode = 'lesson', onDone, continueLabel =
             <Animated.View entering={FadeIn.delay(120)} style={{ gap: 6 }}>
               {correctText ? (
                 <T v="small" color={colors.text}>
-                  Respuesta correcta: <T v="small" bold color={colors.white} style={{ fontFamily: q.t === 'cmd' || q.t === 'order' ? fonts.monoBold : fonts.bold }}>{correctText}</T>
+                  Respuesta correcta: <T v="small" bold color={colors.text} style={{ fontFamily: q.t === 'cmd' || q.t === 'order' ? fonts.monoBold : fonts.bold }}>{correctText}</T>
                 </T>
               ) : null}
               <Inline text={q.why} size={15} color={colors.text} />
@@ -399,6 +403,58 @@ function Output({ q, seed, locked, setReady, getRef }: SubProps & { q: Extract<Q
           return <OptionButton key={i} mono label={o || '(sin salida)'} state={st} onPress={() => { if (!locked) { select(); setSel(i); } }} />;
         })}
       </View>
+    </View>
+  );
+}
+
+// ───────────────────────── Python: predecir la salida ─────────────────────────
+
+function PyOut({ q, seed, locked, setReady, getRef }: SubProps & { q: Extract<Question, { t: 'pyout' }>; seed: string }) {
+  const [correct, setCorrect] = useState<string | null>(null);
+  const [sel, setSel] = useState<number | null>(null);
+  useEffect(() => {
+    let alive = true;
+    pythonStdout(q.code, q.setup).then((out) => {
+      if (alive) setCorrect(out);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [q]);
+  const options = useMemo(() => (correct === null ? [] : seededShuffle([correct, ...q.wrong.map((w) => w.trimEnd())], seed)), [correct, q, seed]);
+  useEffect(() => setReady(sel !== null), [sel, setReady]);
+  getRef.current = () => ({ correct: sel !== null && options[sel] === correct, given: sel !== null ? options[sel] : '' });
+  return (
+    <View style={{ gap: 12 }}>
+      <PyCode code={q.code} />
+      <View style={{ gap: 10 }}>
+        {options.map((o, i) => {
+          let st: 'idle' | 'selected' | 'right' | 'wrong' | 'dim' = sel === i ? 'selected' : 'idle';
+          if (locked) st = o === correct ? 'right' : sel === i ? 'wrong' : 'dim';
+          return <OptionButton key={i} mono label={o || '(sin salida)'} state={st} onPress={() => { if (!locked) { select(); setSel(i); } }} />;
+        })}
+      </View>
+    </View>
+  );
+}
+
+// ───────────────────────── Python: escribir código ─────────────────────────
+
+function PyCodeQ({ q, locked, setReady, getRef }: SubProps & { q: Extract<Question, { t: 'pycode' }>; showHint: boolean }) {
+  const [code, setCode] = useState(q.starter ?? '');
+  const runner = usePyRunner();
+  useEffect(() => setReady(code.trim().length > 0), [code, setReady]);
+  getRef.current = async () => {
+    const { session } = await runner.run(code, { setup: q.setup });
+    const r = pyEngine().evaluate(q.check, { session, code });
+    return { correct: r.ok, given: code };
+  };
+  return (
+    <View style={{ gap: 10 }}>
+      <PyEditor value={code} onChange={setCode} readOnly={locked} minHeight={130} placeholder="# Escribe tu código aquí" />
+      {q.setup?.stdin && q.setup.stdin.length > 0 ? <T v="tiny" color={colors.dim}>⌨ Entrada de prueba: {q.setup.stdin.map((l) => `«${l}»`).join(' · ')}</T> : null}
+      {!locked && <Button label={runner.running ? 'Ejecutando…' : '▶  Probar'} small kind="secondary" disabled={runner.running || !code.trim()} onPress={() => void runner.run(code, { setup: q.setup })} />}
+      {(runner.chunks.length > 0 || runner.running) && <PyOutput chunks={runner.chunks} running={runner.running} asking={!!runner.request} onSubmitInput={runner.submitInput} onStop={runner.stop} maxHeight={160} />}
     </View>
   );
 }

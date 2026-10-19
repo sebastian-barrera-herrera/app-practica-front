@@ -13,6 +13,7 @@ import { dayKey } from '@/game/streak';
 import { useGame } from '@/game/store';
 import { useStudyContext } from '@/lib/studyClock';
 import { AnyChallengeView } from '@/ui/AnyChallenge';
+import { CodeLangProvider } from '@/ui/codeLang';
 import { courseColor } from '@/ui/courseColors';
 import { Button } from '@/ui/Button';
 import { Card } from '@/ui/Card';
@@ -32,8 +33,15 @@ export default function SessionScreen() {
   // los exámenes y misiones de una zona saben a qué curso pertenecen; el resto lo indica el parámetro `course`
   const worldCourse = mode?.startsWith('boss-') || mode?.startsWith('exam-') ? worldById(mode.slice(mode.indexOf('-') + 1))?.course : undefined;
   const cid: CourseId = worldCourse ?? (courseParam === 'python' || courseParam === 'linux' ? courseParam : active);
-  const course = courseDef(cid);
   useStudyContext(cid);
+  return (
+    <CodeLangProvider course={cid}>
+      <SessionRoute mode={mode} scope={scope} course={courseDef(cid)} />
+    </CodeLangProvider>
+  );
+}
+
+function SessionRoute({ mode, scope, course }: { mode: string; scope?: string; course: CourseDef }) {
   if (mode === 'review') return <ReviewRun course={course} />;
   if (mode === 'surprise') return <SurpriseRun course={course} />;
   if (mode === 'blitz') return <BlitzRun course={course} initialScope={scope} />;

@@ -7,6 +7,7 @@ import type { Step } from '@/content/types';
 import { useGame, type FinishOutcome } from '@/game/store';
 import { useStudyContext } from '@/lib/studyClock';
 import { AnyChallengeView } from '@/ui/AnyChallenge';
+import { CodeLangProvider } from '@/ui/codeLang';
 import { courseColor } from '@/ui/courseColors';
 import { PyDemoView } from '@/ui/PyDemoView';
 import { Illustration } from '@/illustrations';
@@ -40,7 +41,11 @@ export default function LessonScreen() {
       </Screen>
     );
   }
-  return <Player key={lesson.id} lessonId={lesson.id} />;
+  return (
+    <CodeLangProvider course={world.course}>
+      <Player key={lesson.id} lessonId={lesson.id} />
+    </CodeLangProvider>
+  );
 }
 
 function Player({ lessonId }: { lessonId: string }) {

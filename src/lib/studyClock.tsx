@@ -8,17 +8,17 @@ import React, { useCallback, useEffect, useRef } from 'react';
 import { AppState, View } from 'react-native';
 import type { CourseId } from '@/content/types';
 import { useGame } from '@/game/store';
+import { getStudyContext, setContext } from './studyContext';
 
 const IDLE_MS = 120_000;
 const FLUSH_EVERY_S = 10;
 
-let context: CourseId | null = null;
 let lastTouch = 0;
 let pending = 0;
 let foreground = true;
 const goalListeners = new Set<(e: { course: CourseId; bonusXp: number; dayDone: boolean }) => void>();
 
-export const getStudyContext = (): CourseId | null => context;
+export { getStudyContext };
 export const markInteraction = () => {
   lastTouch = Date.now();
 };
@@ -30,18 +30,18 @@ export const onGoalReached = (fn: (e: { course: CourseId; bonusXp: number; dayDo
 };
 
 function flush() {
-  if (!context || pending <= 0) return;
+  const course = getStudyContext();
+  if (!course || pending <= 0) return;
   const secs = pending;
   pending = 0;
-  const course = context;
   const r = useGame.getState().addStudy(course, secs);
   if (r.reached) for (const l of goalListeners) l({ course, bonusXp: r.bonusXp, dayDone: r.dayDone });
 }
 
 export function setStudyContext(c: CourseId | null) {
-  if (c !== context) {
+  if (c !== getStudyContext()) {
     flush();
-    context = c;
+    setContext(c);
     pending = 0;
   }
   if (c) markInteraction();
@@ -55,7 +55,7 @@ export function useStudyContext(course: CourseId | null | undefined, enabled = t
       setStudyContext(course);
       return () => {
         flush();
-        if (context === course) context = null;
+        if (getStudyContext() === course) setContext(null);
       };
     }, [course, enabled]),
   );
@@ -74,16 +74,15 @@ export function StudyClock({ children }: { children: React.ReactNode }) {
       const t = Date.now();
       const dt = Math.min(5, (t - last.current) / 1000); // nunca más de 5 s por tic (suspensiones del sistema)
       last.current = t;
-      if (!foreground || !context) return;
+      const ctx = getStudyContext();
+      if (!foreground || !ctx) return;
       if (t - lastTouch > IDLE_MS) return;
       pending += dt;
       if (pending >= FLUSH_EVERY_S) {
         const whole = Math.floor(pending);
         pending -= whole;
-        const secs = whole;
-        const course = context;
-        const r = useGame.getState().addStudy(course, secs);
-        if (r.reached) for (const l of goalListeners) l({ course, bonusXp: r.bonusXp, dayDone: r.dayDone });
+        const r = useGame.getState().addStudy(ctx, whole);
+        if (r.reached) for (const l of goalListeners) l({ course: ctx, bonusXp: r.bonusXp, dayDone: r.dayDone });
       }
     }, 1000);
     return () => {

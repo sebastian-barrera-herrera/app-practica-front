@@ -2,6 +2,8 @@ import React, { useMemo } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { parseInline, parseRich } from '@/content/richtext';
 import type { Block } from '@/content/types';
+import { useCodeLang, type CodeLang } from './codeLang';
+import { PyCode } from './PyCode';
 import { T } from './Text';
 import { colors, fonts, radius, makeStyles } from './theme';
 
@@ -10,7 +12,7 @@ export function Inline({ text, color = colors.text, size = 16 }: { text: string;
   return (
     <T style={{ fontSize: size, lineHeight: size * 1.5 }} color={color}>
       {spans.map((s, i) => {
-        if (s.t === 'b') return <T key={i} bold color={colors.white} style={{ fontSize: size, lineHeight: size * 1.5 }}>{s.s}</T>;
+        if (s.t === 'b') return <T key={i} bold color={colors.text} style={{ fontSize: size, lineHeight: size * 1.5 }}>{s.s}</T>;
         if (s.t === 'i') return <T key={i} color={colors.dim} style={{ fontSize: size, fontStyle: 'italic' }}>{s.s}</T>;
         if (s.t === 'code')
           return (
@@ -31,7 +33,9 @@ const CALLOUT = {
   key: { icon: '🔑', get color() { return colors.violet; }, label: 'Clave' },
 };
 
-export function CodeBlock({ lines }: { lines: string[] }) {
+export function CodeBlock({ lines, lang }: { lines: string[]; lang?: CodeLang }) {
+  const ctx = useCodeLang();
+  if ((lang ?? ctx) === 'py') return <PyCode code={lines.join('\n')} />;
   return (
     <View style={styles.code}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>

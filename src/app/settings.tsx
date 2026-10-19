@@ -9,6 +9,7 @@ import type { CourseId } from '@/content/types';
 import type { SoundId, ThemePref } from '@/game/progress';
 import { COURSE_KEYS, goalStreak } from '@/game/root';
 import { useGame } from '@/game/store';
+import { minutesLabel } from '@/lib/format';
 import { cancelAllNotifications, ensurePermission, permissionStatus, SOUNDS, sendTestNotification } from '@/lib/notify';
 import { previewSound } from '@/lib/sfx';
 import { Button } from '@/ui/Button';
@@ -211,7 +212,7 @@ export default function Settings() {
                   right={<Toggle label={`Meta de ${c.name}`} value={st.courseOn[id]} onChange={(v) => set({ courseOn: { ...st.courseOn, [id]: v } })} />}
                 />
                 {st.courseOn[id] && (
-                  <Options value={st.goalMinutes[id]} options={[15, 30, 45, 60, 90, 120]} color={col} fmt={(v) => (v >= 60 ? `${v / 60} h${v % 60 ? ` ${v % 60}` : ''}`.replace(/ $/, '') : `${v} min`)} onChange={(m) => set({ goalMinutes: { ...st.goalMinutes, [id]: m } })} />
+                  <Options value={st.goalMinutes[id]} options={[15, 30, 45, 60, 90, 120]} color={col} fmt={minutesLabel} onChange={(m) => set({ goalMinutes: { ...st.goalMinutes, [id]: m } })} />
                 )}
               </View>
             );

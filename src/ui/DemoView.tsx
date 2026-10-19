@@ -8,7 +8,7 @@ import { Button } from './Button';
 import { Inline } from './RichText';
 import { AnsiText } from './TerminalView';
 import { T } from './Text';
-import { colors, fonts, radius, makeStyles } from './theme';
+import { colors, darkColors, fonts, radius, makeStyles } from './theme';
 
 interface Block {
   cmd: string;
@@ -75,7 +75,7 @@ export function DemoView({ lines, setup, intro, onComplete }: { lines: DemoLine[
           <View style={[styles.dot, { backgroundColor: '#FF5F57' }]} />
           <View style={[styles.dot, { backgroundColor: '#FEBC2E' }]} />
           <View style={[styles.dot, { backgroundColor: '#28C840' }]} />
-          <T v="tiny" color={colors.faint} style={{ marginLeft: 10 }}>demo · bash</T>
+          <T v="tiny" color={darkColors.faint} style={{ marginLeft: 10 }}>demo · bash</T>
         </View>
         <ScrollView ref={scroll} style={{ maxHeight: 360 }} contentContainerStyle={{ padding: 12, gap: 10 }} nestedScrollEnabled>
           {blocks.map((b, i) => (
@@ -86,13 +86,13 @@ export function DemoView({ lines, setup, intro, onComplete }: { lines: DemoLine[
               ))}
               {b.note ? (
                 <View style={styles.note}>
-                  <T v="small" color={colors.cyan}>→ {b.note}</T>
+                  <T v="small" color={darkColors.cyan}>→ {b.note}</T>
                 </View>
               ) : null}
             </Animated.View>
           ))}
           {typing !== null && <AnsiText raw={term.prompt() + typing + '▌'} />}
-          {blocks.length === 0 && typing === null && <T v="small" color={colors.faint}>Pulsa «Ejecutar» para ver el primer comando…</T>}
+          {blocks.length === 0 && typing === null && <T v="small" color={darkColors.faint}>Pulsa «Ejecutar» para ver el primer comando…</T>}
         </ScrollView>
       </View>
       {!done ? (
@@ -114,10 +114,10 @@ export function DemoView({ lines, setup, intro, onComplete }: { lines: DemoLine[
 }
 
 const styles = makeStyles(() => ({
-  term: { backgroundColor: colors.termBg, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, overflow: 'hidden' },
-  titleBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, backgroundColor: colors.bg2, borderBottomWidth: 1, borderBottomColor: colors.line },
+  term: { backgroundColor: darkColors.termBg, borderRadius: radius.lg, borderWidth: 1, borderColor: darkColors.line, overflow: 'hidden' },
+  titleBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, backgroundColor: darkColors.bg2, borderBottomWidth: 1, borderBottomColor: darkColors.line },
   dot: { width: 10, height: 10, borderRadius: 5, marginRight: 6 },
-  note: { marginTop: 4, paddingLeft: 8, borderLeftWidth: 2, borderLeftColor: colors.cyan },
+  note: { marginTop: 4, paddingLeft: 8, borderLeftWidth: 2, borderLeftColor: darkColors.cyan },
 }));
 
 export { fonts };

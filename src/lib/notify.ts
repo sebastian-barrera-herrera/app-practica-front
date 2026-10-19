@@ -10,7 +10,7 @@ import type { CourseId } from '@/content/types';
 import type { SoundId } from '@/game/progress';
 import type { RootState } from '@/game/root';
 import { dayKey } from '@/game/streak';
-import { getStudyContext } from './studyClock';
+import { getStudyContext } from './studyContext';
 import { planNotifications, type NotifKind, type PlannedNotification } from './notifyPlan';
 
 type NotificationsModule = typeof import('expo-notifications');

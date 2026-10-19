@@ -33,7 +33,29 @@ export type IllustrationId =
   | 'awk-fields'
   | 'script-anatomy'
   | 'sudo-flow'
-  | 'dns-lookup';
+  | 'dns-lookup'
+  | 'py-variables-labels'
+  | 'py-types-map'
+  | 'py-str-index'
+  | 'py-precedence'
+  | 'py-if-flow'
+  | 'py-loop-flow'
+  | 'py-collections'
+  | 'py-mutability'
+  | 'py-call-stack'
+  | 'py-scope-legb'
+  | 'py-comprehension'
+  | 'py-exceptions-flow'
+  | 'py-file-modes'
+  | 'py-import-path'
+  | 'py-class-instance'
+  | 'py-mro'
+  | 'py-iterator-protocol'
+  | 'py-generator-pause'
+  | 'py-decorator-wrap'
+  | 'py-event-loop'
+  | 'py-recursion-tree'
+  | 'py-big-o';
 
 // ───────────────────────── preguntas ─────────────────────────
 
@@ -127,6 +149,10 @@ export interface PyCell {
   code: string;
   /** Explicación bajo la salida. */
   note?: string;
+  /** true ⇒ se ejecuta como en el intérprete interactivo (>>>): cada sentencia con su eco. false ⇒ como un script. */
+  repl?: boolean;
+  /** true ⇒ la celda provoca un error A PROPÓSITO (para enseñar a leer tracebacks); el test lo exige. */
+  error?: boolean;
 }
 
 export interface Lesson {
