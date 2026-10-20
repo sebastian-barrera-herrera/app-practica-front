@@ -1,6 +1,7 @@
 /** Referencia de Python para la «Biblioteca» (funciones, métodos, sentencias y módulos con ejemplos ejecutables). */
 import { BASICOS } from './ref/basicos';
 import { BUCLES } from './ref/bucles';
+import { COLECCIONES } from './ref/colecciones';
 import { CONTROL } from './ref/control';
 import { TEXTO } from './ref/texto';
 
@@ -39,6 +40,6 @@ export interface PyRef {
   seeAlso?: string[];
 }
 
-export const PY_REFERENCE: PyRef[] = [...BASICOS, ...TEXTO, ...CONTROL, ...BUCLES];
+export const PY_REFERENCE: PyRef[] = [...BASICOS, ...TEXTO, ...CONTROL, ...BUCLES, ...COLECCIONES];
 
 export const refByName = (name: string): PyRef | undefined => PY_REFERENCE.find((r) => r.name === name);
