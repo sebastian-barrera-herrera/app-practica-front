@@ -8,7 +8,7 @@ import { Platform } from 'react-native';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { AUTH_URL } from './config';
-import { CloudError, explain, readJson, request } from './http';
+import { brief, CloudError, explain, readJson, request } from './http';
 import { parseJwt } from './jwt';
 import { loadSession, saveSession, type StoredSession } from './secure';
 
@@ -151,6 +151,7 @@ export async function initAuth(): Promise<void> {
 
 /** 'ok' = sesión válida · 'expired' = hay que volver a entrar · 'offline' = no se pudo comprobar. */
 export async function refreshSession(): Promise<'ok' | 'expired' | 'offline'> {
+  jwt = null; // el token en caché puede ser justo lo que falló: se pide uno nuevo
   try {
     const { res, json } = await call('/get-session', undefined, 'GET');
     if (res.ok && json?.user) {
@@ -173,25 +174,37 @@ export async function refreshSession(): Promise<'ok' | 'expired' | 'offline'> {
   }
 }
 
-/** JWT vigente para la Data API (se renueva solo). */
+/**
+ * JWT vigente para la Data API (se renueva solo). Si el servidor no reconoce la sesión con la forma actual de enviarla
+ * (cookie guardada a mano o almacén de cookies del sistema), prueba la otra una vez y se queda con la que funcione.
+ */
 export async function getJwt(): Promise<string> {
   if (jwt && jwt.exp * 1000 - Date.now() > 90_000) return jwt.token;
-  const { res, json } = await call('/get-session', undefined, 'GET');
-  const h = res.headers.get('set-auth-jwt');
-  if (h) {
-    jwt = parseJwt(h);
-    return h;
-  }
-  if (res.ok && json?.user) {
-    const t = await call('/token', undefined, 'GET');
-    const tok = t.json?.token as string | undefined;
-    if (tok) {
-      jwt = parseJwt(tok);
-      return tok;
+  const notes: string[] = [];
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const mode = useJar ? 'cookies del sistema' : 'cookie guardada';
+    const { res, json } = await call('/get-session', undefined, 'GET');
+    const h = res.headers.get('set-auth-jwt');
+    notes.push(`sesión (${mode}): ${res.ok ? (json?.user ? 'válida' : 'sin sesión') : brief(res, json)}${h ? ', con jwt' : ', sin jwt'}`);
+    if (h) {
+      jwt = parseJwt(h);
+      return h;
     }
+    if (res.ok && json?.user) {
+      const t = await call('/token', undefined, 'GET');
+      const tok = t.json?.token as string | undefined;
+      notes.push(`token: ${tok ? 'ok' : brief(t.res, t.json)}`);
+      if (tok) {
+        jwt = parseJwt(tok);
+        return tok;
+      }
+      throw new CloudError('ERROR', 'No pudimos autenticarte con el servidor.', t.res.status, notes.join(' · '));
+    }
+    // la sesión no se reconoció: probamos la otra forma de enviarla (solo en el móvil y si hay algo que enviar)
+    if (Platform.OS === 'web' || attempt === 1 || (!session && !useJar)) break;
+    useJar = !useJar;
   }
-  if (res.ok) throw new CloudError('SESSION_EXPIRED', explain('SESSION_EXPIRED'), 401);
-  throw new CloudError('ERROR', 'No pudimos autenticarte con el servidor.', res.status);
+  throw new CloudError('SESSION_EXPIRED', explain('SESSION_EXPIRED'), 401, notes.join(' · '));
 }
 
 export async function requestPasswordReset(email: string): Promise<void> {

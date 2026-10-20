@@ -2,9 +2,21 @@ import { Platform } from 'react-native';
 import { NATIVE_ORIGIN } from './config';
 
 export class CloudError extends Error {
-  constructor(public code: string, message: string, public status = 0) {
+  /** `detail`: pistas técnicas (paso, estado HTTP, respuesta del servidor) para mostrar cuando algo falla. */
+  constructor(public code: string, message: string, public status = 0, public detail = '') {
     super(message);
   }
+}
+
+/** Resumen corto y sin datos personales de una respuesta fallida, para diagnosticar. */
+export function brief(res: Response, json: unknown): string {
+  let body = '';
+  try {
+    body = json == null ? '' : typeof json === 'string' ? json : JSON.stringify(json);
+  } catch {
+    body = '';
+  }
+  return `HTTP ${res.status}${body ? ` ${body.replace(/\s+/g, ' ').slice(0, 180)}` : ''}`;
 }
 
 /** Mensajes en español para los códigos de error de Neon Auth. */

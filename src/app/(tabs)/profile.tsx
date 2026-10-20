@@ -71,6 +71,7 @@ export default function Profile() {
   const user = useAuth((a) => a.user);
   const lastSyncAt = useAuth((a) => a.lastSyncAt);
   const phase = useSync((x) => x.phase);
+  const syncDetail = useSync((x) => x.detail);
   const [confirmOut, setConfirmOut] = useState<null | 'normal' | 'unsynced'>(null);
   const [busy, setBusy] = useState(false);
   const now = Date.now();
@@ -202,6 +203,9 @@ export default function Profile() {
             <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: phase === 'error' ? colors.rose : phase === 'offline' ? colors.amber : colors.green }} />
             <T v="small" color={colors.dim} style={{ flex: 1 }}>{syncText}</T>
           </View>
+          {phase === 'error' && syncDetail ? (
+            <T v="tiny" selectable color={colors.rose} style={{ marginTop: 6 }}>Detalle técnico: {syncDetail}</T>
+          ) : null}
           <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
             <View style={{ flex: 1 }}>
               <Button label="Sincronizar" kind="secondary" small disabled={phase === 'syncing'} onPress={() => void syncNow()} />

@@ -9,13 +9,13 @@ import { initialRoot, ROOT_VERSION, type RootState } from '@/game/root';
 import { useGame } from '@/game/store';
 import { getJwt, refreshSession, useAuth } from './auth';
 import { API_URL } from './config';
-import { CloudError, explain, readJson, request } from './http';
+import { brief, CloudError, explain, readJson, request } from './http';
 import { joinRoot, mergeRoots, sameProgress, splitRoot, type Parts, type Scope } from './merge';
 
 export type SyncPhase = 'idle' | 'syncing' | 'ok' | 'offline' | 'error';
 
-export const useSync = create<{ phase: SyncPhase; error: string | null }>(() => ({ phase: 'idle', error: null }));
-const setPhase = (phase: SyncPhase, error: string | null = null) => useSync.setState({ phase, error });
+export const useSync = create<{ phase: SyncPhase; error: string | null; detail: string | null }>(() => ({ phase: 'idle', error: null, detail: null }));
+const setPhase = (phase: SyncPhase, error: string | null = null, detail: string | null = null) => useSync.setState({ phase, error, detail });
 
 interface Row {
   scope: Scope;
@@ -49,7 +49,7 @@ async function api(path: string, init: RequestInit & { prefer?: string } = {}): 
 async function pull(): Promise<Row[]> {
   const res = await api('/progress?select=scope,data,client_ts,updated_at');
   const json = await readJson<Row[] | { message?: string }>(res);
-  if (!res.ok || !Array.isArray(json)) throw new CloudError('ERROR', explain(undefined, 'No pudimos leer tu progreso de la nube.', res.status), res.status);
+  if (!res.ok || !Array.isArray(json)) throw new CloudError('ERROR', explain(undefined, 'No pudimos leer tu progreso de la nube.', res.status), res.status, `leer: ${brief(res, json)}`);
   return json;
 }
 
@@ -58,7 +58,7 @@ async function push(root: RootState): Promise<Row[]> {
   const body = (Object.keys(parts) as Scope[]).map((scope) => ({ scope, data: { ...parts[scope], _v: ROOT_VERSION }, client_ts: root.updatedAt }));
   const res = await api('/progress?on_conflict=user_id,scope', { method: 'POST', body: JSON.stringify(body), prefer: 'resolution=merge-duplicates,return=representation' });
   const json = await readJson<Row[]>(res);
-  if (!res.ok || !Array.isArray(json)) throw new CloudError('ERROR', explain(undefined, 'No pudimos guardar tu progreso en la nube.', res.status), res.status);
+  if (!res.ok || !Array.isArray(json)) throw new CloudError('ERROR', explain(undefined, 'No pudimos guardar tu progreso en la nube.', res.status), res.status, `guardar (${body.length} filas, ${JSON.stringify(body).length} bytes): ${brief(res, json)}`);
   return json;
 }
 
@@ -147,7 +147,7 @@ async function doSync(): Promise<'ok' | 'offline' | 'error'> {
       setPhase('offline');
       return 'offline';
     }
-    setPhase('error', e instanceof Error ? e.message : 'Error de sincronización');
+    setPhase('error', e instanceof Error ? e.message : 'Error de sincronización', e instanceof CloudError ? e.detail || `código ${e.code}` : e instanceof Error ? e.name : null);
     return 'error';
   }
 }
