@@ -3,6 +3,8 @@ import type { IllustrationId } from '@/content/types';
 import { AptFlow, BootSequence, DnsLookup, NetRoute, SshHandshake, SudoFlow } from './Flows';
 import { FsTree } from './FsTree';
 import { Missing } from './Missing';
+import { CallStack, Collections, Comprehension, ExceptionsFlow, FileModes, IfFlow, ImportPath, LoopFlow, Mutability, Precedence, ScopeLegb, StrIndex, TypesMap, VariablesLabels } from './PyBasics';
+import { BigO, ClassInstance, DecoratorWrap, EventLoop, GeneratorPause, IteratorProtocol, Mro, RecursionTree } from './PyAdvanced';
 import { PathWalk } from './PathWalk';
 import { ShellVsKernel } from './ShellVsKernel';
 import { CronFields, ProcessStates, Signals, TarBox, UsersGroups } from './SystemViz';
@@ -36,6 +38,29 @@ const MAP: Partial<Record<IllustrationId, React.ComponentType>> = {
   'sudo-flow': SudoFlow,
   'apt-flow': AptFlow,
   'boot-sequence': BootSequence,
+  // Python
+  'py-variables-labels': VariablesLabels,
+  'py-mutability': Mutability,
+  'py-types-map': TypesMap,
+  'py-precedence': Precedence,
+  'py-str-index': StrIndex,
+  'py-if-flow': IfFlow,
+  'py-loop-flow': LoopFlow,
+  'py-call-stack': CallStack,
+  'py-scope-legb': ScopeLegb,
+  'py-comprehension': Comprehension,
+  'py-collections': Collections,
+  'py-exceptions-flow': ExceptionsFlow,
+  'py-file-modes': FileModes,
+  'py-import-path': ImportPath,
+  'py-class-instance': ClassInstance,
+  'py-mro': Mro,
+  'py-iterator-protocol': IteratorProtocol,
+  'py-generator-pause': GeneratorPause,
+  'py-decorator-wrap': DecoratorWrap,
+  'py-event-loop': EventLoop,
+  'py-recursion-tree': RecursionTree,
+  'py-big-o': BigO,
 };
 
 export function Illustration({ id }: { id: IllustrationId }) {
