@@ -621,7 +621,7 @@ export abstract class StmtCompiler extends ExprCompiler {
     };
   }
 
-  handler(h: ExceptHandler): { type: Ev | null; node: ExceptHandler; set: Setter | null; clear: ((f: Frame) => void) | null; name: string | null; body: Ex } {
+  handler(h: ExceptHandler, withBody = true): { type: Ev | null; node: ExceptHandler; set: Setter | null; clear: ((f: Frame) => void) | null; name: string | null; body: Ex } {
     const type = h.type ? this.expr(h.type) : null;
     let set: Setter | null = null;
     let clear: ((f: Frame) => void) | null = null;
@@ -634,7 +634,8 @@ export abstract class StmtCompiler extends ExprCompiler {
         void st;
       };
     }
-    return { type, node: h, set, clear, name: h.name, body: this.block(h.body) };
+    // en generadores/corrutinas el cuerpo se compila con la variante suspendible (puede contener yield/await)
+    return { type, node: h, set, clear, name: h.name, body: withBody ? this.block(h.body) : (null as unknown as Ex) };
   }
 
   /** except* (grupos de excepciones) */

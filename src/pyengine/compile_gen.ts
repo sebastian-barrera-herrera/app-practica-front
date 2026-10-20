@@ -680,7 +680,7 @@ export abstract class GenCompiler extends StmtCompiler {
     if (n.k === 'TryStar') return this.genTryStar(n);
     const body = this.genBlock(n.body);
     const handlers = n.handlers.map((h: ExceptHandler) => {
-      const hh = this.handler(h);
+      const hh = this.handler(h, false);
       return { ...hh, gbody: this.genBlock(h.body), typeG: h.type && this.suspends(h.type) ? this.genExpr(h.type) : null };
     });
     const orelse = n.orelse.length > 0 ? this.genBlock(n.orelse) : null;
@@ -753,7 +753,7 @@ export abstract class GenCompiler extends StmtCompiler {
     const self = this;
     const body = this.genBlock(n.body);
     const handlers = n.handlers.map((h: ExceptHandler) => {
-      const hh = this.handler(h);
+      const hh = this.handler(h, false);
       return { ...hh, gbody: this.genBlock(h.body), typeG: h.type && this.suspends(h.type) ? this.genExpr(h.type) : null };
     });
     const orelse = n.orelse.length > 0 ? this.genBlock(n.orelse) : null;

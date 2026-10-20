@@ -175,7 +175,8 @@ class Compiler extends GenCompiler {
     const sc = this.table.byNode.get(n)!;
     const first = this.expr(n.generators[0].iter);
     const iterNode = n.generators[0].iter;
-    const { code, freeNames } = this.compileFunctionLike(n, sc, '<comp>', this.qualnameFor('<comp>'));
+    const cname = n.k === 'GeneratorExp' ? '<genexpr>' : '<comp>';
+    const { code, freeNames } = this.compileFunctionLike(n, sc, cname, this.qualnameFor(cname));
     const getCells = this.closureBuilder(freeNames);
     const isGenExp = n.k === 'GeneratorExp';
     const isAsync = sc.isCoroutine;
