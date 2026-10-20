@@ -15,12 +15,12 @@ import { T } from './Text';
 import { colors, fonts, ink } from './theme';
 import { usePyRunner } from './usePyRunner';
 
-function Example({ code, note }: { code: string; note: string }) {
+function Example({ code, note }: { code: string; note?: string }) {
   const runner = usePyRunner();
   const [shown, setShown] = useState(false);
   return (
     <Card pad={12}>
-      <T v="small" color={colors.dim} style={{ marginBottom: 8 }}>{note}</T>
+      {note ? <T v="small" color={colors.dim} style={{ marginBottom: 8 }}>{note}</T> : null}
       <PyCode code={code} />
       <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
         <View style={{ flex: 1 }}>

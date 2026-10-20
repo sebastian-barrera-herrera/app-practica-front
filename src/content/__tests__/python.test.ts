@@ -3,6 +3,7 @@
  * superar su comprobación; cada pregunta es coherente; cada demo se ejecuta como se muestra.
  */
 import { pyEngine } from '@/lib/pyrun';
+import { splitReplChunks } from '@/lib/pyrepl';
 import { PY_REFERENCE } from '../py/reference';
 import { COURSES, allChallenges } from '../index';
 import type { PyChallenge, Question } from '../types';
@@ -156,7 +157,6 @@ describe('curso de Python: demostraciones', () => {
     for (const [i, cell] of step.cells.entries()) {
       let ok = true;
       if (cell.repl) {
-        const { splitReplChunks } = await import('@/lib/pyrepl');
         for (const chunk of splitReplChunks(cell.code, eng.isIncomplete)) {
           const r = await s.run(chunk + '\n', { mode: 'repl' });
           if (!r.ok) ok = false;

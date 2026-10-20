@@ -1,4 +1,9 @@
 /** Referencia de Python para la «Biblioteca» (funciones, métodos, sentencias y módulos con ejemplos ejecutables). */
+import { BASICOS } from './ref/basicos';
+import { BUCLES } from './ref/bucles';
+import { CONTROL } from './ref/control';
+import { TEXTO } from './ref/texto';
+
 
 export type PyRefCategory = 'basicos' | 'texto' | 'listas' | 'dicts' | 'control' | 'funciones' | 'clases' | 'errores' | 'archivos' | 'stdlib' | 'avanzado';
 
@@ -30,39 +35,10 @@ export interface PyRef {
   /** Texto enriquecido opcional (mismo formato que las lecciones). */
   details?: string;
   /** Ejemplos [código, nota]: se pueden ejecutar desde la ficha. */
-  examples: [string, string][];
+  examples: ([string] | [string, string])[];
   seeAlso?: string[];
 }
 
-export const PY_REFERENCE: PyRef[] = [
-  {
-    name: 'print',
-    kind: 'función',
-    category: 'basicos',
-    level: 1,
-    summary: 'Muestra valores en pantalla.',
-    usage: 'print(*valores, sep=" ", end="\\n")',
-    details: 'Acepta cualquier cantidad de valores y los separa con `sep`. Al final añade `end` (un salto de línea por defecto).',
-    examples: [
-      ['print("Hola", "mundo")', 'Separa con un espacio'],
-      ['print("a", "b", "c", sep="-")', 'Cambia el separador'],
-      ['print("sin salto", end="")\nprint(" ...continúa")', 'Cambia el final'],
-    ],
-    seeAlso: ['input', 'str.format'],
-  },
-  {
-    name: 'len',
-    kind: 'función',
-    category: 'basicos',
-    level: 1,
-    summary: 'Cuenta los elementos de una colección o los caracteres de un texto.',
-    usage: 'len(objeto) → int',
-    examples: [
-      ['len("python")', 'Caracteres de un texto'],
-      ['len([10, 20, 30])', 'Elementos de una lista'],
-      ['len({"a": 1, "b": 2})', 'Claves de un diccionario'],
-    ],
-  },
-];
+export const PY_REFERENCE: PyRef[] = [...BASICOS, ...TEXTO, ...CONTROL, ...BUCLES];
 
 export const refByName = (name: string): PyRef | undefined => PY_REFERENCE.find((r) => r.name === name);
