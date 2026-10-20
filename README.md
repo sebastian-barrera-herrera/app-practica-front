@@ -104,7 +104,7 @@ npx eas-cli init                                 # enlaza el proyecto y escribe 
 npx eas-cli build -p android --profile preview   # cuando pregunte por la keystore, responde «Yes» (también: npm run build:apk)
 ```
 
-Al terminar (≈10–20 min) EAS da un enlace y un QR para descargar el **.apk**; ábrelo en el móvil e instálalo (hay que permitir «instalar apps de orígenes desconocidos»). El perfil `preview` de `eas.json` genera un APK instalable directamente; `production` genera un `.aab` para Google Play (requiere cuenta de desarrollador de Google).
+Al terminar (≈10–20 min) EAS da un enlace y un QR para descargar el **.apk**; ábrelo en el móvil e instálalo (hay que permitir «instalar apps de orígenes desconocidos»). El perfil `preview` de `eas.json` genera un APK instalable directamente (universal, ~110 MB); el perfil `arm64` genera uno **solo para móviles de 64 bits** (casi todos los actuales), mucho más ligero:  `npx eas-cli build -p android --profile arm64`; `production` genera un `.aab` para Google Play (requiere cuenta de desarrollador de Google).
 
 **Builds siguientes sin interacción** (por ejemplo desde CI o desde un asistente): crea un token en *expo.dev → Account settings → Access tokens*, guárdalo como variable de entorno `EXPO_TOKEN` (nunca en el repositorio) y ejecuta `npx eas-cli build -p android --profile preview --non-interactive`.
 
