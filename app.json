@@ -74,6 +74,12 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "c5ecf436-313e-4366-ac18-a217187d9204"
+      }
+    },
+    "owner": "sebasbh"
   }
 }
