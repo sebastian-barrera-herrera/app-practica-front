@@ -3,6 +3,7 @@ import { BASICOS } from './ref/basicos';
 import { BUCLES } from './ref/bucles';
 import { COLECCIONES } from './ref/colecciones';
 import { CONTROL } from './ref/control';
+import { ESTILO } from './ref/estilo';
 import { FUNCIONES } from './ref/funciones';
 import { TEXTO } from './ref/texto';
 
@@ -41,6 +42,6 @@ export interface PyRef {
   seeAlso?: string[];
 }
 
-export const PY_REFERENCE: PyRef[] = [...BASICOS, ...TEXTO, ...CONTROL, ...BUCLES, ...COLECCIONES, ...FUNCIONES];
+export const PY_REFERENCE: PyRef[] = [...BASICOS, ...TEXTO, ...CONTROL, ...BUCLES, ...COLECCIONES, ...FUNCIONES, ...ESTILO];
 
 export const refByName = (name: string): PyRef | undefined => PY_REFERENCE.find((r) => r.name === name);
