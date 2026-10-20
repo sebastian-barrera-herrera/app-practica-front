@@ -48,4 +48,22 @@ describe('sincronización: partes y fusión', () => {
     expect(Object.values(m.study.linux)[0]).toBe(70);
     expect(m.settings.name).toBe('nuevo');
   });
+
+  test('una copia recién borrada no quita el onboarding ni los ajustes de la nube', () => {
+    const base = initialRoot();
+    const remote = { ...base, settings: { ...base.settings, onboarded: true, name: 'Seb', goalMinutes: { linux: 30, python: 45 } }, updatedAt: 100 };
+    // cerrar sesión deja el móvil con ajustes por defecto y updatedAt 0: manda la nube entera
+    const wiped = { ...base, updatedAt: 0 };
+    const m = mergeRoots(wiped, remote);
+    expect(m.settings.onboarded).toBe(true);
+    expect(m.settings.name).toBe('Seb');
+    expect(m.settings.goalMinutes.python).toBe(45);
+    expect(sameProgress(m, remote)).toBe(true);
+    // aunque la copia borrada llevara una fecha posterior (versiones anteriores), el onboarding y el nombre se conservan
+    const recent = { ...base, updatedAt: 500 };
+    for (const merged of [mergeRoots(recent, remote), mergeRoots(remote, recent)]) {
+      expect(merged.settings.onboarded).toBe(true);
+      expect(merged.settings.name).toBe('Seb');
+    }
+  });
 });

@@ -1,4 +1,5 @@
 import { cancelAllNotifications } from '@/lib/notify';
+import { initialRoot } from '@/game/root';
 import { useGame } from '@/game/store';
 import { logout } from './auth';
 import { syncNow } from './sync';
@@ -12,7 +13,9 @@ export async function signOutAndWipe(opts: { force?: boolean } = {}): Promise<'o
   if (r !== 'ok' && !opts.force) return 'unsynced';
   await cancelAllNotifications();
   await logout();
+  // dispositivo limpio y SIN fecha de modificación (updatedAt 0): al volver a entrar manda la copia de la nube entera
+  // (ajustes, onboarding hecho…) en vez de que unos ajustes por defecto «recientes» la pisen
   useGame.getState().resetAll();
-  useGame.getState().setOwner(null);
+  useGame.getState().replaceRoot(initialRoot());
   return 'ok';
 }

@@ -73,6 +73,7 @@ const unionMap = <T,>(a: Record<string, T[]>, b: Record<string, T[]>) => mergeRe
  */
 export function mergeRoots(a: RootState, b: RootState): RootState {
   const newer = a.updatedAt >= b.updatedAt ? a : b;
+  const older = newer === a ? b : a;
   const base = initialRoot();
   const streak = maxBy(a.streak, b.streak, (s) => (s.lastDay ? Date.parse(s.lastDay) : 0) * 1000 + s.current) ?? base.streak;
   const achievements = mergeRecords<number>(a.achievements, b.achievements, (x, y) => Math.min(x, y));
@@ -82,7 +83,9 @@ export function mergeRoots(a: RootState, b: RootState): RootState {
     streak: { ...streak, best: Math.max(a.streak.best, b.streak.best), freezes: Math.max(a.streak.freezes, b.streak.freezes) },
     dailyXp: mergeDayMap(a.dailyXp, b.dailyXp),
     achievements,
-    settings: mergeSettings(newer.settings),
+    // lo ya configurado no se «des-configura»: una copia recién borrada (ajustes por defecto) no puede quitar
+    // el onboarding ni el nombre que ya había en la otra
+    settings: mergeSettings({ ...newer.settings, onboarded: newer.settings.onboarded || older.settings.onboarded, name: newer.settings.name || older.settings.name }),
     surprise: { lastShown: Math.max(a.surprise.lastShown, b.surprise.lastShown), scheduledUntil: Math.max(a.surprise.scheduledUntil, b.surprise.scheduledUntil) },
     active: newer.active,
     courses: Object.fromEntries(COURSE_KEYS.map((c) => [c, mergeSlice(a.courses[c], b.courses[c])])) as RootState['courses'],
