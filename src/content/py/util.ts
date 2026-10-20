@@ -6,3 +6,6 @@ export const c = (s: TemplateStringsArray): string => s.raw[0].replace(/^\n/, ''
 /** Expresión que vale True si ejecutar `stmt` (con las clases y funciones del alumno) lanza `tipo`. */
 export const lanza = (stmt: string, tipo: string): string =>
   `(lambda g: (exec(${JSON.stringify(`try:\n    ${stmt}\nexcept ${tipo}:\n    ok = True\nelse:\n    ok = False`)}, g), g['ok'])[1])(dict(globals()))`;
+
+/** Expresión que ejecuta `src` (con las funciones y clases del alumno a la vista) y vale lo que quede en la variable `nombre`. */
+export const corre = (src: string, nombre = 'res'): string => `(lambda g: (exec(${JSON.stringify(src)}, g), g[${JSON.stringify(nombre)}])[1])(dict(globals()))`;

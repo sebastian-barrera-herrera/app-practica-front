@@ -10,6 +10,7 @@ import { ERRORES } from './ref/errores';
 import { ESTILO } from './ref/estilo';
 import { FUNCIONES } from './ref/funciones';
 import { ITERACION } from './ref/iteracion';
+import { MAESTRIA } from './ref/maestria';
 import { STDLIB } from './ref/stdlib';
 import { TEXTO } from './ref/texto';
 
@@ -48,6 +49,6 @@ export interface PyRef {
   seeAlso?: string[];
 }
 
-export const PY_REFERENCE: PyRef[] = [...BASICOS, ...TEXTO, ...CONTROL, ...BUCLES, ...COLECCIONES, ...FUNCIONES, ...ESTILO, ...ERRORES, ...ARCHIVOS, ...STDLIB, ...CLASES, ...DATOS, ...ITERACION];
+export const PY_REFERENCE: PyRef[] = [...BASICOS, ...TEXTO, ...CONTROL, ...BUCLES, ...COLECCIONES, ...FUNCIONES, ...ESTILO, ...ERRORES, ...ARCHIVOS, ...STDLIB, ...CLASES, ...DATOS, ...ITERACION, ...MAESTRIA];
 
 export const refByName = (name: string): PyRef | undefined => PY_REFERENCE.find((r) => r.name === name);

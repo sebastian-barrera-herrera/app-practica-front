@@ -44,3 +44,18 @@ def updatecache(filename, module_globals=None):
 
 def lazycache(filename, module_globals):
     return False
+
+
+def _getlines_from_code(code):
+    return getlines(code.co_filename)
+
+
+def _getline_from_code(code, lineno):
+    lines = _getlines_from_code(code)
+    if 1 <= lineno <= len(lines):
+        return lines[lineno - 1]
+    return ''
+
+
+def _register_code(code, string, name):
+    pass
