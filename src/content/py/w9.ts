@@ -1,12 +1,7 @@
 import { fill, illus, learn, lesson, match, mc, tf } from '../build';
 import { pyCode, pyDemo, pyErr, pyOut, pyPractice, pyWorld } from '../pybuild';
 import { all, calls, cls, expr, func, stdout, truthy, uses } from '../pycheck';
-
-/** Código de Python tal cual (las barras invertidas no se interpretan), sin el salto inicial ni el final. */
-const c = (s: TemplateStringsArray): string => s.raw[0].replace(/^\n/, '').replace(/\s+$/, '');
-
-/** Expresión que vale True si ejecutar `stmt` (con las clases del alumno) lanza `tipo`. */
-const lanza = (stmt: string, tipo: string): string => `(lambda g: (exec(${JSON.stringify(`try:\n    ${stmt}\nexcept ${tipo}:\n    ok = True\nelse:\n    ok = False`)}, g), g['ok'])[1])(dict(globals()))`;
+import { c, lanza } from './util';
 
 const PERRO = c`
 class Perro:

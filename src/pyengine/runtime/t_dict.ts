@@ -317,6 +317,7 @@ mappingProxyType.dict!.set('__new__', mkNative('__new__', 'cls, mapping', (cls: 
 const tgt = (x: any): PyDict => (x as any).target as PyDict;
 defMethods(mappingProxyType, {
   __repr__: ['self', (m: any) => `mappingproxy(${ops.repr(tgt(m))})`],
+  __str__: ['self', (m: any) => ops.str(tgt(m))],
   __len__: ['self', (m: any) => tgt(m).m.size],
   __contains__: ['self, k', (m: any, k: any) => tgt(m).has(k)],
   __iter__: ['self', (m: any) => new ops.DictIter(tgt(m), 0)],

@@ -628,6 +628,8 @@ export function makeGenericAlias(origin: any, args: any, cls: PyType = genericAl
   g.dict = new PyDict();
   g.dict.set('__origin__', origin);
   g.dict.set('__args__', args instanceof PyTuple ? args : new PyTuple([args]));
+  g.dict.set('__unpacked__', false);
+  g.dict.set('__typing_unpacked_tuple_args__', null);
   return g;
 }
 

@@ -8,7 +8,8 @@ export function splitReplChunks(code: string, isIncomplete: (src: string) => boo
   const complete = (ls: string[]) => !isIncomplete(ls.join('\n') + '\n\n');
   const continues = (l: string) => /^\s/.test(l) || /^(elif|else|except|finally)\b/.test(l) || l.trim() === '' || /^[)\]}]/.test(l);
   for (const l of lines) {
-    if (cur.length && !continues(l) && complete(cur)) {
+    // un decorador (`@algo`) siempre continúa con la definición que decora
+    if (cur.length && !continues(l) && !/^\s*@/.test(cur[cur.length - 1]) && complete(cur)) {
       chunks.push(cur.join('\n'));
       cur = [];
     }
