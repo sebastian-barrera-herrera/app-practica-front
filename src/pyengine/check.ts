@@ -128,8 +128,9 @@ export function evaluate(check: PyCheck, ctx: PyCheckContext): PyCheckResult {
       const r = evalIn(ctx, `callable(${check.name}) and type(${check.name}).__name__ == 'function'`);
       if (!r.ok || r.value !== 'True') return fail(`Falta definir la función «${check.name}»`);
       if (check.params !== undefined) {
-        const n = evalIn(ctx, `${check.name}.__code__.co_argcount`);
-        if (!n.ok || Number(n.value) !== check.params) return fail(`La función «${check.name}» debería tener ${check.params} parámetro${check.params === 1 ? '' : 's'}`);
+        // se sigue `__wrapped__` (decoradores con @wraps); un envoltorio con *args acepta cualquier cantidad
+        const n = evalIn(ctx, `(lambda f: f.__code__.co_argcount == ${check.params} or bool(f.__code__.co_flags & 4))(__import__('inspect').unwrap(${check.name}))`);
+        if (!n.ok || n.value !== 'True') return fail(`La función «${check.name}» debería tener ${check.params} parámetro${check.params === 1 ? '' : 's'}`);
       }
       return OK;
     }
