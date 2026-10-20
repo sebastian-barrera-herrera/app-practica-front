@@ -273,7 +273,7 @@ defMethods(E.UnicodeDecodeError, {
     if (x.extra && x.extra.custom) return x.extra.custom;
     const [enc, obj, start, end, reason] = x.args;
     const o = obj && obj.b ? obj.b : [];
-    if (typeof start === 'number' && typeof end === 'number' && end === start + 1) return `'${enc}' codec can't decode byte 0x${(o[start] ?? 0).toString(16).padStart(2, '0')} in position ${start}: ${reason}`;
+    if (typeof start === 'number' && typeof end === 'number' && start < o.length && end === start + 1) return `'${enc}' codec can't decode byte 0x${(o[start] ?? 0).toString(16).padStart(2, '0')} in position ${start}: ${reason}`;
     return `'${enc}' codec can't decode bytes in position ${start}-${end - 1}: ${reason}`;
   }],
 });
@@ -281,7 +281,12 @@ defMethods(E.UnicodeEncodeError, {
   __str__: ['self', (e: any) => {
     const x = ex(e);
     if (x.extra && x.extra.custom) return x.extra.custom;
-    const [enc, , start, end, reason] = x.args;
+    const [enc, obj, start, end, reason] = x.args;
+    if (typeof start === 'number' && typeof end === 'number' && ops.isStr(obj) && start < ops.lenOf(obj) && end === start + 1) {
+      const cp = Array.from(ops.strValue(obj))[start].codePointAt(0)!;
+      const ch = cp < 0x100 ? '\\x' + cp.toString(16).padStart(2, '0') : cp < 0x10000 ? '\\u' + cp.toString(16).padStart(4, '0') : '\\U' + cp.toString(16).padStart(8, '0');
+      return `'${enc}' codec can't encode character '${ch}' in position ${start}: ${reason}`;
+    }
     return `'${enc}' codec can't encode characters in position ${start}-${end - 1}: ${reason}`;
   }],
 });

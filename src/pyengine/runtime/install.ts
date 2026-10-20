@@ -10,4 +10,5 @@ import './t_dict';
 import './t_set';
 import './t_func';
 import './t_exc';
+import './t_namespace';
 import './builtins';

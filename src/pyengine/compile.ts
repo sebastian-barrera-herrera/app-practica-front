@@ -216,6 +216,7 @@ export interface CompileOptions {
   mode?: ParseMode;
   hidden?: boolean;
   repl?: boolean;
+  single?: boolean;
 }
 
 export function checkFuture(mod: Module): { annotations: boolean } {
@@ -254,7 +255,7 @@ export function compileModule(I: Interp, mod: Module, lines: string[], warnings:
   const table = buildScopes(mod, mode === 'eval' ? 'eval' : 'module');
   const fut = checkFuture(mod);
   const env: CompileEnv = {
-    I, filename: o.filename, lines, table, hidden: !!o.hidden, futureAnnotations: fut.annotations, replMode: !!o.repl,
+    I, filename: o.filename, lines, table, hidden: !!o.hidden, futureAnnotations: fut.annotations, replMode: !!o.repl, singleMode: !!o.single,
   };
   const c = new Compiler(env);
   const fs = new FnState(table.root, 'module');

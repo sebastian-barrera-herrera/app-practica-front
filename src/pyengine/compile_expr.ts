@@ -100,6 +100,8 @@ export interface CompileEnv {
   hidden: boolean;
   futureAnnotations: boolean;
   replMode: boolean;
+  /** compile(..., 'single'): las expresiones sueltas llaman a sys.displayhook */
+  singleMode?: boolean;
 }
 
 export function posOf(n: Pos): Pos {
@@ -114,6 +116,7 @@ export abstract class ExprCompiler {
   hidden: boolean;
   futureAnnotations: boolean;
   replMode: boolean;
+  singleMode: boolean;
   fs!: FnState;
   qualStack: string[] = [];
 
@@ -125,6 +128,7 @@ export abstract class ExprCompiler {
     this.hidden = env.hidden;
     this.futureAnnotations = env.futureAnnotations;
     this.replMode = env.replMode;
+    this.singleMode = !!env.singleMode;
   }
 
   get scope(): Scope {

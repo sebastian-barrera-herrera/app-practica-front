@@ -12,4 +12,5 @@ import './io';
 import './re';
 import './posix';
 import './struct';
+import './_codecs';
 import './pylib.generated';

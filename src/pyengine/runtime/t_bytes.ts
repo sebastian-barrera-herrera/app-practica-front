@@ -19,7 +19,7 @@ const isBB = (x: any): x is BB => x instanceof PyBytes || x instanceof PyByteArr
 const bytesOf = (x: any): number[] | Uint8Array => {
   if (x instanceof PyBytes) return x.b;
   if (x instanceof PyByteArray) return x.b;
-  if (x instanceof PyObject && x.cls === memoryViewType) return (x as any).src;
+  if (x instanceof PyObject && x.cls === memoryViewType) return mvBytes(x as MV);
   throw typeError(`a bytes-like object is required, not '${typeOf(x).name}'`);
 };
 const mkBytes = (a: ArrayLike<number>, cls: PyType = bytesType): PyBytes => new PyBytes(Uint8Array.from(a as any), cls);
@@ -390,21 +390,125 @@ defMethods(byteArrayType, {
   __iadd__: ['self, other', (b: any, o: any) => { ba(b).b.push(...bytesOf(o)); return b; }],
 });
 
-// ───────────────────────── memoryview mínimo ─────────────────────────
+// ───────────────────────── memoryview ─────────────────────────
 
-memoryViewType.dict!.set('__new__', mkNative('__new__', 'cls, obj', (cls: any, o: any) => {
-  const m = new PyObject(memoryViewType);
-  (m as any).src = bytesOf(o);
+interface MV extends PyObject {
+  /** objeto original */
+  target: any;
+  base: number[] | Uint8Array;
+  lo: number;
+  hi: number;
+  ro: boolean;
+  released: boolean;
+}
+
+function mkView(target: any, base: number[] | Uint8Array, lo: number, hi: number, ro: boolean): MV {
+  const m = new PyObject(memoryViewType) as MV;
+  m.target = target;
+  m.base = base;
+  m.lo = lo;
+  m.hi = hi;
+  m.ro = ro;
+  m.released = false;
   return m;
+}
+const mv = (x: any): MV => {
+  const m = x as MV;
+  if (m.released) throw valueError('operation forbidden on released memoryview object');
+  return m;
+};
+const mvBytes = (m: MV): number[] => Array.from(m.base.slice(m.lo, m.hi) as ArrayLike<number>);
+memoryViewType.dict!.set('__new__', mkNative('__new__', 'cls, object', (_cls: any, o: any) => {
+  if (o instanceof PyBytes) return mkView(o, o.b, 0, o.b.length, true);
+  if (o instanceof PyByteArray) return mkView(o, o.b, 0, o.b.length, false);
+  if (o instanceof PyObject && o.cls === memoryViewType) { const m = mv(o); return mkView(m.target, m.base, m.lo, m.hi, m.ro); }
+  throw typeError(`memoryview: a bytes-like object is required, not '${typeOf(o).name}'`);
 }, { owner: 'memoryview' }));
+const mvProp = (name: string, get: (m: MV) => any): void => {
+  const pr = new (require('./objects').PyProperty)(require('./builtin_types').propertyType);
+  pr.name = name;
+  pr.fget = mkNative(name, 'self', (m: any) => get(mv(m)), { method: true });
+  memoryViewType.dict!.set(name, pr);
+};
+mvProp('obj', (m) => m.target);
+mvProp('nbytes', (m) => m.hi - m.lo);
+mvProp('readonly', (m) => m.ro);
+mvProp('format', () => 'B');
+mvProp('itemsize', () => 1);
+mvProp('ndim', () => 1);
+mvProp('shape', (m) => new PyTuple([m.hi - m.lo]));
+mvProp('strides', () => new PyTuple([1]));
+mvProp('suboffsets', () => new PyTuple([]));
+mvProp('c_contiguous', () => true);
+mvProp('f_contiguous', () => true);
+mvProp('contiguous', () => true);
+const sliceParts = (k: PySlice, n: number): number[] => {
+  const [start, stop, step] = ops.sliceIndices(k, n);
+  const idx: number[] = [];
+  if (step > 0) for (let i = start; i < stop; i += step) idx.push(i);
+  else for (let i = start; i > stop; i += step) idx.push(i);
+  return idx;
+};
 defMethods(memoryViewType, {
-  __len__: ['self', (m: any) => m.src.length],
-  __getitem__: ['self, k', (m: any, k: any) => (k instanceof PySlice ? mkBytes(ops.sliceList(Array.from(m.src), k)) : m.src[ops.normIndex(ops.toIndex(k), m.src.length, 'index out of range')])],
-  tobytes: ['self', (m: any) => mkBytes(m.src)],
-  tolist: ['self', (m: any) => new PyList(Array.from(m.src))],
-  __iter__: ['self', (m: any) => new ops.BytesIter(m.src)],
-  __repr__: ['self', () => '<memory at 0x7f3a5c0d0000>'],
+  __len__: ['self', (m: any) => mv(m).hi - mv(m).lo],
+  __getitem__: ['self, k', (o: any, k: any) => {
+    const m = mv(o);
+    const n = m.hi - m.lo;
+    if (k instanceof PySlice) {
+      const idx = sliceParts(k, n);
+      if (idx.length === 0) return mkView(m.target, m.base, m.lo, m.lo, m.ro);
+      const step = idx.length > 1 ? idx[1] - idx[0] : 1;
+      if (step === 1) return mkView(m.target, m.base, m.lo + idx[0], m.lo + idx[idx.length - 1] + 1, m.ro);
+      return mkView(null, idx.map((i) => m.base[m.lo + i]), 0, idx.length, true);
+    }
+    return m.base[m.lo + ops.normIndex(ops.toIndex(k), n, 'index out of range')];
+  }],
+  __setitem__: ['self, k, v', (o: any, k: any, v: any) => {
+    const m = mv(o);
+    if (m.ro) throw typeError('cannot modify read-only memory');
+    const n = m.hi - m.lo;
+    if (k instanceof PySlice) {
+      const idx = sliceParts(k, n);
+      const src = Array.from(bytesOf(v));
+      if (src.length !== idx.length) throw valueError('memoryview assignment: lvalue and rvalue have different structures');
+      idx.forEach((i, j) => { m.base[m.lo + i] = src[j]; });
+      return null;
+    }
+    const val = ops.toIndex(v);
+    if (typeof val === 'bigint' || val < 0 || val > 255) throw valueError('memoryview: invalid value for format \'B\'');
+    m.base[m.lo + ops.normIndex(ops.toIndex(k), n, 'index out of range')] = val;
+    return null;
+  }],
+  tobytes: ['self, order=', (m: any) => mkBytes(mvBytes(mv(m)))],
+  tolist: ['self', (m: any) => new PyList(mvBytes(mv(m)))],
+  hex: ['self, sep=, bytes_per_sep=', (m: any, sep?: any, bps?: any) => callObj(ops.getAttr(mkBytes(mvBytes(mv(m))), 'hex'), sep === undefined ? [] : bps === undefined ? [sep] : [sep, bps])],
+  release: ['self', (m: any) => { (m as MV).released = true; return null; }],
+  toreadonly: ['self', (o: any) => { const m = mv(o); return mkView(m.target, m.base, m.lo, m.hi, true); }],
+  cast: ['self, format, shape=', (o: any, f: any) => {
+    if (!['B', 'b', 'c'].includes(ops.strValue(f))) throw makeExc(E.NotImplementedError, ['memoryview: only formats B, b and c are supported']);
+    return mv(o);
+  }],
+  __enter__: ['self', (m: any) => m],
+  __exit__: ['self, *args', (m: any) => { (m as MV).released = true; return null; }],
+  __iter__: ['self', (m: any) => new ops.BytesIter(mvBytes(mv(m)))],
+  __eq__: ['self, other', (a: any, b: any) => {
+    let other: ArrayLike<number>;
+    if (b instanceof PyBytes || b instanceof PyByteArray) other = b.b;
+    else if (b instanceof PyObject && b.cls === memoryViewType) other = mvBytes(mv(b));
+    else return NotImplemented;
+    const x = mvBytes(mv(a));
+    if (x.length !== other.length) return false;
+    for (let i = 0; i < x.length; i++) if (x[i] !== other[i]) return false;
+    return true;
+  }],
+  __hash__: ['self', (o: any) => {
+    const m = mv(o);
+    if (!m.ro) throw valueError('cannot hash writable memoryview object');
+    return ops.hashOf(mkBytes(mvBytes(m)));
+  }],
+  __bytes__: ['self', (m: any) => mkBytes(mvBytes(mv(m)))],
+  __repr__: ['self', (m: any) => (mv(m), `<memory at ${require('./state').interp().hexId(m)}>`)],
 });
 
 void [bytesIterType, makeExc, E];
-export { mkBytes, mkBA, bytesOf, isBB };
+export { mkBytes, mkBA, bytesOf, isBB, mkView };

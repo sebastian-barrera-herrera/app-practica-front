@@ -1,10 +1,11 @@
 /**
  * Módulo `sys` y los flujos estándar (stdin/stdout/stderr).
  */
+import { simpleNamespaceType } from '../runtime/t_namespace';
 import { PyBaseException, PyDict, PyFloat, PyList, PyObject, PyProperty, PyTuple, PyModule, PyType } from '../runtime/objects';
 import { newNativeType, objectType, propertyType, tupleType, typeOf } from '../runtime/builtin_types';
 import { E } from '../runtime/exc_types';
-import { makeExc, typeError, valueError } from '../runtime/errors';
+import { makeExc, runtimeError, typeError, valueError } from '../runtime/errors';
 import { callObj } from '../runtime/call';
 import * as ops from '../runtime/ops';
 import type { Interp } from '../runtime/interp';
@@ -136,6 +137,13 @@ const versionInfoType = newNativeType('version_info', 'sys', [tupleType]);
 });
 versionInfoType.dict!.set('__repr__', mkNative('__repr__', 'self', (s: any) => `sys.version_info(major=${s.a[0]}, minor=${s.a[1]}, micro=${s.a[2]}, releaselevel=${ops.repr(s.a[3])}, serial=${s.a[4]})`, { method: true }));
 
+function makeNamespace(fields: [string, any][]): PyObject {
+  const o = new PyObject(simpleNamespaceType);
+  o.dict = new PyDict();
+  for (const [k, v] of fields) o.dict.set(k, v);
+  return o;
+}
+
 function structSeq(name: string, fields: [string, any][]): PyObject {
   const t = newNativeType(name, 'sys', [objectType]);
   const o = new PyObject(t);
@@ -186,8 +194,8 @@ registerNative('sys', (I: Interp, m: PyModule) => {
       ['min_exp', -1021], ['min_10_exp', -307], ['dig', 15], ['mant_dig', 53], ['epsilon', new PyFloat(Number.EPSILON)], ['radix', 2], ['rounds', 1],
     ]),
     int_info: structSeq('int_info', [['bits_per_digit', 30], ['sizeof_digit', 4], ['default_max_str_digits', 4300], ['str_digits_check_threshold', 640]]),
-    implementation: structSeq('implementation', [['name', 'cpython'], ['version', new PyTuple([3, 13, 0, 'final', 0], versionInfoType)], ['cache_tag', 'cpython-313']]),
-    flags: structSeq('flags', [['debug', 0], ['optimize', 0], ['interactive', 0], ['verbose', 0], ['dont_write_bytecode', 1], ['utf8_mode', 1]]),
+    implementation: makeNamespace([['name', 'cpython'], ['cache_tag', 'cpython-313'], ['version', new PyTuple([3, 13, 0, 'final', 0], versionInfoType)], ['hexversion', 0x030d00f0], ['_multiarch', 'x86_64-linux-gnu']]),
+    flags: structSeq('flags', [['debug', 0], ['inspect', 0], ['interactive', 0], ['optimize', 0], ['dont_write_bytecode', 0], ['no_user_site', 0], ['no_site', 0], ['ignore_environment', 0], ['verbose', 0], ['bytes_warning', 0], ['quiet', 0], ['hash_randomization', 1], ['isolated', 0], ['dev_mode', false], ['utf8_mode', 1], ['warn_default_encoding', 0], ['safe_path', false], ['int_max_str_digits', 4300]]),
     hash_info: structSeq('hash_info', [['width', 64], ['modulus', 2305843009213693951n], ['inf', 314159], ['nan', 0], ['imag', 1000003], ['algorithm', 'siphash13'], ['hash_bits', 64], ['seed_bits', 128], ['cutoff', 0]]),
     thread_info: structSeq('thread_info', [['name', 'pthread'], ['lock', 'mutex+cond'], ['version', null]]),
   });
@@ -243,11 +251,20 @@ registerNative('sys', (I: Interp, m: PyModule) => {
   });
   mfn(m, 'displayhook', 'value, /', (v: any) => {
     if (v !== null) {
-      I.write(ops.repr(v) + '\n', false);
+      I.builtins.set('_', null);
+      const text = ops.repr(v) + '\n';
+      const out = m.dict!.get('stdout');
+      if (out === undefined) throw runtimeError('lost sys.stdout');
+      if (out === I.extraFlags.stdoutObj) I.write(text, false);
+      else ops.callMethod(out, 'write', [text]);
       I.builtins.set('_', v);
     }
     return null;
   });
+  m.dict!.set('__excepthook__', m.dict!.get('excepthook'));
+  m.dict!.set('__displayhook__', m.dict!.get('displayhook'));
+  mfn(m, 'breakpointhook', '*args, **kw', () => null);
+  m.dict!.set('__breakpointhook__', m.dict!.get('breakpointhook'));
   mfn(m, '_getsource', 'filename', (fn: any) => {
     const lines = I.sources.get(ops.strValue(fn));
     if (!lines) return null;

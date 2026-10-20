@@ -13,6 +13,7 @@ import { defMethods, mkNative } from './native';
 import { asIdx, asStr, kwMap, tupleArr } from './util';
 import { PyStaticMethod } from './objects';
 import { toFloatValue } from './t_num';
+import { decodeText, encodeText } from './codecs';
 
 const S = strType;
 
@@ -65,63 +66,11 @@ function toCp(s: string, i: number): number {
 // ───────────────────────── __new__ / básicos ─────────────────────────
 
 function decodeBytes(b: ArrayLike<number>, enc: string, errors: string): string {
-  const e = enc.toLowerCase().replace(/[-_ ]/g, '');
-  if (e === 'utf8' || e === 'u8' || e === 'utf') {
-    return utf8Decode(b, (pos, byte, reason) => {
-      if (errors === 'strict') {
-        const x = makeExc(E.UnicodeDecodeError, ['utf-8', new PyBytes(Uint8Array.from(b as any), bytesType), pos, pos + 1, reason]);
-        x.extra = { custom: `'utf-8' codec can't decode byte 0x${byte.toString(16).padStart(2, '0')} in position ${pos}: ${reason}` };
-        throw x;
-      }
-      if (errors === 'ignore') return '';
-      if (errors === 'replace') return '�';
-      if (errors === 'backslashreplace') return '\\x' + byte.toString(16).padStart(2, '0');
-      throw makeExc(E.LookupError, [`unknown error handler name '${errors}'`]);
-    });
-  }
-  if (e === 'ascii' || e === 'usascii') {
-    let out = '';
-    for (let i = 0; i < b.length; i++) {
-      if (b[i] < 128) out += String.fromCharCode(b[i]);
-      else if (errors === 'strict') {
-        const x = makeExc(E.UnicodeDecodeError, ['ascii', new PyBytes(Uint8Array.from(b as any), bytesType), i, i + 1, 'ordinal not in range(128)']);
-        x.extra = { custom: `'ascii' codec can't decode byte 0x${b[i].toString(16).padStart(2, '0')} in position ${i}: ordinal not in range(128)` };
-        throw x;
-      } else if (errors === 'replace') out += '�';
-    }
-    return out;
-  }
-  if (e === 'latin1' || e === 'iso88591' || e === 'l1' || e === 'cp1252' || e === 'windows1252') {
-    let out = '';
-    for (let i = 0; i < b.length; i++) out += String.fromCharCode(b[i]);
-    return out;
-  }
-  throw makeExc(E.LookupError, [`unknown encoding: ${enc}`]);
+  return decodeText(b, enc, errors);
 }
 
 export function encodeStr(s: string, enc: string, errors: string): Uint8Array {
-  const e = enc.toLowerCase().replace(/[-_ ]/g, '');
-  if (e === 'utf8' || e === 'u8' || e === 'utf') return Uint8Array.from(utf8Encode(s));
-  const limit = e === 'ascii' || e === 'usascii' ? 128 : e === 'latin1' || e === 'iso88591' || e === 'l1' ? 256 : -1;
-  if (limit < 0) throw makeExc(E.LookupError, [`unknown encoding: ${enc}`]);
-  const out: number[] = [];
-  let pos = 0;
-  for (const c of s) {
-    const cp = c.codePointAt(0)!;
-    if (cp < limit) out.push(cp);
-    else if (errors === 'strict') {
-      const name = limit === 128 ? 'ascii' : 'latin-1';
-      const x = makeExc(E.UnicodeEncodeError, [name, s, pos, pos + 1, `ordinal not in range(${limit})`]);
-      x.extra = { custom: `'${name}' codec can't encode character '${cp < 256 ? '\\x' + cp.toString(16).padStart(2, '0') : cp < 0x10000 ? '\\u' + cp.toString(16).padStart(4, '0') : '\\U' + cp.toString(16).padStart(8, '0')}' in position ${pos}: ordinal not in range(${limit})` };
-      throw x;
-    } else if (errors === 'ignore') { /* nada */ }
-    else if (errors === 'replace') out.push(63);
-    else if (errors === 'xmlcharrefreplace') for (const ch of `&#${cp};`) out.push(ch.charCodeAt(0));
-    else if (errors === 'backslashreplace') for (const ch of (cp < 256 ? '\\x' + cp.toString(16).padStart(2, '0') : cp < 0x10000 ? '\\u' + cp.toString(16).padStart(4, '0') : '\\U' + cp.toString(16).padStart(8, '0'))) out.push(ch.charCodeAt(0));
-    else throw makeExc(E.LookupError, [`unknown error handler name '${errors}'`]);
-    pos++;
-  }
-  return Uint8Array.from(out);
+  return encodeText(s, enc, errors);
 }
 
 S.dict!.set('__new__', mkNative('__new__', 'cls, object=, encoding=, errors=', (cls: any, obj?: any, enc?: any, errs?: any) => {

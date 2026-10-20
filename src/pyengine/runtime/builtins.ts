@@ -445,7 +445,7 @@ def('compile', 'source, filename, mode, flags=, dont_inherit=, optimize=, *, _fe
       I.sources.set(fname, parsed.src.split('\n'));
       return moduleToPy(I, parsed.module, parsed.src.split('\n'), m);
     }
-    const unit = compileSource(I, text, { filename: fname, mode: m === 'eval' ? 'eval' : 'exec' });
+    const unit = compileSource(I, text, { filename: fname, mode: m === 'eval' ? 'eval' : 'exec', single: m === 'single' });
     const o = new PyObject(require('./builtin_types').codeType);
     (o as any).code = unit.code;
     return o;
@@ -498,6 +498,19 @@ export const BUILTIN_TYPES: Record<string, any> = {
   enumerate: enumerateType, zip: zipType, map: mapType, filter: filterType, reversed: reversedType, property: propertyType,
   classmethod: classMethodType, staticmethod: staticMethodType, super: superType, complex: complexType, memoryview: memoryViewType,
 };
+
+// `__getnewargs__` de los tipos nativos con valor (pickle / copy)
+{
+  const gna = (t: any, f: (o: any) => any): void => {
+    t.dict!.set('__getnewargs__', mkNative('__getnewargs__', 'self', (o: any) => new PyTuple([f(o)]), { method: true, owner: t.name }));
+  };
+  gna(intType, (o) => (o instanceof PyBox ? o.value : o));
+  gna(floatType, (o) => (o instanceof PyBox ? new PyFloat(o.value.v ?? o.value) : o));
+  gna(strType, (o) => (o instanceof PyBox ? o.value : o));
+  gna(require('./builtin_types').bytesType, (o: any) => new PyBytes(Uint8Array.from(o.b), require('./builtin_types').bytesType));
+  gna(require('./builtin_types').tupleType, (o: any) => new PyTuple(o.a.slice()));
+  require('./builtin_types').complexType.dict!.set('__getnewargs__', mkNative('__getnewargs__', 'self', (o: any) => new PyTuple([new PyFloat(o.re), new PyFloat(o.im)]), { method: true, owner: 'complex' }));
+}
 
 export function installBuiltins(d: PyDict): void {
   for (const [k, v] of Object.entries(BUILTIN_FUNCS)) d.set(k, v);

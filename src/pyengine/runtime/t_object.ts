@@ -116,9 +116,14 @@ defMethods(O, {
   __delattr__: ['self, name', (o: any, name: any) => { ops.genericDelAttr(o, asStr(name, 'attribute name')); return null; }],
   __dir__: ['self', (o: any) => new PyList(dirOf(o))],
   __sizeof__: ['self', () => 16],
-  __getstate__: ['self', (o: any) => (o instanceof PyObject && o.dict && o.dict.size > 0 ? o.dict : null)],
-  __reduce_ex__: ['self, protocol=', (o: any) => objectReduce(o)],
-  __reduce__: ['self', (o: any) => objectReduce(o)],
+  __getstate__: ['self', (o: any) => objectGetstate(o)],
+  __reduce_ex__: ['self, protocol', (o: any, proto: any) => {
+    // si la clase redefine __reduce__ se usa; si no, el comportamiento por defecto
+    const r = typeOf(o).lookup('__reduce__');
+    if (r !== undefined && r !== objectType.dict!.get('__reduce__')) return callObj(r, [o]);
+    return commonReduce(o, Number(ops.toIndex(proto)));
+  }],
+  __reduce__: ['self', (o: any) => commonReduce(o, 0)],
 });
 O.dict!.set('__new__', objectNew);
 O.dict!.set('__init__', objectInit);
@@ -138,12 +143,76 @@ O.dict!.set(
   new PyClassMethod(classMethodType, mkNative('__subclasshook__', 'cls, subclass', () => NotImplemented, { owner: 'object' })),
 );
 
-function objectReduce(o: any): any {
-  // copyreg.__newobj__ simplificado: (callable, args, state)
+function copyregModule(): any {
+  const { importModule } = require('./modules') as typeof import('./modules');
+  return importModule(interp(), 'copyreg');
+}
+
+/** object.__getstate__ por defecto: __dict__ (o None) y, si hay ranuras, (dict, {ranura: valor}) */
+function objectGetstate(o: any): any {
+  let state: any = null;
+  if (o instanceof PyObject && o.dict && o.dict.size > 0) state = o.dict;
   const cls = typeOf(o);
-  const state = o instanceof PyObject && o.dict && o.dict.size > 0 ? o.dict : null;
-  const rec = mkNative('__newobj__', 'cls', (c: any) => ops.newObject(c));
-  return new PyTuple([rec, new PyTuple([cls]), state]);
+  if (cls.slots !== null || cls.mro.some((t) => t.ownSlots)) {
+    const names = ops.callMethod(copyregModule(), '_slotnames', [cls]);
+    if (names instanceof PyList && names.a.length > 0) {
+      const slots = new PyDict();
+      for (const n of names.a) {
+        const v = ops.getAttrOpt(o, ops.strValue(n));
+        if (v !== undefined) slots.set(n, v);
+      }
+      if (slots.size > 0) state = new PyTuple([state, slots]);
+    }
+  }
+  return state;
+}
+
+function reduceNewobj(o: any): any {
+  const cls = typeOf(o);
+  if ((cls.flags & F_BUILTIN) && cls !== objectType && cls.lookup('__getnewargs__') === undefined && cls.lookup('__getnewargs_ex__') === undefined) {
+    const nm = cls.module && cls.module !== 'builtins' ? `${cls.module}.${cls.name}` : cls.name;
+    throw typeError(`cannot pickle '${nm}' object`);
+  }
+  let args: PyTuple | null = null;
+  let kwargs: PyDict | null = null;
+  const gex = cls.lookup('__getnewargs_ex__');
+  if (gex !== undefined) {
+    const r = callObj(gex, [o]);
+    if (!(r instanceof PyTuple)) throw typeError(`__getnewargs_ex__ should return a tuple, not '${typeOf(r).name}'`);
+    if (r.a.length !== 2) throw valueError(`__getnewargs_ex__ should return a tuple of length 2, not ${r.a.length}`);
+    if (!(r.a[0] instanceof PyTuple)) throw typeError(`first item of the tuple returned by __getnewargs_ex__ must be a tuple, not '${typeOf(r.a[0]).name}'`);
+    if (!(r.a[1] instanceof PyDict)) throw typeError(`second item of the tuple returned by __getnewargs_ex__ must be a dict, not '${typeOf(r.a[1]).name}'`);
+    args = r.a[0];
+    kwargs = r.a[1];
+  } else {
+    const ga = cls.lookup('__getnewargs__');
+    if (ga !== undefined) {
+      const r = callObj(ga, [o]);
+      if (!(r instanceof PyTuple)) throw typeError(`__getnewargs__ should return a tuple, not '${typeOf(r).name}'`);
+      args = r;
+    }
+  }
+  const cr = copyregModule();
+  let newobj: any;
+  let newargs: PyTuple;
+  if (kwargs === null || kwargs.size === 0) {
+    newobj = ops.getAttr(cr, '__newobj__');
+    newargs = new PyTuple([cls, ...(args === null ? [] : args.a)]);
+  } else {
+    newobj = ops.getAttr(cr, '__newobj_ex__');
+    newargs = new PyTuple([cls, args ?? new PyTuple([]), kwargs]);
+  }
+  const state = ops.callMethod(o, '__getstate__', []);
+  let listitems: any = null;
+  let dictitems: any = null;
+  if (ops.isInstance(o, listType)) listitems = ops.getIter(o);
+  if (ops.isInstance(o, dictType)) dictitems = ops.getIter(ops.callMethod(o, 'items', []));
+  return new PyTuple([newobj, newargs, state, listitems, dictitems]);
+}
+
+function commonReduce(o: any, proto: number): any {
+  if (proto >= 2) return reduceNewobj(o);
+  return ops.callMethod(copyregModule(), '_reduce_ex', [o, proto]);
 }
 
 const classProp = new PyProperty(propertyType);
@@ -433,7 +502,7 @@ tprop('__qualname__', (t) => t.qualname, (t, v) => {
 });
 tprop('__module__', (t) => {
   const m = t.dict!.get('__module__');
-  return m !== undefined ? m : t.module;
+  return m !== undefined && !(m instanceof PyProperty) ? m : t.module;
 }, (t, v) => { t.dict!.set('__module__', v); t.module = typeof v === 'string' ? v : t.module; bumpTypeVersion(); });
 tprop('__bases__', (t) => new PyTuple(t.bases.slice()), (t, v) => {
   if (t.flags & F_BUILTIN) throw typeError(`cannot set '__bases__' attribute of immutable type '${t.name}'`);

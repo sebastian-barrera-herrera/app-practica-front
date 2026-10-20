@@ -1,6 +1,7 @@
 /** Ejecuta un archivo .py con el intérprete (uso: bun run.ts archivo.py). Imprime stdout/stderr tal cual. */
 import { PySession } from '../../index';
 
+if (process.env.SHOWHIDDEN) (globalThis as any).__PY_SHOW_HIDDEN__ = true;
 const file = process.argv[2];
 const src = require('fs').readFileSync(file, 'utf8');
 const s = new PySession({ stdin: [] });

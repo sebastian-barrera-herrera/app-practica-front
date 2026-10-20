@@ -5,8 +5,9 @@ import {
   PyBytes, PyByteArray, PyList, PyModule, PyObject, PyProperty, PyTuple, PyType, F_BASETYPE, F_INSTDICT,
 } from '../runtime/objects';
 import {
-  NotImplemented, bytesType, newNativeType, objectType, propertyType, typeOf,
+  NotImplemented, bytesType, memoryViewType, newNativeType, objectType, propertyType, typeOf,
 } from '../runtime/builtin_types';
+import { bytesOf } from '../runtime/t_bytes';
 import { E, excTypes } from '../runtime/exc_types';
 import { makeExc, osError, stopIteration, typeError, valueError } from '../runtime/errors';
 import { callObj } from '../runtime/call';
@@ -48,6 +49,10 @@ class TextObj extends IOObj {
   dirty = false;
   newline: string | null = '\n';
   lastLineEnding = false;
+  /** TextIOWrapper sobre otro objeto binario: el búfer y lo ya enviado a él */
+  buffer: any = null;
+  sent = 0;
+  lineBuffering = false;
 }
 
 class BytesObj extends IOObj {
@@ -74,6 +79,18 @@ function I_(): Interp {
 }
 
 function flushStream(s: Stream): void {
+  if (s instanceof TextObj && s.buffer !== null) {
+    if (s.canWrite && s.text.length > s.sent) {
+      const chunk = s.text.slice(s.sent);
+      const first = s.sent === 0;
+      let enc = s.encoding;
+      // el BOM de utf-16/utf-32 sólo se escribe en el primer bloque
+      if (!first) enc = enc.toLowerCase().replace(/_/g, '-').replace(/^(utf-(?:16|32))$/, '$1-le');
+      s.sent = s.text.length;
+      ops.callMethod(s.buffer, 'write', [new PyBytes(encodeStr(chunk, enc, s.errors), bytesType)]);
+    }
+    return;
+  }
   if (s.path === null || !s.dirty) return;
   const I = I_();
   const data = s instanceof TextObj ? encodeStr(s.text, s.encoding, s.errors) : s.buf.slice(0, s.len);
@@ -142,6 +159,7 @@ function textWrite(s: TextObj, x: any): number {
   }
   s.pos += str.length;
   s.dirty = true;
+  if (s.buffer !== null && (s.lineBuffering && str.includes('\n'))) flushStream(s);
   return Array.from(ops.strValue(x)).length;
 }
 
@@ -189,15 +207,30 @@ const TEXT_METHODS: Record<string, [string, (...a: any[]) => any]> = {
     s.dirty = true;
     return size;
   }],
-  flush: ['self', (s: TextObj) => { checkOpen(s); flushStream(s); return null; }],
-  close: ['self', (s: TextObj) => { if (!s.closed) { flushStream(s); s.closed = true; I_().openFiles.delete(s as any); } return null; }],
+  flush: ['self', (s: TextObj) => { checkOpen(s); flushStream(s); if (s.buffer !== null) ops.callMethod(s.buffer, 'flush', []); return null; }],
+  close: ['self', (s: TextObj) => {
+    if (!s.closed) {
+      flushStream(s);
+      s.closed = true;
+      I_().openFiles.delete(s as any);
+      if (s.buffer !== null) ops.callMethod(s.buffer, 'close', []);
+    }
+    return null;
+  }],
   readable: ['self', (s: TextObj) => { checkOpen(s); return s.canRead; }],
   writable: ['self', (s: TextObj) => { checkOpen(s); return s.canWrite; }],
   seekable: ['self', (s: TextObj) => { checkOpen(s); return true; }],
   isatty: ['self', () => false],
   fileno: ['self', (s: TextObj) => { if (s.path === null) unsupported('fileno'); return 3; }],
   getvalue: ['self', (s: TextObj) => { checkOpen(s); return s.text; }],
-  detach: ['self', (s: TextObj) => s],
+  detach: ['self', (s: TextObj) => {
+    if (s.buffer === null) return s;
+    flushStream(s);
+    s.closed = true;
+    const b = s.buffer;
+    s.buffer = null;
+    return b;
+  }],
   __iter__: ['self', (s: TextObj) => { checkOpen(s); return s; }],
   __next__: ['self', (s: TextObj) => {
     const l = textReadline(s);
@@ -249,7 +282,7 @@ function bytesWrite(b: BytesObj, x: any): number {
   let data: ArrayLike<number>;
   if (x instanceof PyBytes) data = x.b;
   else if (x instanceof PyByteArray) data = x.b;
-  else if (x instanceof PyObject && (x as any).src) data = (x as any).src;
+  else if (x instanceof PyObject && x.cls === memoryViewType) data = bytesOf(x);
   else throw typeError(`a bytes-like object is required, not '${typeOf(x).name}'`);
   if (b.append) b.pos = b.len;
   ensureCap(b, b.pos + data.length);
@@ -298,7 +331,7 @@ const BYTES_METHODS: Record<string, [string, (...a: any[]) => any]> = {
   isatty: ['self', () => false],
   fileno: ['self', (b: BytesObj) => { if (b.path === null) unsupported('fileno'); return 3; }],
   getvalue: ['self', (b: BytesObj) => { checkOpen(b); return new PyBytes(b.buf.slice(0, b.len), bytesType); }],
-  getbuffer: ['self', (b: BytesObj) => { const m = new PyObject(require('../runtime/builtin_types').memoryViewType); (m as any).src = b.buf.slice(0, b.len); return m; }],
+  getbuffer: ['self', (b: BytesObj) => (require('../runtime/t_bytes') as typeof import('../runtime/t_bytes')).mkView(b, b.buf, 0, b.len, false)],
   detach: ['self', (b: BytesObj) => b],
   __iter__: ['self', (b: BytesObj) => { checkOpen(b); return b; }],
   __next__: ['self', (b: BytesObj) => {
@@ -517,7 +550,27 @@ function installIO(I: Interp, m: PyModule): void {
   fprop(textFile, 'errors', (s: TextObj) => s.errors);
   fprop(textFile, 'line_buffering', () => false);
   fprop(textFile, 'newlines', () => null);
-  fprop(textFile, 'buffer', (s: TextObj) => s);
+  fprop(textFile, 'buffer', (s: TextObj) => (s.buffer !== null ? s.buffer : s));
+  textFile.dict!.set('__init__', mkNative('__init__', 'self, buffer, encoding=None, errors=None, newline=None, line_buffering=False, write_through=False', (s: TextObj, buf: any, enc?: any, errs?: any, nl?: any, lb?: any) => {
+    s.buffer = buf;
+    s.encoding = enc === undefined || enc === null ? 'utf-8' : asStr(enc);
+    encodeStr('', s.encoding, 'strict');
+    s.errors = errs === undefined || errs === null ? 'strict' : asStr(errs);
+    s.newline = nl === undefined || nl === null ? null : asStr(nl) === '' ? null : asStr(nl);
+    s.lineBuffering = lb !== undefined && ops.truthy(lb);
+    s.canRead = ops.truthy(ops.callMethod(buf, 'readable', []));
+    s.canWrite = ops.truthy(ops.callMethod(buf, 'writable', []));
+    s.text = '';
+    s.pos = 0;
+    if (s.canRead) {
+      const data = ops.callMethod(buf, 'read', []);
+      s.text = normNewlines(decodeBytes((data as PyBytes).b, s.encoding, s.errors), s.newline);
+    }
+    s.sent = 0;
+    s.shown = '<wrapper>';
+    s.modeStr = s.canWrite ? (s.canRead ? 'r+' : 'w') : 'r';
+    return null;
+  }, { method: true, owner: 'TextIOWrapper' }));
   textFile.dict!.set('__repr__', mkNative('__repr__', 'self', (s: TextObj) => `<_io.TextIOWrapper name=${ops.repr(s.shown)} mode='${s.modeStr}' encoding='${s.encoding}'>`, { method: true }));
   m.dict!.set('TextIOWrapper', textFile);
   fileTextType = textFile;
@@ -531,6 +584,52 @@ function installIO(I: Interp, m: PyModule): void {
   m.dict!.set('BufferedRandom', buffered);
   m.dict!.set('FileIO', buffered);
   bufferedType = buffered;
+
+  // IncrementalNewlineDecoder
+  class NLDec extends PyObject {
+    decoder: any = null;
+    translate = false;
+    pendingCR = false;
+    seen = 0;
+  }
+  const ind = newNativeType('IncrementalNewlineDecoder', '_io', [objectType], F_BASETYPE);
+  ind.alloc = (cls) => new NLDec(cls);
+  const indDef = (name: string, sig: string, impl: (...a: any[]) => any): void => {
+    ind.dict!.set(name, mkNative(name, sig, impl, { method: true, owner: 'IncrementalNewlineDecoder' }));
+  };
+  indDef('__init__', 'self, decoder, translate, errors=', (s: NLDec, dec: any, tr: any) => {
+    s.decoder = dec;
+    s.translate = ops.truthy(tr);
+    return null;
+  });
+  indDef('decode', 'self, input, final=', (s: NLDec, inp: any, fin?: any) => {
+    const final = fin !== undefined && ops.truthy(fin);
+    let t: any = inp;
+    if (s.decoder !== null) t = ops.callMethod(s.decoder, 'decode', [inp, final]);
+    let str: string = typeof t === 'string' ? t : decodeUtf8(Uint8Array.from((t as PyBytes).b as any));
+    if (s.pendingCR) { str = '\r' + str; s.pendingCR = false; }
+    if (str.endsWith('\r') && !final) { s.pendingCR = true; str = str.slice(0, -1); }
+    const crlf = (str.match(/\r\n/g) ?? []).length;
+    const cr = (str.match(/\r/g) ?? []).length - crlf;
+    const lf = (str.match(/\n/g) ?? []).length - crlf;
+    if (lf > 0) s.seen |= 1;
+    if (cr > 0) s.seen |= 2;
+    if (crlf > 0) s.seen |= 4;
+    if (s.translate) str = str.replace(/\r\n?/g, '\n');
+    return str;
+  });
+  indDef('getstate', 'self', (s: NLDec) => new PyTuple([new PyBytes(new Uint8Array(0), bytesType), s.pendingCR ? 1 : 0]));
+  indDef('setstate', 'self, state', (s: NLDec, st: any) => { s.pendingCR = (st as PyTuple).a[1] !== 0; return null; });
+  indDef('reset', 'self', (s: NLDec) => { s.pendingCR = false; s.seen = 0; return null; });
+  const indNl = new PyProperty(propertyType);
+  indNl.name = 'newlines';
+  indNl.fget = mkNative('newlines', 'self', (s: NLDec) => {
+    const names = ['\n', '\r', '\r\n'];
+    const got = names.filter((_n, i) => (s.seen & (1 << i)) !== 0);
+    return got.length === 0 ? null : got.length === 1 ? got[0] : new PyTuple(got);
+  }, { method: true });
+  ind.dict!.set('newlines', indNl);
+  m.dict!.set('IncrementalNewlineDecoder', ind);
 
   mfn(m, 'open', 'file, mode="r", buffering=-1, encoding=None, errors=None, newline=None, closefd=True, opener=None', (file: any, mode?: any, _buf?: any, enc?: any, errs?: any, nl?: any) =>
     openFile(I, file, mode === undefined ? 'r' : asStr(mode), enc === undefined || enc === null ? null : asStr(enc), errs === undefined || errs === null ? 'strict' : asStr(errs), nl));

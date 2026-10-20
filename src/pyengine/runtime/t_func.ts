@@ -192,6 +192,7 @@ prop(BM, '__module__', (m) => ops.getAttrOpt(bm(m).fn, '__module__') ?? null);
 
 const NF = nativeFunctionType;
 defMethods(NF, {
+  __reduce__: ['self', (f: any) => (f.name !== undefined ? f.name : ops.getAttr(f, '__name__'))],
   __repr__: ['self', (f: any) => {
     const n = f as NativeFunction;
     if (n.isMethod) {

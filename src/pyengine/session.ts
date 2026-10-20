@@ -137,6 +137,7 @@ export class PySession implements PySessionApi {
       try {
         const unit = compileSource(I, code, { filename, repl: mode === 'repl' });
         emitWarnings(I, unit.warnings, filename, unit.lines);
+        if (mode === 'exec' && filename !== '<stdin>') I.mainGlobals!.set('__file__', filename);
         runCode(I, unit.code, I.mainGlobals!);
         if (mode === 'repl' && I.replValue !== undefined && I.replValue !== null) {
           res.value = ops.repr(I.replValue);

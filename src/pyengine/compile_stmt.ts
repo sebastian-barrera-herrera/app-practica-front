@@ -15,7 +15,7 @@ import { rangeType, listType, typeOf, functionType } from './runtime/builtin_typ
 import * as ops from './runtime/ops';
 import * as rt from './runtime/rt';
 import { addTb, callFunction, callObj, toPyExc } from './runtime/call';
-import { assertionError, makeExc, StepLimit, typeError } from './runtime/errors';
+import { assertionError, makeExc, StepLimit, runtimeError, typeError } from './runtime/errors';
 import { importFromName, importName, importStar } from './runtime/modules';
 import { ExprCompiler, FnState, type Setter, pyConst } from './compile_expr';
 import { NeedInput, Aborted } from './runtime/errors';
@@ -120,7 +120,7 @@ export abstract class StmtCompiler extends ExprCompiler {
   exprStmt(n: Stmt & { k: 'Expr' }): Ex | null {
     const v = n.value;
     // docstrings y constantes sueltas no hacen nada
-    if (v.k === 'Constant' && !this.replMode) return null;
+    if (v.k === 'Constant' && !this.replMode && !this.singleMode) return null;
     if (v.k === 'Starred') this.syntaxError("can't use starred expression here", v);
     const e = this.expr(v);
     if (this.replMode && this.fs.kind === 'module') {
@@ -128,6 +128,16 @@ export abstract class StmtCompiler extends ExprCompiler {
       return (f) => {
         const r = e(f);
         I.replValue = r;
+        return undefined;
+      };
+    }
+    if (this.singleMode && this.fs.kind === 'module') {
+      const I = this.I;
+      return (f) => {
+        const r = e(f);
+        const hook = I.sysModule ? I.sysModule.dict!.get('displayhook') : undefined;
+        if (hook === undefined) throw runtimeError('lost sys.displayhook');
+        callObj(hook, [r]);
         return undefined;
       };
     }
