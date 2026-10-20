@@ -453,7 +453,7 @@ function richCompareSlow(op: string, a: any, b: any): any {
     r = callObj(f, [a, b]);
     if (r !== NotImplemented) return r;
   }
-  if (!tried && (tb !== ta || f === undefined)) {
+  if (!tried) {
     const g = tb.lookup(rname);
     if (g !== undefined) {
       r = callObj(g, [b, a]);

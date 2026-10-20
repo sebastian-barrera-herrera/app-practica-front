@@ -143,7 +143,7 @@ class Builder {
       case 'AsyncFunctionDef': {
         for (const d of n.decorators) this.expr(d, s);
         this.argDefaults(n.args, s);
-        this.assign(s, n.name, n);
+        this.assign(s, (n as any).bind ?? n.name, n);
         let outer = s;
         if (n.typeParams.length > 0) {
           outer = this.newScope('typeparams', n.typeParams, s, '<generic parameters of ' + n.name + '>');
@@ -159,7 +159,7 @@ class Builder {
       }
       case 'ClassDef': {
         for (const d of n.decorators) this.expr(d, s);
-        this.assign(s, n.name, n);
+        this.assign(s, (n as any).bind ?? n.name, n);
         let outer = s;
         if (n.typeParams.length > 0) {
           outer = this.newScope('typeparams', n.typeParams, s, '<generic parameters of ' + n.name + '>');

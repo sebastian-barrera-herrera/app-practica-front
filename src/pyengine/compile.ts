@@ -1,6 +1,7 @@
 /**
  * Compilador: AST → Code (closures). Punto de entrada `compileSource`.
  */
+import { mangleModule } from './mangle';
 import type { Expr, Module, Stmt } from './ast';
 import { PySyntaxErr } from './lexer';
 import { parseSource, type ParseMode, type ParseResult, type ParseWarning } from './parser';
@@ -261,6 +262,7 @@ export function compileSource(I: Interp, source: string, o: CompileOptions): Com
 /** Compila un módulo ya analizado (o construido a partir de un árbol de `ast`) */
 export function compileModule(I: Interp, mod: Module, lines: string[], warnings: ParseWarning[], o: CompileOptions): CompiledUnit {
   const mode = o.mode ?? 'exec';
+  mangleModule(mod);
   const table = buildScopes(mod, mode === 'eval' ? 'eval' : 'module');
   const fut = checkFuture(mod);
   const env: CompileEnv = {

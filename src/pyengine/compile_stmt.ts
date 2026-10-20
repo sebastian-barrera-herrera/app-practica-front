@@ -816,7 +816,7 @@ export abstract class StmtCompiler extends ExprCompiler {
   funcDef(n: FunctionDef): Ex {
     const sc = this.table.byNode.get(n)!;
     const decorators = n.decorators.map((d) => this.expr(d));
-    const set = this.storeName(n.name, n);
+    const set = this.storeName((n as any).bind ?? n.name, n);
     let mk: Ev;
     if (n.typeParams.length > 0) {
       mk = this.genericDef(n, sc);
@@ -938,7 +938,7 @@ export abstract class StmtCompiler extends ExprCompiler {
   classDef(n: ClassDef): Ex {
     const sc = this.table.byNode.get(n)!;
     const decorators = n.decorators.map((d) => this.expr(d));
-    const set = this.storeName(n.name, n);
+    const set = this.storeName((n as any).bind ?? n.name, n);
     const bases = n.bases.map((b) => (b.k === 'Starred' ? { star: true, ev: this.expr(b.value) } : { star: false, ev: this.expr(b) }));
     const kws = n.keywords.map((k) => ({ name: k.arg, ev: this.expr(k.value) }));
     const qual = this.qualnameFor(n.name);
