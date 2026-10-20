@@ -327,7 +327,7 @@ function deriveGroup(e: PyBaseException, excs: any): PyBaseException {
   const g = extra(e).group;
   const items = ops.iterToArray(excs);
   const r = ops.newObject(typeOf(e)) as PyBaseException;
-  r.args = [g.message, new PyTuple(items)];
+  r.args = [g.message, excs];
   extra(r).group = { message: g.message, exceptions: items };
   return r;
 }
@@ -352,15 +352,123 @@ export function splitGroup(e: PyBaseException, cond: any): [any, any] {
     } else if (matches(x, cond)) m.push(x);
     else r.push(x);
   }
-  const mk = (items: any[]): any => {
-    if (items.length === 0) return null;
-    const n = deriveGroup(e, new PyTuple(items));
-    n.cause = e.cause;
-    n.context = e.context;
-    n.tb = e.tb.slice();
-    return n;
-  };
+  const mk = (items: any[]): any => (items.length === 0 ? null : copyGroupMeta(e, deriveGroup(e, new PyList(items))));
   return [mk(m), mk(r)];
+}
+
+/** divide un grupo según un predicado sobre las hojas (excepciones que no son grupos) */
+function splitByLeaf(e: PyBaseException, pred: (leaf: PyBaseException) => boolean): [any, any] {
+  const g = extra(e).group;
+  if (!g) return pred(e) ? [e, null] : [null, e];
+  const m: any[] = [];
+  const r: any[] = [];
+  for (const x of g.exceptions) {
+    const [a, b] = splitByLeaf(x, pred);
+    if (a !== null) m.push(a);
+    if (b !== null) r.push(b);
+  }
+  const mk = (items: any[], same: boolean): any => {
+    if (items.length === 0) return null;
+    if (same) return e;
+    return copyGroupMeta(e, deriveGroup(e, new PyList(items)));
+  };
+  return [mk(m, r.length === 0), mk(r, m.length === 0)];
+}
+
+function copyGroupMeta(from: PyBaseException, to: PyBaseException): PyBaseException {
+  to.cause = from.cause;
+  to.context = from.context;
+  to.suppressContext = from.suppressContext;
+  to.tb = from.tb.slice();
+  const notes = from.dict ? from.dict.get('__notes__') : undefined;
+  if (notes !== undefined) {
+    if (!to.dict) to.dict = new PyDict();
+    to.dict.set('__notes__', notes);
+  }
+  return to;
+}
+
+function leavesOf(e: PyBaseException, out: Set<PyBaseException>): void {
+  const g = extra(e).group;
+  if (!g) { out.add(e); return; }
+  for (const x of g.exceptions) leavesOf(x, out);
+}
+
+function sameMeta(a: PyBaseException, b: PyBaseException): boolean {
+  if (a === b) return true;
+  if (a.cause !== b.cause || a.context !== b.context) return false;
+  const na = a.dict ? a.dict.get('__notes__') : undefined;
+  const nb = b.dict ? b.dict.get('__notes__') : undefined;
+  if (na !== nb) return false;
+  if (a.tb.length !== b.tb.length) return false;
+  for (let i = 0; i < a.tb.length; i++) if (a.tb[i] !== b.tb[i]) return false;
+  return true;
+}
+
+/**
+ * Estado de un `try ... except*` (equivalente a `_PyExc_PrepReraiseStar` de CPython):
+ * reparte la excepción entre los manejadores y calcula la que hay que relanzar al final.
+ */
+export class StarTry {
+  private isGroup: boolean;
+  private remaining: PyBaseException | null;
+  private excs: PyBaseException[] = [];
+  constructor(private orig: PyBaseException) {
+    this.isGroup = ops.isInstance(orig, E.BaseExceptionGroup);
+    this.remaining = orig;
+  }
+
+  get exhausted(): boolean {
+    return this.remaining === null;
+  }
+
+  /** parte de la excepción que coincide con `spec` (null si ninguna o ya no quedan excepciones) */
+  match(spec: any): PyBaseException | null {
+    if (this.remaining === null) return null;
+    const checkType = (t: any): void => {
+      if (t instanceof PyType && t.isSubtype(E.BaseException)) {
+        if (t.isSubtype(E.BaseExceptionGroup)) throw typeError('catching ExceptionGroup with except* is not allowed. Use except instead.');
+      } else throw typeError('catching classes that do not inherit from BaseException is not allowed');
+    };
+    if (spec instanceof PyTuple) spec.a.forEach(checkType);
+    else checkType(spec);
+    const cur = this.remaining;
+    if (!ops.isInstance(cur, E.BaseExceptionGroup)) {
+      if (rt.exceptMatch(cur, spec)) {
+        // excepción suelta que coincide: se entrega envuelta en un grupo
+        this.remaining = null;
+        return callObj(E.ExceptionGroup, ['', new PyTuple([cur])]) as PyBaseException;
+      }
+      return null;
+    }
+    const r = splitGroup(cur, spec);
+    this.remaining = r[1];
+    return r[0];
+  }
+
+  /** excepción lanzada (o relanzada) por un manejador */
+  raised(e: PyBaseException): void {
+    this.excs.push(e);
+  }
+
+  /** excepción que sigue propagándose al terminar los manejadores (null = ninguna) */
+  finish(): PyBaseException | null {
+    if (this.remaining !== null) this.excs.push(this.remaining);
+    if (!this.isGroup) return this.excs.length === 0 ? null : this.excs[0];
+    const raised: PyBaseException[] = [];
+    const reraised: PyBaseException[] = [];
+    for (const e of this.excs) (sameMeta(e, this.orig) ? reraised : raised).push(e);
+    let reraisedEg: PyBaseException | null = null;
+    if (reraised.length > 0) {
+      const keep = new Set<PyBaseException>();
+      for (const e of reraised) leavesOf(e, keep);
+      reraisedEg = splitByLeaf(this.orig, (leaf) => keep.has(leaf))[0];
+    }
+    if (raised.length === 0) return reraisedEg;
+    if (reraisedEg !== null) raised.push(reraisedEg);
+    if (raised.length === 1) return raised[0];
+    return callObj(E.ExceptionGroup, ['', new PyList(raised)]) as PyBaseException;
+  }
 }
 
 void [strRepr, asStr, kwMap, PyObject, attributeError, NotImplemented];

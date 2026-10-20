@@ -2,6 +2,7 @@
  * Compilador en modo generador: cuerpos de generadores y corrutinas como `function*`.
  * Los subárboles que no contienen `yield`/`await` se delegan en las closures síncronas.
  */
+import { StarTry } from './runtime/t_exc';
 import type { Expr, ExceptHandler, Stmt, Try, With, For, While, If, Assign, AugAssign, Match, Raise, Assert, Return, Delete, AnnAssign } from './ast';
 import { Scope } from './scope';
 import { Suspend } from './suspend';
@@ -80,6 +81,8 @@ function awaitMsgError(x: any): never {
 
 export function getAwaitIter(x: any): any {
   if (x instanceof PyGenerator && x.cls === coroutineType) return x;
+  // generador marcado con types.coroutine
+  if (x instanceof PyGenerator && x.frame.code.iterCoro) return x;
   const t = typeOf(x);
   const aw = t.lookup('__await__');
   if (aw === undefined) awaitMsgError(x);
@@ -674,7 +677,7 @@ export abstract class GenCompiler extends StmtCompiler {
   genTry(n: Stmt & { k: 'Try' | 'TryStar' }): GEx {
     const I = this.I;
     const self = this;
-    if (n.k === 'TryStar') throw this.notSupported('except* con await/yield');
+    if (n.k === 'TryStar') return this.genTryStar(n);
     const body = this.genBlock(n.body);
     const handlers = n.handlers.map((h: ExceptHandler) => {
       const hh = this.handler(h);
@@ -710,6 +713,90 @@ export abstract class GenCompiler extends StmtCompiler {
           }
         }
         throw exc;
+      }
+      if (orelse !== null && sig === undefined) return yield* orelse(f);
+      return sig;
+    };
+    if (finalbody === null) return main;
+    return function* (f) {
+      let sig: number | undefined;
+      let pending: any = NOEXC;
+      try {
+        sig = yield* main(f);
+      } catch (e) {
+        if (isInternalSignal(e)) throw e;
+        pending = e;
+      }
+      let pendExc: PyBaseException | null = null;
+      if (pending !== NOEXC) {
+        pendExc = self.caughtOrNull(pending);
+        if (pendExc === null) throw pending;
+        if (pendExc.lastFrame !== f) addTb(pendExc, f);
+      }
+      const prev = I.curExc;
+      if (pendExc !== null) I.curExc = pendExc;
+      let fsig: number | undefined;
+      try {
+        fsig = yield* finalbody(f);
+      } finally {
+        I.curExc = prev;
+      }
+      if (fsig !== undefined) return fsig;
+      if (pendExc !== null) throw pendExc;
+      return sig;
+    };
+  }
+
+  /** try / except* cuando el cuerpo o los manejadores contienen await o yield */
+  genTryStar(n: Stmt & { k: 'Try' | 'TryStar' }): GEx {
+    const I = this.I;
+    const self = this;
+    const body = this.genBlock(n.body);
+    const handlers = n.handlers.map((h: ExceptHandler) => {
+      const hh = this.handler(h);
+      return { ...hh, gbody: this.genBlock(h.body), typeG: h.type && this.suspends(h.type) ? this.genExpr(h.type) : null };
+    });
+    const orelse = n.orelse.length > 0 ? this.genBlock(n.orelse) : null;
+    const finalbody = n.finalbody.length > 0 ? this.genBlock(n.finalbody) : null;
+    const main: GEx = function* (f) {
+      let sig: number | undefined;
+      try {
+        sig = yield* body(f);
+      } catch (e0) {
+        if (isInternalSignal(e0)) throw e0;
+        const exc0 = self.caught(e0);
+        addTb(exc0, f);
+        const st = new StarTry(exc0);
+        const outerExc: any = I.curExc;
+        I.curExc = exc0;
+        try {
+        for (const h of handlers) {
+          if (st.exhausted) break;
+          f.pos = h.node;
+          const spec = h.typeG ? yield* h.typeG(f) : h.type!(f);
+          const matched = st.match(spec);
+          if (matched === null) continue;
+          const prev: any = I.curExc;
+          I.curExc = matched;
+          try {
+            if (h.set) h.set(f, matched);
+            yield* h.gbody(f);
+          } catch (e1) {
+            if (isInternalSignal(e1)) throw e1;
+            const ex1 = self.caught(e1);
+            if (ex1 !== matched) addTb(ex1, f);
+            st.raised(ex1);
+          } finally {
+            I.curExc = prev;
+            if (h.name !== null) h.clear!(f);
+          }
+        }
+        } finally {
+          I.curExc = outerExc;
+        }
+        const res = st.finish();
+        if (res !== null) throw res;
+        return undefined;
       }
       if (orelse !== null && sig === undefined) return yield* orelse(f);
       return sig;

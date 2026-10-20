@@ -3,7 +3,7 @@
  */
 import type { Expr, Module, Stmt } from './ast';
 import { PySyntaxErr } from './lexer';
-import { parseSource, type ParseMode, type ParseWarning } from './parser';
+import { parseSource, type ParseMode, type ParseResult, type ParseWarning } from './parser';
 import { buildScopes, Scope } from './scope';
 import {
   Cell, Frame, PyFunction, PyGenerator, PyDict, PyList, PySet, SIG_RETURN, type Code, type Ev, type Ex,
@@ -217,6 +217,8 @@ export interface CompileOptions {
   hidden?: boolean;
   repl?: boolean;
   single?: boolean;
+  /** clave para reutilizar el AST entre sesiones (sólo para texto fuente inmutable) */
+  cacheKey?: string;
 }
 
 export function checkFuture(mod: Module): { annotations: boolean } {
@@ -241,9 +243,16 @@ export function checkFuture(mod: Module): { annotations: boolean } {
 }
 
 /** Parsea, analiza y compila un texto fuente. Lanza PySyntaxErr. */
+/** AST de los módulos incluidos en la aplicación: se analizan una sola vez por proceso y se reutilizan entre sesiones */
+const AST_CACHE = new Map<string, ParseResult>();
+
 export function compileSource(I: Interp, source: string, o: CompileOptions): CompiledUnit {
   const mode = o.mode ?? 'exec';
-  const parsed = parseSource(source, mode);
+  let parsed: ParseResult | undefined = o.cacheKey !== undefined ? AST_CACHE.get(o.cacheKey) : undefined;
+  if (parsed === undefined) {
+    parsed = parseSource(source, mode);
+    if (o.cacheKey !== undefined) AST_CACHE.set(o.cacheKey, parsed);
+  }
   const lines = parsed.src.split('\n');
   I.sources.set(o.filename, lines);
   return compileModule(I, parsed.module, lines, parsed.warnings, o);

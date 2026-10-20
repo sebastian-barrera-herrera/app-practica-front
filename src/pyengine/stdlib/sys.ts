@@ -263,6 +263,19 @@ registerNative('sys', (I: Interp, m: PyModule) => {
   });
   m.dict!.set('__excepthook__', m.dict!.get('excepthook'));
   m.dict!.set('__displayhook__', m.dict!.get('displayhook'));
+  const hooksT = newNativeType('asyncgen_hooks', 'sys', [tupleType]);
+  hooksT.dict!.set('firstiter', (() => { const pr = new PyProperty(propertyType); pr.name = 'firstiter'; pr.fget = mkNative('firstiter', 'self', (t: any) => t.a[0], { method: true }); return pr; })());
+  hooksT.dict!.set('finalizer', (() => { const pr = new PyProperty(propertyType); pr.name = 'finalizer'; pr.fget = mkNative('finalizer', 'self', (t: any) => t.a[1], { method: true }); return pr; })());
+  hooksT.dict!.set('__repr__', mkNative('__repr__', 'self', (t: any) => `asyncgen_hooks(firstiter=${ops.repr(t.a[0])}, finalizer=${ops.repr(t.a[1])})`, { method: true }));
+  I.extraFlags.agenHooks = [null, null];
+  mfn(m, 'get_asyncgen_hooks', '', () => new PyTuple([I.extraFlags.agenHooks[0], I.extraFlags.agenHooks[1]], hooksT));
+  mfn(m, 'set_asyncgen_hooks', 'firstiter=, finalizer=', (f?: any, g?: any) => {
+    if (f !== undefined && f !== null && !ops.isCallable(f)) throw typeError(`callable firstiter expected, got ${typeOf(f).name}`);
+    if (g !== undefined && g !== null && !ops.isCallable(g)) throw typeError(`callable finalizer expected, got ${typeOf(g).name}`);
+    if (f !== undefined) I.extraFlags.agenHooks[0] = f;
+    if (g !== undefined) I.extraFlags.agenHooks[1] = g;
+    return null;
+  });
   mfn(m, 'breakpointhook', '*args, **kw', () => null);
   m.dict!.set('__breakpointhook__', m.dict!.get('breakpointhook'));
   mfn(m, '_getsource', 'filename', (fn: any) => {

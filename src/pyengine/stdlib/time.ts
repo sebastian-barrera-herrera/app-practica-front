@@ -1,7 +1,8 @@
 /**
  * Módulo `time` sobre el reloj virtual del intérprete (zona horaria siempre UTC).
  */
-import { PyFloat, PyModule, PyProperty, PyTuple } from '../runtime/objects';
+import { simpleNamespaceType } from '../runtime/t_namespace';
+import { PyDict, PyFloat, PyModule, PyObject, PyProperty, PyTuple } from '../runtime/objects';
 import { newNativeType, propertyType, tupleType } from '../runtime/builtin_types';
 import { overflowError, typeError, valueError } from '../runtime/errors';
 import * as ops from '../runtime/ops';
@@ -185,6 +186,24 @@ registerNative('time', (I: Interp, m: PyModule) => {
     const sp = (require('../runtime/modules') as typeof import('../runtime/modules')).importModule(I, '_strptime');
     return ops.callMethod(sp, '_strptime_time', f === undefined ? [s] : [s, f]);
   });
-  mfn(m, 'get_clock_info', 'name, /', () => null);
+  mfn(m, 'get_clock_info', 'name, /', (n: any) => {
+    const name = ops.strValue(n);
+    const info: Record<string, [string, boolean, boolean, number]> = {
+      monotonic: ['clock_gettime(CLOCK_MONOTONIC)', true, false, 1e-9],
+      perf_counter: ['clock_gettime(CLOCK_MONOTONIC)', true, false, 1e-9],
+      process_time: ['clock_gettime(CLOCK_PROCESS_CPUTIME_ID)', true, false, 1e-9],
+      thread_time: ['clock_gettime(CLOCK_THREAD_CPUTIME_ID)', true, false, 1e-9],
+      time: ['clock_gettime(CLOCK_REALTIME)', false, true, 1e-9],
+    };
+    const e = info[name];
+    if (e === undefined) throw valueError('unknown clock');
+    const o = new PyObject(simpleNamespaceType);
+    o.dict = new PyDict();
+    o.dict.set('implementation', e[0]);
+    o.dict.set('monotonic', e[1]);
+    o.dict.set('adjustable', e[2]);
+    o.dict.set('resolution', new PyFloat(e[3]));
+    return o;
+  });
   mfn(m, 'tzset', '', () => null);
 });

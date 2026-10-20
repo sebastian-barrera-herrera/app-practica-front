@@ -180,7 +180,7 @@ export function execSource(I: Interp, abs: string, text: string, filename: strin
   }
   I.modules.set(abs, m);
   try {
-    const unit = compileSource(I, text, { filename, hidden });
+    const unit = compileSource(I, text, { filename, hidden, cacheKey: hidden ? 'std:' + abs : undefined });
     emitWarnings(I, unit.warnings, filename, unit.lines);
     runCode(I, unit.code, d);
   } catch (e) {

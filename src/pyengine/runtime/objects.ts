@@ -192,6 +192,8 @@ export const SIG_RETURN = 3;
 
 export interface Code {
   /** posiciones internadas para `tb_lasti` / `co_positions()` (índice 0 = sin posición) */
+  /** generador marcado con types.coroutine (CO_ITERABLE_COROUTINE): se puede usar con await */
+  iterCoro?: boolean;
   plist?: (Pos | null)[];
   pmap?: Map<Pos, number>;
   name: string;

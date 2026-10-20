@@ -15,6 +15,7 @@ import { rangeType, listType, typeOf, functionType } from './runtime/builtin_typ
 import * as ops from './runtime/ops';
 import * as rt from './runtime/rt';
 import { addTb, callFunction, callObj, toPyExc } from './runtime/call';
+import { StarTry } from './runtime/t_exc';
 import { assertionError, makeExc, StepLimit, runtimeError, typeError } from './runtime/errors';
 import { importFromName, importName, importStar } from './runtime/modules';
 import { ExprCompiler, FnState, type Setter, pyConst } from './compile_expr';
@@ -648,48 +649,39 @@ export abstract class StmtCompiler extends ExprCompiler {
       try {
         sig = body(f);
       } catch (e0) {
+        if (isInternalSignal(e0)) throw e0;
         const exc0 = this.caught(e0);
         addTb(exc0, f);
-        // envolver excepciones sueltas en un grupo
-        let remaining: PyBaseException | null = exc0;
-        const raised: PyBaseException[] = [];
-        const isGroup = ops.isInstance(exc0, E.BaseExceptionGroup);
-        const group: PyBaseException = isGroup ? exc0 : (ops.callObj(E.ExceptionGroup, ['', new PyList([exc0])]) as PyBaseException);
-        remaining = group;
+        const st = new StarTry(exc0);
+        const outerExc: any = I.curExc;
+        I.curExc = exc0;
+        try {
         for (const h of handlers) {
-          if (remaining === null) break;
+          if (st.exhausted) break;
           f.pos = h.node;
           const spec = h.type!(f);
-          const split = ops.callMethod(remaining, 'split', [spec]) as PyTuple;
-          const matched = split.a[0];
-          const rest = split.a[1];
-          if (matched !== null) {
-            const prev = I.curExc;
-            I.curExc = matched;
-            try {
-              if (h.set) h.set(f, matched);
-              const r = h.body(f);
-              if (r !== undefined) return r;
-            } catch (e1) {
-              const ex1 = this.caught(e1);
-              raised.push(ex1);
-            } finally {
-              I.curExc = prev;
-              if (h.name !== null) h.clear!(f);
-            }
+          const matched = st.match(spec);
+          if (matched === null) continue;
+          const prev: any = I.curExc;
+          I.curExc = matched;
+          try {
+            if (h.set) h.set(f, matched);
+            h.body(f);
+          } catch (e1) {
+            if (isInternalSignal(e1)) throw e1;
+            const ex1 = this.caught(e1);
+            if (ex1 !== matched) addTb(ex1, f);
+            st.raised(ex1);
+          } finally {
+            I.curExc = prev;
+            if (h.name !== null) h.clear!(f);
           }
-          remaining = rest;
         }
-        if (raised.length > 0) {
-          const all = raised.slice();
-          if (remaining !== null) all.push(remaining);
-          if (all.length === 1) throw all[0];
-          throw ops.callObj(E.ExceptionGroup, ['', new PyList(all)]);
+        } finally {
+          I.curExc = outerExc;
         }
-        if (remaining !== null) {
-          if (!isGroup && remaining === group) throw exc0;
-          throw remaining;
-        }
+        const res = st.finish();
+        if (res !== null) throw res;
         return undefined;
       }
       if (orelse !== null && sig === undefined) return orelse(f);

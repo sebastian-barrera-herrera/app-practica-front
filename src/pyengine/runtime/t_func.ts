@@ -13,6 +13,8 @@ import {
 } from './builtin_types';
 import type { Pos } from '../ast';
 import { E } from './exc_types';
+import { AGYield } from './objects';
+import { newNativeType } from './builtin_types';
 import { attributeError, makeExc, stopIteration, typeError, valueError } from './errors';
 import { callObj, genClose, genResume, genThrow } from './call';
 import * as ops from './ops';
@@ -82,7 +84,10 @@ prop(FN, '__annotations__', (f: PyFunction) => {
   if (f.annotations === null) f.annotations = new PyDict();
   return f.annotations;
 }, (f: PyFunction, v) => { f.annotations = v; });
-prop(FN, '__code__', (f: PyFunction) => makeCodeObject(f.code));
+prop(FN, '__code__', (f: PyFunction) => makeCodeObject(f.code), (f: PyFunction, v: any) => {
+  if (!(v instanceof PyObject) || v.cls !== codeType) throw typeError('__code__ must be set to a code object');
+  f.code = (v as any).code;
+});
 prop(FN, '__builtins__', (f: PyFunction) => f.builtins);
 prop(FN, '__type_params__', (f: PyFunction) => (f.dict && f.dict.get('__type_params__')) || new PyTuple([]), (f: PyFunction, v) => {
   if (!f.dict) f.dict = new PyDict();
@@ -115,6 +120,7 @@ prop(codeType, 'co_flags', (c) => {
   if (k.isGenerator && !k.isCoroutine && !k.isAsyncGen) fl |= 32;
   if (k.isCoroutine) fl |= 128;
   if (k.isAsyncGen) fl |= 512;
+  if (k.iterCoro) fl |= 256;
   return fl;
 });
 prop(codeType, 'co_code', () => new (require('./objects').PyBytes)(new Uint8Array(0), require('./builtin_types').bytesType));
@@ -144,6 +150,22 @@ function utf8Col(line: string | undefined, col: number): number {
 }
 
 defMethods(codeType, {
+  replace: ['self, **kw', (c: any, kw: any) => {
+    const k = { ...cod(c) } as Code;
+    delete k.plist;
+    delete k.pmap;
+    if (kw instanceof PyDict) {
+      for (const e of kw.m.values()) {
+        const key = ops.strValue(e.k);
+        if (key === 'co_flags') k.iterCoro = (Number(e.v) & 256) !== 0;
+        else if (key === 'co_name') k.name = ops.strValue(e.v);
+        else if (key === 'co_qualname') k.qualname = ops.strValue(e.v);
+        else if (key === 'co_filename') k.filename = ops.strValue(e.v);
+        else if (key === 'co_firstlineno') k.firstLine = Number(e.v);
+      }
+    }
+    return makeCodeObject(k);
+  }],
   co_positions: ['self', (c: any) => {
     const k = cod(c);
     const lines = interp().sources.get(k.filename);
@@ -525,6 +547,95 @@ export class CoroWrapper extends PyIter {
     return r;
   }
 }
+
+// ───────────────────────── generadores asíncronos ─────────────────────────
+
+const agAwaitableType = newNativeType('async_generator_asend', 'builtins', [objectType], 0);
+const agAthrowType = newNativeType('async_generator_athrow', 'builtins', [objectType], 0);
+
+class AGAwait extends PyObject {
+  state = 0;
+  constructor(cls: PyType, public g: PyGenerator, public kind: 'send' | 'throw' | 'close', public arg: any) {
+    super(cls);
+  }
+}
+
+function agInitHooks(g: PyGenerator): void {
+  const gg = g as any;
+  if (gg.hooksInit) return;
+  gg.hooksInit = true;
+  const hooks = interp().extraFlags.agenHooks as any[] | undefined;
+  if (hooks && hooks[0] !== null && hooks[0] !== undefined) callObj(hooks[0], [g]);
+}
+
+function agStep(a: AGAwait, mode: 0 | 1, val: any): any {
+  const g = a.g;
+  if (a.state === 2) throw makeExc(E.RuntimeError, ['cannot reuse already awaited __anext__()/asend()']);
+  if (a.state === 0) {
+    a.state = 1;
+    if (a.kind === 'send') { mode = 0; val = a.arg; }
+    else if (a.kind === 'throw') { mode = 1; val = a.arg; }
+    else { mode = 1; val = makeExc(E.GeneratorExit, []); }
+  }
+  const fin = { done: false, value: null as any };
+  let y: any;
+  try {
+    y = genResume(g, mode, val, fin);
+  } catch (e) {
+    a.state = 2;
+    if (e instanceof PyBaseException) {
+      if (a.kind === 'close' && (ops.isInstance(e, E.GeneratorExit) || ops.isInstance(e, E.StopAsyncIteration))) throw stopIteration(null);
+      if (ops.isInstance(e, E.StopIteration) || ops.isInstance(e, E.StopAsyncIteration)) {
+        const r = makeExc(E.RuntimeError, [`async generator raised ${e.cls.name}`]);
+        r.cause = e;
+        r.context = e;
+        r.suppressContext = true;
+        throw r;
+      }
+    }
+    throw e;
+  }
+  if (fin.done) {
+    a.state = 2;
+    if (a.kind === 'close') throw stopIteration(null);
+    throw makeExc(E.StopAsyncIteration, []);
+  }
+  if (y instanceof AGYield) {
+    a.state = 2;
+    if (a.kind === 'close') throw makeExc(E.RuntimeError, ['async generator ignored GeneratorExit']);
+    throw stopIteration(y.v);
+  }
+  return y;
+}
+
+for (const t of [agAwaitableType, agAthrowType]) {
+  defMethods(t, {
+    __await__: ['self', (a: any) => a],
+    __iter__: ['self', (a: any) => a],
+    __next__: ['self', (a: any) => agStep(a, 0, null)],
+    send: ['self, value', (a: any, v: any) => agStep(a, 0, v)],
+    throw: ['self, type, value=, traceback=', (a: any, ty: any, v?: any, tb?: any) => agStep(a, 1, makeThrowable(ty, v, tb))],
+    close: ['self', (a: any) => { (a as AGAwait).state = 2; return null; }],
+  });
+}
+
+defMethods(asyncGeneratorType, {
+  __repr__: ['self', (g: any) => `<async_generator object ${gen(g).qualname} at ${interp().hexId(g)}>`],
+  __aiter__: ['self', (g: any) => g],
+  __anext__: ['self', (g: any) => { agInitHooks(gen(g)); return new AGAwait(agAwaitableType, gen(g), 'send', null); }],
+  asend: ['self, value', (g: any, v: any) => { agInitHooks(gen(g)); return new AGAwait(agAwaitableType, gen(g), 'send', v); }],
+  athrow: ['self, type, value=, traceback=', (g: any, ty: any, v?: any, tb?: any) => {
+    agInitHooks(gen(g));
+    return new AGAwait(agAthrowType, gen(g), 'throw', makeThrowable(ty, v, tb));
+  }],
+  aclose: ['self', (g: any) => { agInitHooks(gen(g)); return new AGAwait(agAthrowType, gen(g), 'close', null); }],
+});
+prop(asyncGeneratorType, '__name__', (g: PyGenerator) => g.name, (g: PyGenerator, v) => { g.name = v; });
+prop(asyncGeneratorType, '__qualname__', (g: PyGenerator) => g.qualname, (g: PyGenerator, v) => { g.qualname = v; });
+prop(asyncGeneratorType, 'ag_running', (g: PyGenerator) => g.state === 2);
+prop(asyncGeneratorType, 'ag_frame', (g: PyGenerator) => (g.state === 3 ? null : makeFrameObject(g.frame)));
+prop(asyncGeneratorType, 'ag_code', (g: PyGenerator) => makeCodeObject(g.frame.code));
+prop(asyncGeneratorType, 'ag_await', () => null);
 
 void [noneType, Cell, excStr, Kw0()];
 function Kw0(): null { return null; }
