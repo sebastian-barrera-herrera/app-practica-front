@@ -3,7 +3,7 @@ import { Pressable, View, type LayoutChangeEvent, type ViewStyle } from 'react-n
 import Animated, { Easing, FadeIn, useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
 import Svg, { Line } from 'react-native-svg';
 import { select, tap } from '@/lib/haptics';
-import { T } from '@/ui/Text';
+import { OnDark, T } from '@/ui/Text';
 import { colors, fonts, radius } from '@/ui/theme';
 
 export function Frame({ title, children, style }: { title?: string; children: React.ReactNode; style?: ViewStyle }) {
@@ -29,7 +29,9 @@ export const palette = {
 export function MonoBox({ children, color = colors.termText, size = 14 }: { children: React.ReactNode; color?: string; size?: number }) {
   return (
     <View style={{ backgroundColor: colors.termBg, borderRadius: 10, padding: 10, borderWidth: 1, borderColor: colors.line }}>
-      <T style={{ fontFamily: fonts.mono, fontSize: size, lineHeight: size + 6 }} color={color}>{children}</T>
+      <OnDark>
+        <T style={{ fontFamily: fonts.mono, fontSize: size, lineHeight: size + 6 }} color={color}>{children}</T>
+      </OnDark>
     </View>
   );
 }
@@ -67,6 +69,7 @@ export function TapParts({ parts, size = 18, prefix }: { parts: Part[]; size?: n
   return (
     <View style={{ gap: 12 }}>
       <View style={{ backgroundColor: colors.termBg, padding: 14, borderRadius: 12, borderWidth: 1, borderColor: colors.line }}>
+        <OnDark>
         {prefix ? <T style={{ fontFamily: fonts.mono, fontSize: 12 }} color={colors.faint}>{prefix}</T> : null}
         <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
           {parts.map((x, i) => (
@@ -75,6 +78,7 @@ export function TapParts({ parts, size = 18, prefix }: { parts: Part[]; size?: n
             </Pressable>
           ))}
         </View>
+        </OnDark>
       </View>
       <Animated.View key={sel} entering={FadeIn.duration(220)} style={{ borderLeftWidth: 4, borderLeftColor: p.color, paddingLeft: 12, gap: 2 }}>
         <T v="h3" color={p.color}>{p.title}</T>
@@ -91,12 +95,14 @@ export function TapLines({ parts, size = 13 }: { parts: Part[]; size?: number })
   return (
     <View style={{ gap: 12 }}>
       <View style={{ backgroundColor: colors.termBg, paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: colors.line }}>
+        <OnDark>
         {parts.map((x, i) => (
           <Pressable key={i} onPress={() => { tap(); setSel(i); }} style={{ flexDirection: 'row', paddingHorizontal: 10, backgroundColor: sel === i ? x.color + '26' : 'transparent', borderLeftWidth: 3, borderLeftColor: sel === i ? x.color : 'transparent' }}>
             <T style={{ fontFamily: fonts.mono, fontSize: size - 2, width: 20 }} color={colors.faint}>{i + 1}</T>
             <T style={{ fontFamily: sel === i ? fonts.monoBold : fonts.mono, fontSize: size, flex: 1 }} color={x.color}>{x.t}</T>
           </Pressable>
         ))}
+        </OnDark>
       </View>
       <Animated.View key={sel} entering={FadeIn.duration(220)} style={{ borderLeftWidth: 4, borderLeftColor: p.color, paddingLeft: 12, gap: 2 }}>
         <T v="h3" color={p.color}>{p.title}</T>

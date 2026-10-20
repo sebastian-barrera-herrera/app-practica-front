@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Pressable, View, type LayoutChangeEvent } from 'react-native';
 import Animated, { FadeIn, FadeInDown, Easing, useAnimatedStyle, useSharedValue, withRepeat, withTiming, ZoomIn } from 'react-native-reanimated';
 import { select, tap } from '@/lib/haptics';
-import { T } from '@/ui/Text';
+import { OnDark, T } from '@/ui/Text';
 import { colors, fonts, radius } from '@/ui/theme';
 import { Caption, Chips, Frame, MonoBox, TapLines, TapParts, type Part } from './common';
 
@@ -158,7 +158,9 @@ export function RegexCheat() {
       <Chips items={REGEX.map((r) => ({ id: r.id, label: r.label }))} value={id} onChange={setId} color={colors.violet} />
       <MonoBox color={colors.amber}>{`grep ${d.ere ? '-E ' : ''}"${d.pattern}" archivo`}</MonoBox>
       <Animated.View key={id} entering={FadeIn.duration(200)} style={{ backgroundColor: colors.termBg, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: colors.line }}>
-        <Highlighted text={d.text} re={re} />
+        <OnDark>
+          <Highlighted text={d.text} re={re} />
+        </OnDark>
       </Animated.View>
       <Caption color={colors.text}>{d.desc}</Caption>
     </Frame>
@@ -428,16 +430,18 @@ export function GrepScan() {
     <Frame title="grep recorre línea a línea">
       <Chips items={GREP.map((x) => ({ id: x.id, label: x.label }))} value={id} onChange={setId} color={colors.orange} />
       <View style={{ backgroundColor: colors.termBg, borderRadius: 10, borderWidth: 1, borderColor: colors.line, paddingVertical: 8 }}>
+        <OnDark>
         {LOG.map((l, i) => {
           const seen = i < idx;
           const hit = seen && g.test(l);
           const scanning = i === idx;
           return (
             <View key={i} style={{ flexDirection: 'row', paddingHorizontal: 10, paddingVertical: 2, backgroundColor: hit ? colors.green + '26' : scanning ? colors.amber + '2A' : 'transparent', borderLeftWidth: 3, borderLeftColor: hit ? colors.green : scanning ? colors.amber : 'transparent' }}>
-              <T style={{ fontFamily: fonts.mono, fontSize: 12, opacity: seen && !hit ? 0.35 : 1 }} color={hit ? colors.green : colors.dim} numberOfLines={1}>{l}</T>
+              <T style={{ fontFamily: fonts.mono, fontSize: 12, opacity: seen && !hit ? 0.5 : 1 }} color={hit ? colors.green : colors.dim} numberOfLines={1}>{l}</T>
             </View>
           );
         })}
+        </OnDark>
       </View>
       <View style={{ gap: 2 }}>
         <T v="label" color={colors.dim}>Salida ({found.length})</T>

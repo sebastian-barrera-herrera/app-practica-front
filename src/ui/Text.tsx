@@ -1,6 +1,6 @@
-import React from 'react';
-import { StyleSheet, Text as RNText, type TextProps, type TextStyle } from 'react-native';
-import { colors, fonts, monoFallback } from './theme';
+import React, { createContext, useContext } from 'react';
+import { StyleSheet, Text as RNText, type StyleProp, type TextProps, type TextStyle } from 'react-native';
+import { colors, fonts, monoFallback, termInk } from './theme';
 
 type Variant = 'title' | 'h1' | 'h2' | 'h3' | 'body' | 'small' | 'tiny' | 'mono' | 'label';
 
@@ -26,6 +26,16 @@ export function minLineHeight(fontSize: number, mono = false): number {
   return Math.ceil(fontSize * k);
 }
 
+const OnDarkContext = createContext(false);
+
+/**
+ * Marca su contenido como dibujado sobre un fondo de terminal (siempre oscuro): los textos `T` de dentro usan el
+ * equivalente del tema oscuro de su color, así que se leen igual en el tema claro. Envuelve el interior de cada panel de terminal.
+ */
+export function OnDark({ children }: { children: React.ReactNode }) {
+  return <OnDarkContext.Provider value>{children}</OnDarkContext.Provider>;
+}
+
 export interface TProps extends TextProps {
   v?: Variant;
   color?: string;
@@ -33,7 +43,8 @@ export interface TProps extends TextProps {
   bold?: boolean;
 }
 
-export function T({ v = 'body', color = colors.text, center, bold, style, ...rest }: TProps) {
+/** Estilo final de un texto `T` (función pura: la usan el componente y los tests). */
+export function textStyle({ v = 'body', color = colors.text, center, bold, style, onDark = false }: Pick<TProps, 'v' | 'color' | 'center' | 'bold' | 'style'> & { onDark?: boolean }): StyleProp<TextStyle> {
   const base = variants[v];
   const flat = StyleSheet.flatten(style) as TextStyle | undefined;
   // Si el estilo cambia el tamaño (típico: emojis a 30–46 px) y no fija su propia altura de línea, o la deja corta,
@@ -43,19 +54,20 @@ export function T({ v = 'body', color = colors.text, center, bold, style, ...res
   const floor = minLineHeight(fs, mono);
   const lh = flat?.lineHeight ?? (flat?.fontSize != null ? 0 : base.lineHeight ?? 0);
   const fix: TextStyle | null = lh < floor && (flat?.fontSize != null || flat?.lineHeight != null) ? { lineHeight: floor } : null;
-  return (
-    <RNText
-      {...rest}
-      style={[
-        base,
-        { color },
-        center && { textAlign: 'center' },
-        bold && { fontFamily: v === 'mono' ? fonts.monoBold : fonts.bold },
-        style,
-        fix,
-      ]}
-    />
-  );
+  return [
+    base,
+    { color: onDark ? termInk(color) : color },
+    center && { textAlign: 'center' },
+    bold && { fontFamily: v === 'mono' ? fonts.monoBold : fonts.bold },
+    style,
+    onDark && typeof flat?.color === 'string' ? { color: termInk(flat.color) } : null,
+    fix,
+  ];
+}
+
+export function T({ v, color, center, bold, style, ...rest }: TProps) {
+  const onDark = useContext(OnDarkContext);
+  return <RNText {...rest} style={textStyle({ v, color, center, bold, style, onDark })} />;
 }
 
 export const Mono = ({ style, ...p }: TextProps) => <RNText {...p} style={[{ fontFamily: fonts.mono || monoFallback, color: colors.termText, fontSize: 13, lineHeight: 19 }, style]} />;

@@ -15,7 +15,7 @@ import { PyEditor } from './PyEditor';
 import { PyOutput } from './PyOutput';
 import { CodeBlock, Inline } from './RichText';
 import { usePyRunner } from './usePyRunner';
-import { T } from './Text';
+import { OnDark, T } from './Text';
 import { colors, fonts, radius, makeStyles } from './theme';
 
 export interface Result {
@@ -219,6 +219,7 @@ function Cmd({ q, locked, setReady, getRef, text, setText, onSubmit }: SubProps 
   };
   return (
     <View style={styles.cmdBox}>
+<OnDark>
       <T style={{ fontFamily: fonts.monoBold, fontSize: 16 }} color={colors.mint}>$</T>
       <TextInput
         value={text}
@@ -236,7 +237,8 @@ function Cmd({ q, locked, setReady, getRef, text, setText, onSubmit }: SubProps 
         placeholderTextColor={colors.faint}
         style={styles.cmdInput}
       />
-    </View>
+    </OnDark>
+</View>
   );
 }
 
@@ -251,6 +253,7 @@ function Order({ q, seed, locked, setReady, getRef }: SubProps & { q: Extract<Qu
   return (
     <View style={{ gap: 16 }}>
       <View style={styles.slotRow}>
+<OnDark>
         {chosen.length === 0 && <T v="small" color={colors.faint}>Toca las piezas para construir el comando</T>}
         {chosen.map((i) => (
           <Pressable key={i} onPress={() => !locked && setChosen((c) => c.filter((x) => x !== i))}>
@@ -259,7 +262,8 @@ function Order({ q, seed, locked, setReady, getRef }: SubProps & { q: Extract<Qu
             </View>
           </Pressable>
         ))}
-      </View>
+      </OnDark>
+</View>
       <View style={styles.pool}>
         {pool.map(({ p, i }) => (
           <Pressable key={i} disabled={chosen.includes(i) || locked} onPress={() => { select(); setChosen((c) => [...c, i]); }}>
@@ -291,6 +295,7 @@ function Fill({ q, seed, locked, setReady, getRef }: SubProps & { q: Extract<Que
   return (
     <View style={{ gap: 18 }}>
       <View style={styles.codeLine}>
+<OnDark>
         {parts.map((p, i) => (
           <React.Fragment key={i}>
             <T style={{ fontFamily: fonts.mono, fontSize: 17 }} color={colors.termText}>{p}</T>
@@ -303,7 +308,8 @@ function Fill({ q, seed, locked, setReady, getRef }: SubProps & { q: Extract<Que
             )}
           </React.Fragment>
         ))}
-      </View>
+      </OnDark>
+</View>
       <View style={styles.pool}>
         {options.map((o) => {
           const used = vals.includes(o) && q.options.filter((x) => x === o).length === 1;

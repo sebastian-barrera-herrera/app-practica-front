@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { tap } from '@/lib/haptics';
-import { T } from '@/ui/Text';
+import { OnDark, T } from '@/ui/Text';
 import { colors, fonts } from '@/ui/theme';
 import { Frame } from './common';
 
@@ -24,6 +24,7 @@ export function TerminalAnatomy() {
   return (
     <Frame title="Toca cada parte">
       <View style={{ backgroundColor: colors.termBg, padding: 14, borderRadius: 12, borderWidth: 1, borderColor: colors.line }}>
+        <OnDark>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
           {PARTS.map((x, i) => (
             <Pressable key={i} onPress={() => { tap(); setSel(i); }}>
@@ -31,6 +32,7 @@ export function TerminalAnatomy() {
             </Pressable>
           ))}
         </View>
+        </OnDark>
       </View>
       <Animated.View key={sel} entering={FadeIn.duration(220)} style={{ borderLeftWidth: 4, borderLeftColor: p.color, paddingLeft: 12, gap: 2 }}>
         <T v="h3" color={p.color}>{p.title}</T>

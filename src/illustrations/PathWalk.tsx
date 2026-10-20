@@ -3,7 +3,7 @@ import { View } from 'react-native';
 import Animated, { useAnimatedProps, useSharedValue, withSpring } from 'react-native-reanimated';
 import Svg, { Circle, G, Line, Rect, Text as SvgText } from 'react-native-svg';
 import { Button } from '@/ui/Button';
-import { T } from '@/ui/Text';
+import { OnDark, T } from '@/ui/Text';
 import { colors, fonts } from '@/ui/theme';
 import { Frame } from './common';
 
@@ -53,8 +53,10 @@ export function PathWalk() {
         <AnimatedCircle animatedProps={props} r={7} fill={colors.amber} stroke="#fff" strokeWidth={1.5} />
       </Svg>
       <View style={{ backgroundColor: colors.termBg, borderRadius: 10, padding: 10, borderWidth: 1, borderColor: colors.line }}>
-        <T style={{ fontFamily: fonts.mono, fontSize: 13 }} color={colors.dim}>$ pwd</T>
-        <T style={{ fontFamily: fonts.monoBold, fontSize: 14 }} color={colors.mint}>{cur}</T>
+        <OnDark>
+          <T style={{ fontFamily: fonts.mono, fontSize: 13 }} color={colors.dim}>$ pwd</T>
+          <T style={{ fontFamily: fonts.monoBold, fontSize: 14 }} color={colors.mint}>{cur}</T>
+        </OnDark>
       </View>
       {i >= 0 && <T v="small" color={colors.cyan}>{STEPS[i].note}</T>}
       <View style={{ flexDirection: 'row', gap: 10 }}>

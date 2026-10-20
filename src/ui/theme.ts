@@ -118,6 +118,21 @@ export function ink(hex: string): string {
   return `#${ch((n >> 16) & 255)}${ch((n >> 8) & 255)}${ch(n & 255)}`;
 }
 
+/**
+ * Color equivalente del tema OSCURO para algo dibujado sobre un fondo de terminal (siempre oscuro, también en el tema claro).
+ * Los colores de contenido del tema claro son tonos oscuros pensados para fondo claro y sobre la terminal casi no se ven.
+ * Si `c` no es un color de la paleta (o el tema es oscuro), se devuelve igual. Conserva un sufijo de transparencia (`#RRGGBBAA`).
+ */
+export function termInk(c: string): string {
+  if (current !== 'light' || typeof c !== 'string') return c;
+  const base = c.slice(0, 7).toLowerCase();
+  if (!/^#[0-9a-f]{6}$/.test(base) || base === '#ffffff' || base === '#000000') return c;
+  for (const k of Object.keys(lightColors) as (keyof Palette)[]) {
+    if (lightColors[k].toLowerCase() === base) return darkColors[k] + c.slice(7);
+  }
+  return c;
+}
+
 /** `StyleSheet.create` que se vuelve a calcular cuando cambia el tema. */
 type Styles = Parameters<typeof StyleSheet.create>[0];
 export function makeStyles<S extends Styles>(factory: () => S & Styles): Readonly<S> {

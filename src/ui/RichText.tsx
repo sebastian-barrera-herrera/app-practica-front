@@ -4,7 +4,7 @@ import { parseInline, parseRich } from '@/content/richtext';
 import type { Block } from '@/content/types';
 import { useCodeLang, type CodeLang } from './codeLang';
 import { PyCode } from './PyCode';
-import { T } from './Text';
+import { OnDark, T } from './Text';
 import { colors, fonts, radius, makeStyles } from './theme';
 
 export function Inline({ text, color = colors.text, size = 16 }: { text: string; color?: string; size?: number }) {
@@ -38,6 +38,7 @@ export function CodeBlock({ lines, lang }: { lines: string[]; lang?: CodeLang })
   if ((lang ?? ctx) === 'py') return <PyCode code={lines.join('\n')} />;
   return (
     <View style={styles.code}>
+      <OnDark>
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         <View>
           {lines.map((l, i) => {
@@ -52,6 +53,7 @@ export function CodeBlock({ lines, lang }: { lines: string[]; lang?: CodeLang })
           })}
         </View>
       </ScrollView>
+      </OnDark>
     </View>
   );
 }
