@@ -234,7 +234,7 @@ export function StepBar({ i, n, go, auto, toggle, color, hint, label }: { i: num
 export function Slider({ min, max, value, onChange, color, label, format }: { min: number; max: number; value: number; onChange: (v: number) => void; color?: string; label: string; format?: (v: number) => string }) {
   const c = color ?? pyHue().a;
   const [w, setW] = useState(240);
-  const ref = useRef<View>(null);
+  const ref = useRef<React.ComponentRef<typeof View>>(null);
   const left = useRef(0);
   const latest = useRef({ w, min, max, value, onChange });
   latest.current = { w, min, max, value, onChange };
@@ -254,7 +254,7 @@ export function Slider({ min, max, value, onChange, color, label, format }: { mi
       onPanResponderTerminationRequest: () => false,
       onPanResponderGrant: (e) => {
         const px = e.nativeEvent.pageX;
-        ref.current?.measureInWindow((x) => {
+        ref.current?.measureInWindow((x: number) => {
           left.current = x;
           setFrom(px);
         });
