@@ -25,6 +25,7 @@ PATCHES = {
         ("raise ValueError('second must be in 0..59', second)", "raise ValueError('second must be in 0..59')"),
         ("raise ValueError('microsecond must be in 0..999999', microsecond)", "raise ValueError('microsecond must be in 0..999999')"),
         ("raise ValueError('fold must be either 0 or 1', fold)", "raise ValueError('fold must be either 0 or 1')"),
+        ("return (f'{self.__class__.__name__}'\n                f'(year={self[0]}", "return (f'datetime.{self.__class__.__name__}'\n                f'(year={self[0]}"),
     ],
 }
 

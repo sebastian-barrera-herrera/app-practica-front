@@ -7,6 +7,7 @@ import { CONTROL } from './ref/control';
 import { ERRORES } from './ref/errores';
 import { ESTILO } from './ref/estilo';
 import { FUNCIONES } from './ref/funciones';
+import { STDLIB } from './ref/stdlib';
 import { TEXTO } from './ref/texto';
 
 
@@ -44,6 +45,6 @@ export interface PyRef {
   seeAlso?: string[];
 }
 
-export const PY_REFERENCE: PyRef[] = [...BASICOS, ...TEXTO, ...CONTROL, ...BUCLES, ...COLECCIONES, ...FUNCIONES, ...ESTILO, ...ERRORES, ...ARCHIVOS];
+export const PY_REFERENCE: PyRef[] = [...BASICOS, ...TEXTO, ...CONTROL, ...BUCLES, ...COLECCIONES, ...FUNCIONES, ...ESTILO, ...ERRORES, ...ARCHIVOS, ...STDLIB];
 
 export const refByName = (name: string): PyRef | undefined => PY_REFERENCE.find((r) => r.name === name);
