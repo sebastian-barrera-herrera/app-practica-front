@@ -1,0 +1,4 @@
+{
+ "stdout": "<Rex> Animal('Rex') Rex hace un sonido (guau) Rex/mestizo 1\nFido lab x 3\nTrue True (<class '__main__.Dog'>, <class '__main__.Animal'>, <class 'object'>) Dog Dog\n[Animal('a'), Animal('b')] 1 True True\nTrue def {'name': 'Fido', 'breed': 'lab'} True\n5\nFalse\nVec(6, 8) Vec(6, 8) Vec(6, 8) Vec(-3, -4) 5.0 False 2 4 [3, 4] True Vec(30, 40) [  3,   4]\nAttributeError 'Vec' object has no attribute 'z' and no __dict__ for setting new attributes\nWITHMETA Meta\n['A1', 'A2']\n10 val\nM4>M2>M3>M1 ['M4', 'M2', 'M3', 'M1', 'object']\n",
+ "stderr": ""
+}

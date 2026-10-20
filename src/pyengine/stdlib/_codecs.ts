@@ -60,7 +60,6 @@ function excInfo(e: any, name: string): { start: number; end: number; obj: any; 
     obj: ops.getAttr(e, 'object'),
     reason: String(ops.getAttr(e, 'reason')),
   };
-  void name;
 }
 
 function installHandlers(m: PyModule): void {

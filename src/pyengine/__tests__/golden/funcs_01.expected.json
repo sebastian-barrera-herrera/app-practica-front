@@ -1,0 +1,4 @@
+{
+ "stdout": "(1, 2, (), 3, {}) (1, 5, (6, 7), 9, {'z': 1}) (1, 2, (), 4, {})\n6 g None None\n3 3\n20\n16 ((1,), {'k': 2}) [1, 3]\nantes hello\ndespues\nhola x\n['t', 't', 't']\nrecibido hola\n0 1 2\nstop fin\n[0, 1, 2, 'a', 'b', 0, 'fin']\n45 (3, 'bcd')\n[0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377]\nTrue False f function\n2\nkwonly() takes 0 positional arguments but 1 was given\nf() missing 1 required positional argument: 'a'\ng() takes 2 positional arguments but 3 were given\ng() got an unexpected keyword argument 'w'\n[1, 2] [1, 2]\n[0, 1, 2] [2, 2, 2]\n[2, 2, 2]\n1-2-3!\n[1, 2, 3, 4] True True\n(1, 2, 3)\nabc\nTrue gen\n",
+ "stderr": ""
+}

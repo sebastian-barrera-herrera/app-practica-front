@@ -90,7 +90,7 @@ function pack(fmt: string, vals: any[], buf?: Uint8Array, at = 0): Uint8Array {
           let iv: bigint;
           try {
             iv = toBig(ops.toIndex(v, 'required argument is not an integer'));
-          } catch (e) {
+          } catch {
             throw makeExc(structError, ['required argument is not an integer']);
           }
           const signed = 'bhilqn'.includes(it.code);

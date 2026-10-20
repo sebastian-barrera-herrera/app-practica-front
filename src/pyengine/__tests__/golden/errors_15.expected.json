@@ -1,0 +1,4 @@
+{
+ "stdout": "",
+ "stderr": "Traceback (most recent call last):\n  File \"errors_15.py\", line 3, in <module>\n    f(1)\n    ~^^^\nTypeError: f() missing 1 required positional argument: 'b'\n"
+}

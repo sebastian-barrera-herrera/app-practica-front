@@ -487,7 +487,7 @@ function compilePattern(I: Interp, pattern: any, flags: number): PatternObj {
   let hasIdx = true;
   try {
     re = new RegExp(info.source, jsFlags + 'dg');
-  } catch (e) {
+  } catch {
     try {
       re = new RegExp(info.source, jsFlags + 'g');
       hasIdx = false;
@@ -604,7 +604,6 @@ function expandTemplate(mo: MatchObj, tpl: string): string {
   return parseTemplate(mo.pat, tpl)(mo);
 }
 
-const tplCache = new Map<string, (mo: MatchObj) => string>();
 function parseTemplate(p: PatternObj, tpl: string): (mo: MatchObj) => string {
   type Part = string | number | string[];
   const parts: Part[] = [];

@@ -1,0 +1,4 @@
+{
+ "stdout": "start a\nstart b\nstart c\nend b\nend c\nend a\n['a', 'b', 'c']\nstart x\nstart y\nend x\n['x', ValueError('y')]\nstart p\nstart q\ngather error q\nend p\njob False\nstart t1\ncancelled True\nstart slow\ntimeout\nput 0\ngot 0\nput 1\ngot 1\nput 2\ngot 2\nput 3\ngot 3\nlock 0\nlock 1\nlock 2\nevent set\nsem in 0\nsem in 1\nsem out 0\nsem out 1\nsem in 2\nsem in 3\nsem out 2\nsem out 3\nstart g1\nstart g2\nend g2\nend g1\ng1 g2\nstart e1\nstart e2\ngroup ['e2']\ntimeout ctx\nstart f\nstart s\nend f\ncompleted f\nend s\ncompleted s\nstart w1\nstart w2\nend w1\n1 1\n[0, 1, 2] [2, 4]\nsoon\nlater\n6\n1024\nstart sh\nend sh\nsh\n5 0\n2.9 True 1\nrun raised boom\nstart z\nend z\nz\nTrue\n",
+ "stderr": ""
+}

@@ -1,0 +1,4 @@
+{
+ "stdout": "",
+ "stderr": "Traceback (most recent call last):\n  File \"errors_09.py\", line 3, in <module>\n    f(0)\n    ~^^^\n  File \"errors_09.py\", line 2, in f\n    return f(n + 1)\n  File \"errors_09.py\", line 2, in f\n    return f(n + 1)\n  File \"errors_09.py\", line 2, in f\n    return f(n + 1)\n  [Previous line repeated 996 more times]\nRecursionError: maximum recursion depth exceeded\n"
+}

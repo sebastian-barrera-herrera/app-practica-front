@@ -1,0 +1,4 @@
+{
+ "stdout": "",
+ "stderr": "Traceback (most recent call last):\n  File \"errors_08.py\", line 1, in <module>\n    print(\"a\" + 1)\n          ~~~~^~~\nTypeError: can only concatenate str (not \"int\") to str\n"
+}

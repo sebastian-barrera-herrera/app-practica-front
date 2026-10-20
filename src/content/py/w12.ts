@@ -1,6 +1,6 @@
 import { fill, illus, learn, lesson, match, mc, tf } from '../build';
-import { pyCode, pyDemo, pyErr, pyOut, pyPractice, pyWorld } from '../pybuild';
-import { all, any, calls, cls, expr, file, forbids, func, not, outHas, stdout, truthy, uses, variable } from '../pycheck';
+import { pyCode, pyDemo, pyOut, pyPractice, pyWorld } from '../pybuild';
+import { all, any, calls, cls, file, forbids, func, not, stdout, truthy, uses, variable } from '../pycheck';
 import { c, corre } from './util';
 
 /** Gestor de tareas de referencia (lo usan la demo y los retos de la última lección). */

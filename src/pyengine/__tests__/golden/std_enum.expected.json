@@ -1,0 +1,4 @@
+{
+ "stdout": "Color.RED <Color.RED: 1> Color.GREEN Color.BLUE RED 1 [<Color.RED: 1>, <Color.GREEN: 2>, <Color.BLUE: 3>] True True 3\nTrue 3 2 [<Pri.LOW: 1>, <Pri.HIGH: 2>] 2\nPerm.R|W True Perm(0) False 7\na bee a xbee bee\ncircle:c Shape.SQUARE ['CIRCLE', 'SQUARE'] Shape.SQUARE\n9 is not a valid Color\nAttributeError\nU True 1 ['A', 'B']\n5.97e+24 (5.97e+24, 6370000.0)\n",
+ "stderr": ""
+}

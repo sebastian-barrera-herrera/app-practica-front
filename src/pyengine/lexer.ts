@@ -174,7 +174,7 @@ export function tokenize(src: string, table: LineTable, o: LexOptions = {}): Lex
     error = new PySyntaxErr(kind, msg, sLine, sCol, eLine, eCol, eof);
   };
 
-  outer: while (i < n) {
+  while (i < n) {
     // ── inicio de línea lógica: indentación ──
     if (atLineStart && parens.length === 0) {
       let col = 0;

@@ -5,12 +5,11 @@ import { PyBox, PyByteArray, PyBytes, PyDict, PyFloat, PyList, PyObject, PySlice
 import { NotImplemented, bytesType, classMethodType, staticMethodType, strType, typeOf } from './builtin_types';
 import { E } from './exc_types';
 import { indexError, keyError, makeExc, typeError, valueError, overflowError } from './errors';
-import { callObj } from './call';
 import * as ops from './ops';
 import { asciiOf, formatFloat, isPrintableCp, percentFormat, strRepr, type PercentHost } from './fmt';
-import { chars, cmpStr, cpIndexOf, hasAstral, strHash, strLen, utf16IndexOf, utf8Decode, utf8Encode } from './pystr';
+import { chars, cmpStr, cpIndexOf, hasAstral, strHash, strLen, utf16IndexOf } from './pystr';
 import { defMethods, mkNative } from './native';
-import { asIdx, asStr, kwMap, tupleArr } from './util';
+import { asIdx, kwMap, tupleArr } from './util';
 import { PyStaticMethod } from './objects';
 import { toFloatValue } from './t_num';
 import { decodeText, encodeText } from './codecs';

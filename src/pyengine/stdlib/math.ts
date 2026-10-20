@@ -55,7 +55,6 @@ function toInt(x: any, name: string): PyInt {
   if (v !== undefined) return v;
   if (x instanceof PyFloat) throw typeError(`'float' object cannot be interpreted as an integer`);
   return ops.toIndex(x, `'${typeOf(x).name}' object cannot be interpreted as an integer`);
-  void name;
 }
 
 function gcd2(a: bigint, b: bigint): bigint {

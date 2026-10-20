@@ -1,0 +1,4 @@
+{
+ "stdout": "",
+ "stderr": "Traceback (most recent call last):\n  File \"errors_04.py\", line 2, in <module>\n    print(d[\"b\"])\n          ~^^^^^\nKeyError: 'b'\n"
+}

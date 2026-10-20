@@ -1,0 +1,4 @@
+{
+ "stdout": "1\n",
+ "stderr": "Traceback (most recent call last):\n  File \"errors_20.py\", line 2, in <module>\n    assert 1 == 2, \"no es igual\"\n           ^^^^^^\nAssertionError: no es igual\n"
+}

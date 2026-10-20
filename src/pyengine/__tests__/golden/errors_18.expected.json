@@ -1,0 +1,4 @@
+{
+ "stdout": "",
+ "stderr": "Traceback (most recent call last):\n  File \"errors_18.py\", line 1, in <module>\n    a, b = 1, 2, 3\n    ^^^^\nValueError: too many values to unpack (expected 2)\n"
+}

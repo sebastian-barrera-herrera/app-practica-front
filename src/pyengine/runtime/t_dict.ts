@@ -10,7 +10,6 @@ import { E } from './exc_types';
 import { callObj } from './call';
 import * as ops from './ops';
 import { defMethods, mkNative } from './native';
-import { kwMap } from './util';
 import { ckey } from './hash';
 
 const D = dictType;

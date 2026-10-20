@@ -495,9 +495,6 @@ export class PyProperty extends PyObject {
   name: string | null = null;
   /** tipo nativo que define este descriptor (getset_descriptor) */
   owner: PyType | null = null;
-  constructor(cls: PyType) {
-    super(cls);
-  }
 }
 
 export class PyClassMethod extends PyObject {
@@ -553,9 +550,6 @@ export class PyBaseException extends PyObject {
   lastFrame: Frame | null = null;
   /** SyntaxError etc.: datos adicionales */
   extra: any = null;
-  constructor(cls: PyType) {
-    super(cls);
-  }
 }
 
 // ───────────────────────── generadores ─────────────────────────

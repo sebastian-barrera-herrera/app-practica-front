@@ -5,7 +5,12 @@ const expoConfig = require('eslint-config-expo/flat');
 module.exports = defineConfig([
   expoConfig,
   {
-    ignores: ['dist/*', 'src/engine/__tests__/scratch*', 'src/app/gallery.tsx'],
+    ignores: ['dist/*', 'src/engine/__tests__/scratch*'],
+  },
+  {
+    // El motor de Python usa `require()` perezosos a propósito (evitan ciclos de importación y retrasan la carga de módulos grandes).
+    files: ['src/pyengine/**'],
+    rules: { '@typescript-eslint/no-require-imports': 'off' },
   },
   {
     // Reglas del React Compiler: el proyecto no usa el compilador y estos patrones

@@ -1,0 +1,4 @@
+{
+ "stdout": "",
+ "stderr": "  File \"errors_13.py\", line 1\n    x = 5 +\n           ^\nSyntaxError: invalid syntax\n"
+}

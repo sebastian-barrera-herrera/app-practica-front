@@ -19,13 +19,14 @@ import {
   attributeError, indexError, keyError, makeExc, overflowError, stopIteration, typeError, valueError, zeroDivision,
 } from './errors';
 import { callObj, callFunction } from './call';
-import { interp } from './state';
 import {
   MAXS, cmpIntFloat, floatFloorDiv, floatMod, floatPow, hashFloat, hashInt, intAdd, intAnd, intCmp, intDivmod, intFloorDiv, intInvert,
   intLshift, intMod, intMul, intNeg, intOr, intPow, intRshift, intSub, intToFloat, intTrueDiv, intXor, normBig, toBig, type PyInt,
 } from './numeric';
-import { bytesRepr, floatRepr, strRepr, asciiOf, formatFloat, formatInt, formatStr } from './fmt';
+import { floatRepr, strRepr, asciiOf, formatFloat, formatInt, formatStr } from './fmt';
 import { cmpStr, strAt, strHash, strLen, strSlice, chars, hasAstral } from './pystr';
+
+import { ckey as ckeyOf } from './hash';
 
 export { typeOf, callObj };
 export { NotImplemented };
@@ -983,8 +984,6 @@ export function getitem(o: any, k: any): any {
   }
   return getitemSlow(o, k);
 }
-
-import { ckey as ckeyOf } from './hash';
 
 function getitemSlow(o: any, k: any): any {
   const t = typeOf(o);

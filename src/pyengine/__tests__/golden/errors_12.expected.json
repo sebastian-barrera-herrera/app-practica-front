@@ -1,0 +1,4 @@
+{
+ "stdout": "",
+ "stderr": "  File \"errors_12.py\", line 2\n    print(1)\n    ^^^^^\nIndentationError: expected an indented block after function definition on line 1\n"
+}

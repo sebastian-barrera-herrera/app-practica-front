@@ -1,0 +1,4 @@
+{
+ "stdout": "10 60 5 32\n12586269025 CacheInfo(hits=48, misses=51, maxsize=None, currsize=51) 55\nCacheInfo(hits=0, misses=0, maxsize=None, currsize=0)\n16 16 1\nhello doc hello\nTrue True False True\n[3, 2, 1]\nint str otro otro\ncalculando\n42 42\na-b\nTrue ('a',) {'sep': '-'}\n9\n",
+ "stderr": ""
+}

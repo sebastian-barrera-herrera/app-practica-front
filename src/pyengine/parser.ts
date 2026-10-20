@@ -5,7 +5,7 @@
 import { unicodeByName } from './unames';
 import type {
   Alias, Arg, Arguments, BinOpName, CmpOpName, Comprehension, Constant, Expr, ExceptHandler, FunctionDef, Keyword, Match,
-  MatchCase, Module, Name, Pattern, Pos, Stmt, TypeParam, WithItem, Ctx, JoinedStr, FormattedValue, Slice, TupleExpr,
+  MatchCase, Module, Name, Pattern, Pos, Stmt, TypeParam, WithItem, Ctx, JoinedStr, FormattedValue, Slice,
 } from './ast';
 import {
   KEYWORDS, LineTable, PySyntaxErr, normalizeNewlines, scanFParts, tokenize,

@@ -1,0 +1,4 @@
+{
+ "stdout": "",
+ "stderr": "Traceback (most recent call last):\n  File \"errors_06.py\", line 3, in <module>\n    a.foo\nAttributeError: 'A' object has no attribute 'foo'\n"
+}

@@ -1,7 +1,7 @@
 /**
  * Módulo `posix` (base de `os`) sobre el sistema de archivos virtual en memoria.
  */
-import { PyBytes, PyDict, PyFloat, PyList, PyModule, PyObject, PyProperty, PyTuple, PyType } from '../runtime/objects';
+import { PyBytes, PyDict, PyFloat, PyList, PyModule, PyObject, PyProperty, PyStaticMethod, PyTuple, PyType } from '../runtime/objects';
 import { bytesType, newNativeType, objectType, propertyType, tupleType, typeOf } from '../runtime/builtin_types';
 import { E } from '../runtime/exc_types';
 import { makeExc, typeError, valueError } from '../runtime/errors';
@@ -14,7 +14,6 @@ import { registerNative } from './registry';
 import { mconst, mfn } from './helpers';
 import { ERRNO_MSG, fsError, normPath } from '../runtime/vfs';
 import { asIdx, asStr } from '../runtime/util';
-import { PyStaticMethod } from '../runtime/objects';
 import { openFile } from './io';
 
 /** crea un tipo tipo `namedtuple` nativo (como las structseq de CPython) */

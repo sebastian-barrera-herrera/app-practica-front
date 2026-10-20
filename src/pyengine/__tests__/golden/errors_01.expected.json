@@ -1,0 +1,4 @@
+{
+ "stdout": "",
+ "stderr": "Traceback (most recent call last):\n  File \"errors_01.py\", line 5, in <module>\n    g(0)\n    ~^^^\n  File \"errors_01.py\", line 4, in g\n    return f(x) + 1\n           ~^^^\n  File \"errors_01.py\", line 2, in f\n    return 10 / x\n           ~~~^~~\nZeroDivisionError: division by zero\n"
+}

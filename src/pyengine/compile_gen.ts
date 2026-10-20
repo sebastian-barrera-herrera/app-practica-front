@@ -3,7 +3,7 @@
  * Los subárboles que no contienen `yield`/`await` se delegan en las closures síncronas.
  */
 import { StarTry } from './runtime/t_exc';
-import type { Expr, ExceptHandler, Stmt, Try, With, For, While, If, Assign, AugAssign, Match, Raise, Assert, Return, Delete, AnnAssign } from './ast';
+import type { Expr, ExceptHandler, Stmt, With, For, While, If, Assign, AugAssign, Match, Raise, Assert, Return, Delete, AnnAssign } from './ast';
 import { Scope } from './scope';
 import { Suspend } from './suspend';
 import {
@@ -666,8 +666,8 @@ export abstract class GenCompiler extends StmtCompiler {
           return undefined;
         }
         f.pos = it.node;
-        let r = rt.withExit(ctx, null);
-        if (isAsync) r = yield* delegate(getAwaitIter(r), true);
+        const r = rt.withExit(ctx, null);
+        if (isAsync) yield* delegate(getAwaitIter(r), true);
         return sig;
       };
     };

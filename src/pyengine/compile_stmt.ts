@@ -14,12 +14,11 @@ import { E } from './runtime/exc_types';
 import { rangeType, listType, typeOf, functionType } from './runtime/builtin_types';
 import * as ops from './runtime/ops';
 import * as rt from './runtime/rt';
-import { addTb, callFunction, callObj, toPyExc } from './runtime/call';
+import { addTb, callObj, toPyExc } from './runtime/call';
 import { StarTry } from './runtime/t_exc';
-import { assertionError, makeExc, StepLimit, runtimeError, typeError } from './runtime/errors';
+import { assertionError, makeExc, StepLimit, runtimeError, typeError , NeedInput, Aborted } from './runtime/errors';
 import { importFromName, importName, importStar } from './runtime/modules';
-import { ExprCompiler, FnState, type Setter, pyConst } from './compile_expr';
-import { NeedInput, Aborted } from './runtime/errors';
+import { ExprCompiler, FnState, type Setter } from './compile_expr';
 import { MAXS } from './runtime/numeric';
 
 const NOEXC = Symbol('noexc');

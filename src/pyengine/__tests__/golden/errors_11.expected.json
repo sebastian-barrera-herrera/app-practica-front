@@ -1,0 +1,4 @@
+{
+ "stdout": "",
+ "stderr": "  File \"errors_11.py\", line 1\n    for i in range(3)\n                     ^\nSyntaxError: expected ':'\n"
+}

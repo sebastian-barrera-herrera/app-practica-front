@@ -1,0 +1,4 @@
+{
+ "stdout": "antes\n",
+ "stderr": "Traceback (most recent call last):\n  File \"errors_03.py\", line 2, in <module>\n    x = undefined_name + 1\n        ^^^^^^^^^^^^^^\nNameError: name 'undefined_name' is not defined\n"
+}

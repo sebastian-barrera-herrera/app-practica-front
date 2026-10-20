@@ -1,0 +1,4 @@
+{
+ "stdout": "",
+ "stderr": "Traceback (most recent call last):\n  File \"errors_05.py\", line 2, in <module>\n    print(xs[10])\n          ~~^^^^\nIndexError: list index out of range\n"
+}

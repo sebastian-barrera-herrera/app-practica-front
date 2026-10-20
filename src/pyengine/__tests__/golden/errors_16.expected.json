@@ -1,0 +1,4 @@
+{
+ "stdout": "(1, 2) (1, 2) E(1, 2)\n",
+ "stderr": "Traceback (most recent call last):\n  File \"errors_16.py\", line 9, in <module>\n    raise KeyError(\"k\")\nKeyError: 'k'\n"
+}

@@ -1,6 +1,6 @@
 import { fill, illus, learn, lesson, match, mc, tf } from '../build';
 import { pyCode, pyDemo, pyErr, pyOut, pyPractice, pyWorld } from '../pybuild';
-import { all, any, calls, cls, expr, func, outHas, stdout, truthy, uses, variable } from '../pycheck';
+import { all, any, calls, cls, expr, func, outHas, stdout, uses, variable } from '../pycheck';
 import { c } from './util';
 
 const VENTAS_TXT = 'pan;10;1.5\nleche;4;2.25\n# comentario\npan;5;1.5\nhuevos;doce;3.0\nleche;2;2.25\n;;\nagua;6;1.0\n';

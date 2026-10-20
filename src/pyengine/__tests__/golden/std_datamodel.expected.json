@@ -1,0 +1,4 @@
+{
+ "stdout": "['a', 'b'] ('a', 'b') {'a': <class 'int'>, 'b': <class 'int'>, 'return': <class 'int'>}\nPt(x=1, y=0) {'x': 1, 'y': 2} {'x': <class 'int'>, 'y': <class 'int'>}\nunhashable type: 'A'\nunhashable type: 'list'\nNone True True True True\nmutable default <class 'list'> for field l is not allowed: use default_factory\nTrue 1\nunhashable type: 'W'\nTrue True [O(a=1, b='z'), O(a=3, b='z')]\nnegativo\n4 a True True x\nb\ncannot reassign member 'A'\nDup.X True [<Dup.X: 1>]\nA 1\nB 2\n{'A': <E.A: 1>, 'B': <E.B: 2>}\n",
+ "stderr": ""
+}

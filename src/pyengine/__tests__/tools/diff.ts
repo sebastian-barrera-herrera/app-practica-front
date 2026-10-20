@@ -1,18 +1,20 @@
 /**
  * Compara el intérprete con python3 sobre los .py de __tests__/golden (o los que se indiquen).
- * Uso: bun diff.ts [filtro]   →  imprime las diferencias y un resumen.
+ * Uso: bun diff.ts [filtro]           →  imprime las diferencias y un resumen.
+ *      bun diff.ts [filtro] --bless   →  además guarda la salida de CPython en golden/<nombre>.expected.json
+ *                                        (es lo que compara `golden.test.ts` en jest, sin necesitar python3).
  */
 import { PySession } from '../../index';
 import { spawnSync } from 'child_process';
-import { readdirSync, readFileSync, existsSync, mkdtempSync, copyFileSync, rmSync } from 'fs';
+import { readdirSync, readFileSync, existsSync, mkdtempSync, copyFileSync, rmSync , writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
+import { norm } from './golden_norm';
 
 const dir = join(__dirname, '..', 'golden');
-/** Normaliza lo que cambia entre ejecuciones (tiempos, direcciones de memoria). */
-const norm = (t: string): string => t.replace(/(Ran \d+ tests? in )[\d.]+s/g, '$1Xs').replace(/ at 0x[0-9a-f]+>/g, ' at 0xADDR>').replace(/0x[0-9a-f]{8,}/g, '0xADDR');
-const filter = process.argv[2] ?? '';
+const filter = process.argv[2] && !process.argv[2].startsWith('-') ? process.argv[2] : '';
 const verbose = process.argv.includes('-v');
+const bless = process.argv.includes('--bless');
 const files = readdirSync(dir).filter((f) => f.endsWith('.py') && f.includes(filter)).sort();
 let fails = 0;
 
@@ -43,6 +45,7 @@ async function main(): Promise<void> {
     r.stderr = norm(r.stderr);
     py.stdout = norm(py.stdout);
     py.stderr = norm(py.stderr);
+    if (bless) writeFileSync(join(dir, f.replace(/\.py$/, '.expected.json')), JSON.stringify({ stdout: py.stdout, stderr: py.stderr }, null, 1) + '\n');
     const same = r.stdout === py.stdout && r.stderr === py.stderr;
     if (!same) {
       fails++;

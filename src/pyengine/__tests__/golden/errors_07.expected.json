@@ -1,0 +1,4 @@
+{
+ "stdout": "",
+ "stderr": "Traceback (most recent call last):\n  File \"errors_07.py\", line 1, in <module>\n    print(int(\"abc\"))\n          ~~~^^^^^^^\nValueError: invalid literal for int() with base 10: 'abc'\n"
+}

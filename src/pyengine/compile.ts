@@ -9,12 +9,13 @@ import { buildScopes, Scope } from './scope';
 import {
   Cell, Frame, PyFunction, PyGenerator, PyDict, PyList, PySet, SIG_RETURN, type Code, type Ev, type Ex,
 } from './runtime/objects';
-import { functionType, generatorType, listType, typeOf } from './runtime/builtin_types';
+import { functionType, generatorType, listType, typeOf , asyncGeneratorType, coroutineType } from './runtime/builtin_types';
 import * as ops from './runtime/ops';
 import { callFunction, runFrame } from './runtime/call';
 import type { Interp } from './runtime/interp';
 import { FnState, type CompileEnv } from './compile_expr';
 import { GenCompiler } from './compile_gen';
+
 
 export interface CompiledUnit {
   code: Code;
@@ -202,8 +203,6 @@ class Compiler extends GenCompiler {
     };
   }
 }
-
-import { asyncGeneratorType, coroutineType } from './runtime/builtin_types';
 function typeAsyncGen() {
   return asyncGeneratorType;
 }

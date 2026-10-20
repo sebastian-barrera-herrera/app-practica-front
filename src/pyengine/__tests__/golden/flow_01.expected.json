@@ -1,0 +1,4 @@
+{
+ "stdout": "cero\nuno o dos\ngrande 500\npar 1,2\nlista 1 +2\ndict 9\nstr hi\nnone\notro\notro\ny 2\n3 4\ni 3\ni 4\ni 5\nfor-else 2\n3\n7\n0 a\n1 b\npos 5 [5, 7, 9]\nwalrus 10\n[1, 2, 3] [(0, 0), (0, 1), (1, 0), (1, 1)]\n{'a': [1, 2]}\nfin1\ncap a\ncleanup\ntry\nf 0\nf 1\nf 2\nenter\nexit KeyError\nafter\nenter\nenter\nbody\nexit None\nexit None\nValueError ('x',)\nValueError(\"invalid literal for int() with base 10: 'z'\") Exception\nTrue True\nTrue None\nname 'x' is not defined\nname 'undefined_local' is not defined\ncannot access local variable 'zz' where it is not associated with a value\n[(1, 'a'), (3, 'c')] ['a', 'b', 'c'] [10, 7, 4, 1] [] 2 9 4\nTrue True [2, 1, 0]\n",
+ "stderr": ""
+}

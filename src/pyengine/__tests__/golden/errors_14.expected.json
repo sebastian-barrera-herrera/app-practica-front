@@ -1,0 +1,4 @@
+{
+ "stdout": "",
+ "stderr": "  File \"errors_14.py\", line 1\n    if x = 3:\n       ^^^^^\nSyntaxError: invalid syntax. Maybe you meant '==' or ':=' instead of '='?\n"
+}

@@ -1,0 +1,4 @@
+{
+ "stdout": "",
+ "stderr": "Traceback (most recent call last):\n  File \"errors_19.py\", line 1, in <module>\n    len(5)\n    ~~~^^^\nTypeError: object of type 'int' has no len()\n"
+}

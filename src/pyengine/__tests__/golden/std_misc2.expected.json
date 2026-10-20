@@ -1,0 +1,4 @@
+{
+ "stdout": "enter 2\ndentro 4\nexit 2\n'oculto\\n'\nCan't instantiate abstract class A without an implementation for abstract methods 'f', 'p'\n1 5 True True\n3 (typing.Generic[~T],) typing.List[int] typing.Dict[str, typing.List[int]] typing.Optional[int] typing.Union[int, str] typing.Callable[[int], str] typing.Literal['a', 1]\nEmp(name='a', age=0) ('name', 'age') {'name': <class 'str'>, 'age': <class 'int'>} {'name': 'b', 'age': 3}\n{'a': 1} <class 'list'> (<class 'str'>, <class 'int'>) typing.Any x\n<class '__main__.Proto'> True\nTrue ['hola', 'mundo'] f.txt .txt f d/sub ('d', 'sub', 'f.txt') ['f.txt', 'sub'] ['sub'] a/b ('x.tar', '.gz') b.c False\na,b c,\"d\"\"e\"\n1,2,3\n\"x,y\",,1.5\n\n[['a', 'b c', 'd\"e'], ['1', '2', '3'], ['x,y', '', '1.5']]\n[{'n': 'a', 'v': '1'}] /home/alumno 11 11 ['sub']\nFalse True /a/b/c a/b.x\nTrue linux ['std_misc2.py'] 9223372036854775807\n",
+ "stderr": ""
+}

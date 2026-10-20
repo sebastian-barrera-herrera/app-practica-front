@@ -216,7 +216,6 @@ function binop(name: string, f: (a: PySet, b: PySet) => PySet): [string, (a: any
     const r = f(sa(a), o);
     return r;
   }];
-  void name;
 }
 
 const common = {

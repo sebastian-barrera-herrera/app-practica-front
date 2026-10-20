@@ -1,0 +1,4 @@
+{
+ "stdout": "P(x=1, y=2, tags=[]) P(x=1, y=2, tags=[]) True {'x': 1, 'y': 2, 'tags': []} (1, 2, []) P(x=5, y=2, tags=[]) True ['x', 'y', 'tags']\nTrue [V(a=1, b='a'), V(a=2, b='z')] True True\nFrozenInstanceError cannot assign to field 'a'\nQ(n=4) None P(x: int, y: int = 0, tags: list = <factory>)\nS(a=1) ('a',)\nP.__init__() missing 1 required positional argument: 'x'\nInv(items={}) Inv(items={'a': 1})\n",
+ "stderr": ""
+}

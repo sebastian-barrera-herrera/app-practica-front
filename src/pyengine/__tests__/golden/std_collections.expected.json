@@ -1,0 +1,4 @@
+{
+ "stdout": "Counter({'a': 5, 'b': 2, 'r': 2, 'c': 1, 'd': 1}) [('a', 5), ('b', 2)] 5 0 11 ['a', 'a', 'a', 'a', 'a'] Counter({'a': 3, 'b': 1})\ndefaultdict(<class 'list'>, {'a': [1, 3], 'b': [2], 'zz': []}) {'a': [1, 3], 'b': [2]} [] 3 defaultdict(<class 'int'>, {'x': 1})\ndeque([0, 2], maxlen=4) 4 3 [0, 2] 2 4 deque(['a', 'b', 'c']) 0 False\nP(x=1, y=2) 1 2 {'x': 1, 'y': 2} P(x=9, y=2) ('x', 'y') (1, 2) P(x=5, y=6) True\n1 2 True P\nOrderedDict({'a': 1, 'c': 3}) ['b', 'a', 'c'] ('b', 2) OrderedDict({'a': 1, 'c': 3})\n1 3 {'a': 1, 'b': 3} ['a', 'b'] 2\nPoint(x=1, y=2, z=0) {'z': 0}\nTrue True True True True\n",
+ "stderr": ""
+}

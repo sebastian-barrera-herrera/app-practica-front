@@ -12,17 +12,17 @@ import {
   Cell, Frame, NativeFunction, PyBytes, PyComplex, PyDict, PyFloat, PyFunction, PyList, PyObject, PySet, PyTuple, PyType,
   PyGenerator, SIG_RETURN, type Code, type Ev, type Ex, type Kw, PyBaseException,
 } from './runtime/objects';
-import { Ellipsis } from './runtime/builtin_types';
+import { Ellipsis , bytesType, dictType, functionType, listType, tupleType, typeOf, Ellipsis as EllipsisV } from './runtime/builtin_types';
 import { E } from './runtime/exc_types';
-import { bytesType, dictType, functionType, listType, tupleType, typeOf, Ellipsis as EllipsisV } from './runtime/builtin_types';
 import { Interp } from './runtime/interp';
 import * as ops from './runtime/ops';
 import * as rt from './runtime/rt';
 import { callFunction, callObj } from './runtime/call';
 import { MAXS } from './runtime/numeric';
-import { nameError, typeError, StepLimit } from './runtime/errors';
+import { nameError, typeError, StepLimit , runtimeError as makeRuntimeError } from './runtime/errors';
 import { repr as reprOf } from './runtime/ops';
 import { asciiOf } from './runtime/fmt';
+
 
 void Ellipsis;
 void EllipsisV;
@@ -979,8 +979,6 @@ export abstract class ExprCompiler {
 }
 
 export const SUPER_BUILTIN: { f: any } = { f: undefined };
-
-import { runtimeError as makeRuntimeError } from './runtime/errors';
 
 void SIG_RETURN;
 void PyType;

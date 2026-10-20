@@ -6,12 +6,12 @@
  *   const r = await s.run('print(input("¿Cómo te llamas? "))');
  *   evaluate({ t: 'stdout', includes: 'Ana' }, { session: s, code: '…' });
  */
+import type { PyCheck } from './types';
+
 export { PySession } from './session';
 export { analyze, isIncomplete } from './analyze';
 export { evaluate } from './check';
 export type * from './types';
-
-import type { PyCheck } from './types';
 
 /** Constructores cómodos para escribir comprobaciones (retos y preguntas del curso). */
 export const check = {

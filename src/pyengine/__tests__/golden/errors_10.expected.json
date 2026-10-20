@@ -1,0 +1,4 @@
+{
+ "stdout": "",
+ "stderr": "  File \"errors_10.py\", line 1\n    print(\"hola\"\n         ^\nSyntaxError: '(' was never closed\n"
+}

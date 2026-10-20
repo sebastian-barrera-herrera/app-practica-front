@@ -1,0 +1,4 @@
+{
+ "stdout": "(1, 5, 6, 10) m 1 [1, 2]\nFalse 1 2\n['_B__Inner', '_B__c', '_B__cte', '_B__k', '_B__m', '_B__p']\nm 10 ok\n__m B.__m\n__Inner True\n1 ['_Cls__x']\n['__y']\n('outer', ['_Nested__v'])\nAttributeError: 'Z' object has no attribute '__z'\nFalse True V(5) V(2) [V(3), V(1)]\n'<=' not supported between instances of 'V' and 'V'\neq 1\neq 2\neq 1\neq 2\nFalse True\n",
+ "stderr": ""
+}

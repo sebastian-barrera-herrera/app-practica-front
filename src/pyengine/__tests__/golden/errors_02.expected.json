@@ -1,0 +1,4 @@
+{
+ "stdout": "",
+ "stderr": "Traceback (most recent call last):\n  File \"errors_02.py\", line 5, in a\n    1 / 0\n    ~~^~~\nZeroDivisionError: division by zero\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"errors_02.py\", line 10, in b\n    a()\n    ~^^\n  File \"errors_02.py\", line 7, in a\n    raise MyError(\"fallo\") from e\nMyError: fallo\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"errors_02.py\", line 13, in <module>\n    b()\n    ~^^\n  File \"errors_02.py\", line 12, in b\n    raise ValueError(\"otra\")\nValueError: otra\n"
+}

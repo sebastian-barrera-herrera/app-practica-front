@@ -1,0 +1,4 @@
+{
+ "stdout": "",
+ "stderr": "Traceback (most recent call last):\n  File \"errors_17.py\", line 2, in <module>\n    y = x[1:2:0]\n        ~^^^^^^^\nValueError: slice step cannot be zero\n"
+}

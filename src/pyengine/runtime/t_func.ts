@@ -10,11 +10,10 @@ import {
   NotImplemented, asyncGeneratorType, boundMethodType, cellType, classMethodType, codeType, coroutineType, frameType, functionType,
   generatorType, getSetDescrType, methodDescriptorType, moduleType, nativeFunctionType, noneType, objectType, propertyType, staticMethodType,
   superType, tracebackType, typeOf, wrapperDescrType,
-} from './builtin_types';
+ newNativeType } from './builtin_types';
 import type { Pos } from '../ast';
 import { E } from './exc_types';
 import { AGYield } from './objects';
-import { newNativeType } from './builtin_types';
 import { attributeError, makeExc, stopIteration, typeError, valueError } from './errors';
 import { callObj, genClose, genResume, genThrow } from './call';
 import * as ops from './ops';

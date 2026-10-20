@@ -2,7 +2,7 @@
  * Módulo `io` y la función `open()` sobre el sistema de archivos virtual.
  */
 import {
-  PyBytes, PyByteArray, PyList, PyModule, PyObject, PyProperty, PyTuple, PyType, F_BASETYPE, F_INSTDICT,
+  PyBytes, PyByteArray, PyIter, PyList, PyModule, PyObject, PyProperty, PyTuple, PyType, F_BASETYPE, F_INSTDICT,
 } from '../runtime/objects';
 import {
   NotImplemented, bytesType, memoryViewType, newNativeType, objectType, propertyType, typeOf,
@@ -20,7 +20,6 @@ import { mconst, mfn } from './helpers';
 import { asIdx, asStr } from '../runtime/util';
 import { decodeBytes, encodeStr } from '../runtime/t_str';
 import { activeOrNull } from '../runtime/state';
-import { PyIter } from '../runtime/objects';
 import { fsError } from '../runtime/vfs';
 
 // ───────────────────────── objetos ─────────────────────────
