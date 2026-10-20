@@ -93,18 +93,22 @@ Todas son **locales** (no hay servidor de notificaciones): se reprograman a part
 
 ## Generar el APK
 
-La app se compila con **EAS Build** (no necesitas Android Studio).
+La app se compila con **EAS Build** (en la nube de Expo; no necesitas Android Studio). Necesitas una cuenta gratuita en [expo.dev](https://expo.dev) y Node 20+.
+
+**Primer build** (interactivo: EAS genera aquí la clave de firma de la app, así que hazlo desde tu terminal):
 
 ```bash
-npm install -g eas-cli
-eas login                                  # crea una cuenta gratis en expo.dev si no tienes
-eas init                                   # enlaza el proyecto con tu cuenta (una sola vez)
-eas build -p android --profile preview     # también: npm run build:apk
+npm install
+npx eas-cli login                                # tu cuenta de expo.dev
+npx eas-cli init                                 # enlaza el proyecto y escribe `extra.eas.projectId` en app.json (haz commit)
+npx eas-cli build -p android --profile preview   # cuando pregunte por la keystore, responde «Yes» (también: npm run build:apk)
 ```
 
-Al terminar (≈10–20 min) EAS te da un enlace y un QR para descargar el **.apk**; ábrelo en el móvil e instálalo (hay que permitir «instalar apps desconocidas»). El perfil `preview` de `eas.json` genera un APK instalable directamente; `production` genera un `.aab` para Google Play.
+Al terminar (≈10–20 min) EAS da un enlace y un QR para descargar el **.apk**; ábrelo en el móvil e instálalo (hay que permitir «instalar apps de orígenes desconocidos»). El perfil `preview` de `eas.json` genera un APK instalable directamente; `production` genera un `.aab` para Google Play (requiere cuenta de desarrollador de Google).
 
-Datos del paquete: nombre `Dev Dojo`, id `com.devdojo.app` (cámbialo en `app.json` si quieres otro).
+**Builds siguientes sin interacción** (por ejemplo desde CI o desde un asistente): crea un token en *expo.dev → Account settings → Access tokens*, guárdalo como variable de entorno `EXPO_TOKEN` (nunca en el repositorio) y ejecuta `npx eas-cli build -p android --profile preview --non-interactive`.
+
+Datos del paquete: nombre `Dev Dojo`, id `com.devdojo.app` (en `app.json`). **La clave de firma vive en tu cuenta de Expo**: sin ella no podrás publicar actualizaciones que se instalen encima de la versión anterior; descárgala con `npx eas-cli credentials` si quieres una copia de seguridad.
 
 ## Privacidad
 
