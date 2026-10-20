@@ -51,14 +51,15 @@ export function Button({ label, onPress, kind = 'primary', icon, disabled, small
     >
       <View style={styles.row}>
         {icon ? <T v="h3" style={{ marginRight: 8 }}>{icon}</T> : null}
-        <T v={small ? 'small' : 'h3'} color={palette.fg} bold style={{ letterSpacing: 0.3 }}>{label}</T>
+        {/* flexShrink: una etiqueta larga se parte en dos líneas en vez de salirse del botón y cortarse */}
+        <T v={small ? 'small' : 'h3'} color={palette.fg} bold center style={{ letterSpacing: 0.3, flexShrink: 1 }}>{label}</T>
       </View>
     </AnimatedPressable>
   );
 }
 
 const styles = makeStyles(() => ({
-  base: { paddingVertical: 14, paddingHorizontal: 20, borderRadius: radius.lg, borderBottomWidth: 4, alignItems: 'center', justifyContent: 'center' },
-  small: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: radius.md, borderBottomWidth: 3 },
-  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+  base: { paddingVertical: 14, paddingHorizontal: 20, minHeight: 54, borderRadius: radius.lg, borderBottomWidth: 4, alignItems: 'center', justifyContent: 'center' },
+  small: { paddingVertical: 8, paddingHorizontal: 14, minHeight: 40, borderRadius: radius.md, borderBottomWidth: 3 },
+  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', maxWidth: '100%' },
 }));

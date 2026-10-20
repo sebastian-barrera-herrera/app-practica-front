@@ -8,6 +8,7 @@ import { COURSE_LIST, type CourseDef } from '@/content';
 import type { CourseId } from '@/content/types';
 import { nextLesson } from '@/game/progress';
 import { dayComplete, enabledCourses, flat, goalSeconds, goalStreak, studySeconds } from '@/game/root';
+import { lessonResumeLabel, useResume } from '@/game/resume';
 import { reviewSession, shouldOfferSurprise } from '@/game/sessions';
 import { useGame } from '@/game/store';
 import { dayKey, streakAlive } from '@/game/streak';
@@ -95,6 +96,8 @@ function CourseNext({ course }: { course: CourseDef }) {
   const rev = reviewSession(s, Date.now(), course);
   const lesson = next ? next.world.lessons[next.lessonIndex] : null;
   const started = done > 0;
+  const resumes = useResume((r) => r.lessons);
+  const where = lesson ? lessonResumeLabel(resumes[lesson.id], lesson.steps.length) : undefined;
   return (
     <Card accent={col}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
@@ -106,7 +109,10 @@ function CourseNext({ course }: { course: CourseDef }) {
           {course.worlds.length === 0 ? (
             <T v="h3">Próximamente</T>
           ) : lesson ? (
-            <T v="h3" numberOfLines={2}>{started ? 'Sigue con: ' : 'Empieza con: '}{lesson.emoji} {lesson.title}</T>
+            <>
+              <T v="h3" numberOfLines={2}>{where ? 'Retoma: ' : started ? 'Sigue con: ' : 'Empieza con: '}{lesson.emoji} {lesson.title}</T>
+              {where ? <T v="tiny" bold color={col}>▶ {where}</T> : null}
+            </>
           ) : (
             <T v="h3">¡Ruta completa! 🎉</T>
           )}
@@ -117,7 +123,7 @@ function CourseNext({ course }: { course: CourseDef }) {
         <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
           <View style={{ flex: 1.4 }}>
             <Button
-              label={lesson ? (started ? 'Continuar' : 'Empezar') : 'Practicar'}
+              label={lesson ? (where ? 'Retomar donde quedé' : started ? 'Continuar' : 'Empezar') : 'Practicar'}
               color={col}
               onPress={() => {
                 if (lesson) router.push({ pathname: '/lesson/[id]', params: { id: lesson.id } });

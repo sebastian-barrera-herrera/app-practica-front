@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, TextInput, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown, SlideInDown, ZoomIn } from 'react-native-reanimated';
 import { evaluate } from '@/engine/check';
 import { Terminal } from '@/engine/terminal';
@@ -9,6 +9,7 @@ import { error as hapticError, select, success as hapticSuccess } from '@/lib/ha
 import { pyEngine, pythonStdout } from '@/lib/pyrun';
 import { Button } from './Button';
 import { Chip } from './Chip';
+import { KeyboardSafe } from './KeyboardSafe';
 import { PyCode } from './PyCode';
 import { PyEditor } from './PyEditor';
 import { PyOutput } from './PyOutput';
@@ -80,7 +81,7 @@ export function QuestionView({ q, seed, mode = 'lesson', onDone, continueLabel =
   const correctText = checked && !checked.correct ? describeCorrect(q) : null;
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+    <KeyboardSafe>
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 16, gap: 18, paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
         <Animated.View entering={FadeInDown.duration(260)} key={seed} style={{ gap: 18 }}>
           {prompt}
@@ -121,7 +122,7 @@ export function QuestionView({ q, seed, mode = 'lesson', onDone, continueLabel =
           <Button label={continueLabel} onPress={() => onDone(checked)} kind={checked.correct ? 'primary' : 'danger'} />
         </Animated.View>
       )}
-    </KeyboardAvoidingView>
+    </KeyboardSafe>
   );
 }
 

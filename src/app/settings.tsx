@@ -10,7 +10,8 @@ import type { SoundId, ThemePref } from '@/game/progress';
 import { COURSE_KEYS, goalStreak } from '@/game/root';
 import { useGame } from '@/game/store';
 import { minutesLabel } from '@/lib/format';
-import { cancelAllNotifications, ensurePermission, permissionStatus, SOUNDS, sendTestNotification } from '@/lib/notify';
+import { applyOta, checkOta, otaInfo, type OtaInfo } from '@/lib/ota';
+import { cancelAllNotifications, ensurePermission, openBatterySettings, permissionStatus, reliability, requestExactAlarms, SOUNDS, sendTestNotification } from '@/lib/notify';
 import { previewSound } from '@/lib/sfx';
 import { Button } from '@/ui/Button';
 import { Card } from '@/ui/Card';
@@ -103,8 +104,24 @@ export default function Settings() {
   const [pwMsg, setPwMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [testMsg, setTestMsg] = useState<string | null>(null);
 
+  const [rel, setRel] = useState<'granted' | 'denied' | 'na'>('na');
+  const [ota, setOta] = useState<OtaInfo>({ enabled: false, runtimeVersion: null, channel: null, updateId: null, createdAt: null, embedded: true });
+  const [otaBusy, setOtaBusy] = useState(false);
+  const [otaMsg, setOtaMsg] = useState<{ text: string; ready: boolean } | null>(null);
+  const searchOta = async () => {
+    setOtaBusy(true);
+    const r = await checkOta();
+    setOtaBusy(false);
+    setOtaMsg(
+      r === 'ready' ? { text: 'Actualización descargada. Reinicia para usarla.', ready: true }
+      : r === 'none' ? { text: 'Ya tienes lo último ✓', ready: false }
+      : { text: 'No se pudo comprobar. ¿Tienes conexión?', ready: false },
+    );
+  };
   useEffect(() => {
     void permissionStatus().then(setPerm);
+    void reliability().then((r) => setRel(r.exactAlarms));
+    void otaInfo().then(setOta);
   }, []);
 
   const R = st.reminders;
@@ -156,7 +173,7 @@ export default function Settings() {
   const testNotif = async (kind: 'study' | 'surprise') => {
     const ok = await askPermission();
     if (!ok) return;
-    const sent = await sendTestNotification(kind === 'study' ? R.sound : st.surpriseSound, kind, R.vibrate);
+    const sent = await sendTestNotification(kind === 'study' ? R.sound : st.surpriseSound, kind, R.vibrate, R.alarm);
     setTestMsg(sent ? 'Te llegará en unos 4 segundos. Sal de la app o bloquea la pantalla para verla con sus botones.' : 'No pudimos programar la prueba.');
   };
 
@@ -270,6 +287,23 @@ export default function Settings() {
               <Divider />
               <Row title="Vibrar" right={<Toggle label="Vibración del aviso" value={R.vibrate} onChange={(vibrate) => setR({ vibrate })} />} />
               <Divider />
+              <Row
+                title="Sonar con el móvil bloqueado"
+                desc="Entrega los avisos como una alarma: a su hora exacta aunque la pantalla esté apagada o el móvil en reposo. Verás un pequeño icono de alarma."
+                right={<Toggle label="Entrega garantizada" value={R.alarm} onChange={(alarm) => setR({ alarm })} />}
+              />
+              {Platform.OS === 'android' && (
+                <View style={{ marginTop: 10, gap: 8 }}>
+                  {rel === 'denied' && (
+                    <Button label="⏰ Permitir alarmas y recordatorios" kind="accent" small onPress={() => void requestExactAlarms().then((ok) => setRel(ok ? 'granted' : 'denied'))} />
+                  )}
+                  <T v="tiny" color={colors.dim}>
+                    Si aun así no suenan con la pantalla apagada, algunos móviles (Xiaomi, Oppo, Huawei, Samsung…) cierran las apps en segundo plano: permite que Dev Dojo funcione «sin restricciones» en los ajustes de batería.
+                  </T>
+                  <Button label="🔋 Abrir ajustes de batería" kind="secondary" small onPress={() => void openBatterySettings()} />
+                </View>
+              )}
+              <Divider />
               <Row title="No avisar si ya cumplí" desc="Si hoy ya alcanzaste tus metas, se saltan los avisos restantes." right={<Toggle label="Saltar si ya cumplí" value={R.skipIfDone} onChange={(skipIfDone) => setR({ skipIfDone })} />} />
               <Divider />
               <Row title="«Te echamos de menos»" desc="Un aviso suave si pasan varios días sin entrar." right={<Toggle label="Avisos de regreso" value={R.comeback} onChange={(comeback) => setR({ comeback })} />} />
@@ -312,8 +346,29 @@ export default function Settings() {
         <Card>
           <Row title="Efectos de sonido" desc="Al acertar, fallar, completar lecciones y cumplir metas" right={<Toggle label="Efectos de sonido" value={st.sfx} onChange={(sfx) => set({ sfx })} />} />
           <Divider />
-          <Row title="Vibración al tocar" desc="Respuesta háptica al tocar y al acertar" right={<Toggle label="Vibración" value={st.haptics} onChange={(haptics) => set({ haptics })} />} />
+          <Row title="Vibración al tocar" desc="Vibra al tocar, al acertar, al equivocarte y con el confeti" right={<Toggle label="Vibración" value={st.haptics} onChange={(haptics) => set({ haptics })} />} />
         </Card>
+
+        {/* ── actualizaciones ── */}
+        {ota.enabled && (
+          <>
+            <SectionTitle>Actualizaciones</SectionTitle>
+            <Card>
+              <T v="small" color={colors.dim}>
+                Las lecciones nuevas y los arreglos llegan por internet, sin reinstalar la app.
+                {ota.updateId ? ` Versión en uso: ${ota.updateId}${ota.createdAt ? ` · ${ota.createdAt.toLocaleDateString('es')}` : ''}.` : ' Estás en la versión de fábrica.'}
+              </T>
+              {otaMsg ? <T v="small" bold color={otaMsg.ready ? colors.green : colors.amber} style={{ marginTop: 8 }}>{otaMsg.text}</T> : null}
+              <View style={{ marginTop: 12, gap: 8 }}>
+                {otaMsg?.ready ? (
+                  <Button label="Reiniciar y aplicar" small onPress={() => void applyOta()} />
+                ) : (
+                  <Button label={otaBusy ? 'Buscando…' : 'Buscar actualizaciones'} kind="secondary" small disabled={otaBusy} onPress={() => void searchOta()} />
+                )}
+              </View>
+            </Card>
+          </>
+        )}
 
         <SectionTitle>Avanzado</SectionTitle>
         <Card>

@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { ScrollView, View } from 'react-native';
 import Animated, { FadeInDown, ZoomIn } from 'react-native-reanimated';
 import type { Lesson } from '@/content/types';
 import type { FinishOutcome } from '@/game/store';
 import { levelTitle } from '@/game/xp';
+import { success } from '@/lib/haptics';
 import { Button } from './Button';
 import { Card } from './Card';
 import { Chip } from './Chip';
@@ -13,6 +14,10 @@ import { T } from './Text';
 import { colors } from './theme';
 
 export function LessonSummary({ lesson, outcome, hasNext, onNext, onBack }: { lesson: Lesson; outcome: FinishOutcome; hasNext: boolean; onNext: () => void; onBack: () => void }) {
+  // con 2 o 3 estrellas vibra el confeti; con 1, un aviso de lección completada
+  useEffect(() => {
+    if (outcome.stars < 2) success();
+  }, [outcome.stars]);
   return (
     <View style={{ flex: 1 }}>
       {outcome.stars >= 2 && <Confetti />}

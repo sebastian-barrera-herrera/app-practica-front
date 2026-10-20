@@ -3,7 +3,7 @@ import { FlatList, Pressable, ScrollView, TextInput, View, type LayoutChangeEven
 import { parseAnsi, type Terminal } from '@/engine';
 import type { AnsiSpan } from '@/engine/ansi';
 import { stripAnsi } from '@/engine';
-import { select, tap } from '@/lib/haptics';
+import { error as hapticError, select, tap } from '@/lib/haptics';
 import { Chip } from './Chip';
 import { T } from './Text';
 import { ansi, ansi256, darkColors as colors, fonts, makeStyles } from './theme';
@@ -273,8 +273,9 @@ export function TerminalView({ term, onRun, onSignal, autoFocus, hideKeys, place
     setCont([]);
     setInput('');
     if (full.trim() === '') return;
-    const p = term.run(full);
-    await p;
+    const rec = await term.run(full);
+    // un comando que falla avisa con una vibración corta
+    if (rec && rec.stderr.trim() !== '') hapticError();
     onRun?.(full);
     scrollEnd();
   }, [input, cont, term, secret, disabled, echo, onRun, scrollEnd]);

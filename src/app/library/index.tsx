@@ -47,7 +47,7 @@ function Library() {
         autoCorrect={false}
         style={{ backgroundColor: colors.card, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, color: colors.text, fontFamily: fonts.mono, fontSize: 15, paddingHorizontal: 16, paddingVertical: 12 }}
       />
-      <View style={{ height: 52 }}>
+      <View style={{ height: 58 }}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, alignItems: 'center', paddingVertical: 10 }}>
           <Chip label="Todos" active={cat === null} onPress={() => setCat(null)} />
           {cats.map((c) => (

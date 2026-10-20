@@ -10,6 +10,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { initAuth, useAuth } from '@/cloud/auth';
 import { startAutoSync } from '@/cloud/sync';
 import { dayKey } from '@/game/streak';
+import { useResumeReady } from '@/game/resume';
 import { useGame, useHydrated } from '@/game/store';
 import { setHaptics } from '@/lib/haptics';
 import { installNotificationRouting, rescheduleAll, setNotificationRouterReady, setupNotifications } from '@/lib/notify';
@@ -46,7 +47,8 @@ export default function RootLayout() {
     void initAuth();
   }, []);
 
-  const ready = fontsLoaded && hydrated && authStatus !== 'loading';
+  const resumeReady = useResumeReady();
+  const ready = fontsLoaded && hydrated && resumeReady && authStatus !== 'loading';
   useEffect(() => {
     if (ready) SplashScreen.hide();
   }, [ready]);

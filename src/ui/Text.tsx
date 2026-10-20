@@ -1,20 +1,30 @@
 import React from 'react';
-import { Text as RNText, type TextProps, type TextStyle } from 'react-native';
+import { StyleSheet, Text as RNText, type TextProps, type TextStyle } from 'react-native';
 import { colors, fonts, monoFallback } from './theme';
 
 type Variant = 'title' | 'h1' | 'h2' | 'h3' | 'body' | 'small' | 'tiny' | 'mono' | 'label';
 
+/**
+ * Los `lineHeight` son generosos a propósito: en Android, si la altura de línea es menor que la del glifo
+ * (Nunito mide ~1,36 em; los emojis y las tildes de las mayúsculas, más), el texto se dibuja recortado por arriba o por abajo.
+ */
 const variants: Record<Variant, TextStyle> = {
-  title: { fontFamily: fonts.black, fontSize: 32, lineHeight: 38, letterSpacing: -0.5 },
-  h1: { fontFamily: fonts.black, fontSize: 26, lineHeight: 32, letterSpacing: -0.3 },
-  h2: { fontFamily: fonts.bold, fontSize: 20, lineHeight: 26 },
-  h3: { fontFamily: fonts.bold, fontSize: 16, lineHeight: 22 },
+  title: { fontFamily: fonts.black, fontSize: 32, lineHeight: 44, letterSpacing: -0.5 },
+  h1: { fontFamily: fonts.black, fontSize: 26, lineHeight: 36, letterSpacing: -0.3 },
+  h2: { fontFamily: fonts.bold, fontSize: 20, lineHeight: 28 },
+  h3: { fontFamily: fonts.bold, fontSize: 16, lineHeight: 23 },
   body: { fontFamily: fonts.regular, fontSize: 16, lineHeight: 24 },
-  small: { fontFamily: fonts.semi, fontSize: 14, lineHeight: 20 },
-  tiny: { fontFamily: fonts.semi, fontSize: 12, lineHeight: 16 },
+  small: { fontFamily: fonts.semi, fontSize: 14, lineHeight: 21 },
+  tiny: { fontFamily: fonts.semi, fontSize: 12, lineHeight: 17 },
   mono: { fontFamily: fonts.mono, fontSize: 14, lineHeight: 20 },
-  label: { fontFamily: fonts.black, fontSize: 12, lineHeight: 16, letterSpacing: 1, textTransform: 'uppercase' },
+  label: { fontFamily: fonts.black, fontSize: 12, lineHeight: 17, letterSpacing: 1, textTransform: 'uppercase' },
 };
+
+/** Altura de línea mínima que no recorta el glifo para un tamaño dado (emojis incluidos). */
+export function minLineHeight(fontSize: number, mono = false): number {
+  const k = mono ? 1.32 : fontSize >= 24 ? 1.38 : 1.4;
+  return Math.ceil(fontSize * k);
+}
 
 export interface TProps extends TextProps {
   v?: Variant;
@@ -24,16 +34,25 @@ export interface TProps extends TextProps {
 }
 
 export function T({ v = 'body', color = colors.text, center, bold, style, ...rest }: TProps) {
+  const base = variants[v];
+  const flat = StyleSheet.flatten(style) as TextStyle | undefined;
+  // Si el estilo cambia el tamaño (típico: emojis a 30–46 px) y no fija su propia altura de línea, o la deja corta,
+  // se ajusta aquí para que nada quede cortado.
+  const fs = flat?.fontSize ?? base.fontSize ?? 16;
+  const mono = (flat?.fontFamily ?? base.fontFamily ?? '').toString().toLowerCase().includes('mono');
+  const floor = minLineHeight(fs, mono);
+  const lh = flat?.lineHeight ?? (flat?.fontSize != null ? 0 : base.lineHeight ?? 0);
+  const fix: TextStyle | null = lh < floor && (flat?.fontSize != null || flat?.lineHeight != null) ? { lineHeight: floor } : null;
   return (
     <RNText
       {...rest}
       style={[
-        variants[v],
-        v === 'mono' && !rest.children ? null : null,
+        base,
         { color },
         center && { textAlign: 'center' },
         bold && { fontFamily: v === 'mono' ? fonts.monoBold : fonts.bold },
         style,
+        fix,
       ]}
     />
   );

@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Keyboard, Platform, Pressable, ScrollView, View } from 'react-native';
 import Animated, { FadeIn, SlideInDown, ZoomIn } from 'react-native-reanimated';
 import type { PyChallenge } from '@/content/types';
-import { success as hapticSuccess } from '@/lib/haptics';
+import { getDraft, useResume } from '@/game/resume';
+import { success as hapticSuccess, warn as hapticWarn } from '@/lib/haptics';
 import { sfx } from '@/lib/sfx';
 import { pyEngine } from '@/lib/pyrun';
 import { Button } from './Button';
@@ -28,8 +29,11 @@ interface Props {
 
 /** Reto de código: el alumno escribe un programa; al ejecutarlo se comprueba con el intérprete real. */
 export function PyChallengeView({ challenge, onSolved, onRun, continueLabel = 'Continuar', strict }: Props) {
-  const [code, setCode] = useState(challenge.starter ?? '');
+  const draftKey = `py:${challenge.id}`;
+  // si el alumno salió a la mitad, vuelve a encontrar lo que había escrito
+  const [code, setCode] = useState(() => getDraft<string>(draftKey) ?? challenge.starter ?? '');
   const [nonce, setNonce] = useState(0);
+  const firstRun = useRef(true);
   const runner = usePyRunner();
   const [hints, setHints] = useState(0);
   const [solution, setSolution] = useState(false);
@@ -40,7 +44,11 @@ export function PyChallengeView({ challenge, onSolved, onRun, continueLabel = 'C
   const runs = useRef(0);
 
   useEffect(() => {
-    setCode(challenge.starter ?? '');
+    if (firstRun.current) firstRun.current = false;
+    else {
+      setCode(challenge.starter ?? '');
+      useResume.getState().clearDraft(draftKey);
+    }
     setHints(0);
     setSolution(false);
     setSolved(null);
@@ -49,6 +57,26 @@ export function PyChallengeView({ challenge, onSolved, onRun, continueLabel = 'C
     runner.clear();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- se reinicia al cambiar de reto o al pulsar «Reiniciar»
   }, [challenge, nonce]);
+
+  // borrador: se guarda al escribir (con una pausa) y al salir
+  const latest = useRef({ code, solved: false });
+  latest.current = { code, solved: !!solved };
+  useEffect(() => {
+    if (solved) return;
+    const t = setTimeout(() => {
+      if (code && code !== (challenge.starter ?? '')) useResume.getState().setDraft(draftKey, code);
+      else useResume.getState().clearDraft(draftKey);
+    }, 500);
+    return () => clearTimeout(t);
+  }, [code, solved, challenge.starter, draftKey]);
+  useEffect(
+    () => () => {
+      const { code: c, solved: done } = latest.current;
+      if (!done && c && c !== (challenge.starter ?? '')) useResume.getState().setDraft(draftKey, c);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- solo al desmontar
+    [],
+  );
 
   useEffect(() => {
     const a = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', () => setKbd(true));
@@ -68,14 +96,18 @@ export function PyChallengeView({ challenge, onSolved, onRun, continueLabel = 'C
     const r = pyEngine().evaluate(challenge.check, { session, code });
     if (r.ok) {
       hapticSuccess();
+      useResume.getState().clearDraft(draftKey);
       sfx('correct');
       setSolved({ commands: runs.current, hintsUsed: hints, usedSolution: solution, ctrlC: false });
     } else if (result.timedOut) {
       setMsg('Tu programa tardó demasiado: ¿hay un bucle infinito?');
     } else if (!result.ok && result.error) {
       setMsg(`Hay un error (${result.error.type}). Léelo en la salida: dice en qué línea falló.`);
-    } else setMsg(r.why ?? null);
-  }, [runner, solved, code, onRun, challenge, hints, solution]);
+    } else {
+      hapticWarn();
+      setMsg(r.why ?? null);
+    }
+  }, [runner, solved, code, onRun, challenge, hints, solution, draftKey]);
 
   const hintsLeft = challenge.hints.length - hints;
   const compact = kbd;

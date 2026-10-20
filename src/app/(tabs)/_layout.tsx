@@ -8,6 +8,7 @@ import { courseDef } from '@/content';
 import { useGame } from '@/game/store';
 import { courseColor } from '@/ui/courseColors';
 import { T } from '@/ui/Text';
+import { useKeyboardHeight } from '@/ui/KeyboardSafe';
 import { colors, makeStyles } from '@/ui/theme';
 
 /** Pestañas que dependen del curso activo llevan su color y, el laboratorio, su nombre. */
@@ -35,6 +36,9 @@ function TabItem({ focused, label, emoji, onPress, accent }: { focused: boolean;
 function DojoTabBar({ state, navigateToTab, insets }: BottomTabBarProps) {
   const active = useGame((s) => s.active);
   const course = courseDef(active);
+  // con el teclado abierto la barra no pinta nada: libera espacio para ver lo que se escribe
+  const typing = useKeyboardHeight() > 0;
+  if (typing) return null;
   return (
     <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, 8) }]}>
       {state.routes.map((r, i) => {

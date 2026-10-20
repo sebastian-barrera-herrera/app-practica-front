@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { KeyboardAvoidingView, Modal, Platform, ScrollView, TextInput, View } from 'react-native';
+import { Modal, ScrollView, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { registerEditorHost, type EditorRequest } from '@/lib/editorBus';
 import { Button } from './Button';
+import { KeyboardSafe } from './KeyboardSafe';
 import { T } from './Text';
 import { darkColors as colors, fonts, makeStyles } from './theme';
 
@@ -28,7 +29,8 @@ export function EditorHost() {
   const modified = text !== req.content;
   return (
     <Modal visible animationType="slide" onRequestClose={() => close(false)}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, backgroundColor: colors.termBg, paddingTop: insets.top, paddingBottom: insets.bottom }}>
+      <View style={{ flex: 1, backgroundColor: colors.termBg, paddingTop: insets.top, paddingBottom: insets.bottom }}>
+      <KeyboardSafe>
         <View style={[styles.bar, { backgroundColor: isVim ? '#12301f' : '#1c2540' }]}>
           <T style={{ fontFamily: fonts.monoBold, fontSize: 13 }} color={colors.termText}>
             {isVim ? 'VIM' : 'GNU nano 7.2'}  {req.path.split('/').pop()}
@@ -65,7 +67,8 @@ export function EditorHost() {
             </View>
           </View>
         </View>
-      </KeyboardAvoidingView>
+      </KeyboardSafe>
+      </View>
     </Modal>
   );
 }

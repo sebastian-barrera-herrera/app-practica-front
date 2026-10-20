@@ -5,7 +5,7 @@
  *  · surprise: ⚡ Responder · ⏰ En 1 h · 🔕 Silenciar hoy
  * En Android, «aplazar» y «hoy no» se resuelven sin abrir la app (tarea en segundo plano, ver `notifTask.ts`).
  */
-import { Platform } from 'react-native';
+import { Linking, Platform } from 'react-native';
 import type { CourseId } from '@/content/types';
 import type { SoundId } from '@/game/progress';
 import type { RootState } from '@/game/root';
@@ -34,6 +34,7 @@ export interface NotifData {
   sound: SoundId;
   channel: string;
   vibrate: boolean;
+  alarm?: boolean;
   [k: string]: unknown;
 }
 
@@ -63,9 +64,24 @@ function load(): Promise<NotificationsModule | null> {
   return ready;
 }
 
-/** Canal de Android (el sonido y la vibración son inmutables por canal ⇒ un canal por combinación). */
+/**
+ * Canal de Android (el sonido, la vibración y la importancia son inmutables por canal ⇒ un canal por combinación).
+ * El sufijo de versión permite crear canales nuevos y limpios si cambia algo (los antiguos se borran al arrancar).
+ */
+const CHANNEL_VERSION = 'v2';
 function channelId(kind: 'study' | 'surprise', sound: SoundId, vibrate: boolean) {
-  return `${kind === 'study' ? 'practica' : 'sorpresa'}-${sound}-${vibrate ? 'v' : 'n'}`;
+  return `${kind === 'study' ? 'practica' : 'sorpresa'}-${sound}-${vibrate ? 'v' : 'n'}-${CHANNEL_VERSION}`;
+}
+
+/** Borra los canales de versiones anteriores (si el usuario los silenció o quedaron mal configurados). */
+async function dropOldChannels(N: NotificationsModule) {
+  if (Platform.OS !== 'android') return;
+  try {
+    const all = await N.getNotificationChannelsAsync();
+    for (const c of all) if (/^(practica|sorpresa)-/.test(c.id) && !c.id.endsWith(`-${CHANNEL_VERSION}`)) await N.deleteNotificationChannelAsync(c.id);
+  } catch {
+    /* nada */
+  }
 }
 
 async function ensureChannel(N: NotificationsModule, id: string, kind: 'study' | 'surprise', sound: SoundId, vibrate: boolean) {
@@ -90,6 +106,7 @@ async function ensureChannel(N: NotificationsModule, id: string, kind: 'study' |
 export async function setupNotifications(): Promise<void> {
   const N = await load();
   if (!N) return;
+  void dropOldChannels(N);
   const bg = Platform.OS !== 'android'; // fuera de Android, los botones abren la app para poder gestionarlos
   try {
     await N.setNotificationCategoryAsync(CAT_STUDY, [
@@ -132,10 +149,16 @@ export async function permissionStatus(): Promise<'granted' | 'denied' | 'undete
   }
 }
 
-async function scheduleOne(N: NotificationsModule, p: PlannedNotification, vibrate: boolean, atMs = p.at, identifier = p.key) {
+interface Delivery {
+  vibrate: boolean;
+  alarm: boolean;
+}
+
+async function scheduleOne(N: NotificationsModule, p: PlannedNotification, o: Delivery, atMs = p.at, identifier = p.key) {
+  const { vibrate, alarm } = o;
   const ch = channelId(p.category, p.sound, vibrate);
   await ensureChannel(N, ch, p.category, p.sound, vibrate);
-  const data: NotifData = { kind: p.kind, course: p.course, day: p.day, route: p.route, sound: p.sound, channel: ch, vibrate };
+  const data: NotifData = { kind: p.kind, course: p.course, day: p.day, route: p.route, sound: p.sound, channel: ch, vibrate, alarm };
   await N.scheduleNotificationAsync({
     identifier,
     content: {
@@ -146,7 +169,8 @@ async function scheduleOne(N: NotificationsModule, p: PlannedNotification, vibra
       sound: p.sound === 'silencio' ? false : Platform.OS === 'ios' ? `${p.sound}.wav` : 'default',
       color: '#22D3A6',
     },
-    trigger: { type: N.SchedulableTriggerInputTypes.DATE, date: new Date(atMs), channelId: ch },
+    // 'alarmClock': el sistema lo entrega a la hora exacta aunque el móvil esté bloqueado, en reposo (Doze) o con ahorro de batería
+    trigger: { type: N.SchedulableTriggerInputTypes.DATE, date: new Date(atMs), channelId: ch, ...(Platform.OS === 'android' && alarm ? { delivery: 'alarmClock' as const } : {}) },
   });
 }
 
@@ -160,10 +184,11 @@ export async function rescheduleAll(root: RootState, now = Date.now()): Promise<
     const granted = (await N.getPermissionsAsync()).granted;
     if (!granted) return 0;
     const plan = planNotifications(root, now);
-    const sig = JSON.stringify(plan.map((p) => [p.key, p.at, p.title, p.body, p.sound])) + root.settings.reminders.vibrate;
+    const { vibrate, alarm } = root.settings.reminders;
+    const sig = JSON.stringify(plan.map((p) => [p.key, p.at, p.title, p.body, p.sound])) + vibrate + alarm;
     if (sig === lastSignature) return plan.length;
     await N.cancelAllScheduledNotificationsAsync();
-    for (const p of plan) await scheduleOne(N, p, root.settings.reminders.vibrate);
+    for (const p of plan) await scheduleOne(N, p, { vibrate, alarm });
     lastSignature = sig;
     return plan.length;
   } catch {
@@ -214,7 +239,7 @@ async function snooze(N: NotificationsModule, content: { title: string | null; b
     sound: d.sound ?? 'campana',
     category: d.kind === 'surprise' ? 'surprise' : 'study',
   };
-  await scheduleOne(N, p, d.vibrate ?? true, p.at, p.key);
+  await scheduleOne(N, p, { vibrate: d.vibrate ?? true, alarm: d.alarm ?? true }, p.at, p.key);
 }
 
 let pendingRoute: string | null = null;
@@ -280,7 +305,7 @@ export function installNotificationRouting(): () => void {
 }
 
 /** Programa una notificación de prueba para dentro de unos segundos (Ajustes ▸ Probar). */
-export async function sendTestNotification(sound: SoundId, kind: 'study' | 'surprise', vibrate: boolean): Promise<boolean> {
+export async function sendTestNotification(sound: SoundId, kind: 'study' | 'surprise', vibrate: boolean, alarm = true): Promise<boolean> {
   const N = await load();
   if (!N) return false;
   if (!(await ensurePermission())) return false;
@@ -299,9 +324,47 @@ export async function sendTestNotification(sound: SoundId, kind: 'study' | 'surp
   };
   try {
     await setupNotifications();
-    await scheduleOne(N, p, vibrate);
+    await scheduleOne(N, p, { vibrate, alarm });
     return true;
   } catch {
     return false;
+  }
+}
+
+// ───────────────────────── fiabilidad con la pantalla apagada ─────────────────────────
+
+/** Estado de los permisos que hacen que los avisos suenen a su hora con el móvil bloqueado (solo Android). */
+export async function reliability(): Promise<{ exactAlarms: 'granted' | 'denied' | 'na' }> {
+  const N = await load();
+  if (!N || Platform.OS !== 'android' || !N.getExactAlarmPermissionsAsync) return { exactAlarms: 'na' };
+  try {
+    const r = await N.getExactAlarmPermissionsAsync();
+    return { exactAlarms: r.granted ? 'granted' : 'denied' };
+  } catch {
+    return { exactAlarms: 'na' };
+  }
+}
+
+/** Abre el permiso de «alarmas y recordatorios» (Android 12+), si hace falta. */
+export async function requestExactAlarms(): Promise<boolean> {
+  const N = await load();
+  if (!N || Platform.OS !== 'android') return false;
+  try {
+    return (await N.requestExactAlarmPermissionsAsync()).granted;
+  } catch {
+    return false;
+  }
+}
+
+/** Abre los ajustes de batería de Android para permitir que Dev Dojo funcione sin restricciones en segundo plano. */
+export async function openBatterySettings(): Promise<void> {
+  if (Platform.OS !== 'android') {
+    await Linking.openSettings().catch(() => {});
+    return;
+  }
+  try {
+    await Linking.sendIntent('android.settings.IGNORE_BATTERY_OPTIMIZATION_SETTINGS');
+  } catch {
+    await Linking.openSettings().catch(() => {});
   }
 }

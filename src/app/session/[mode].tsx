@@ -10,6 +10,7 @@ import type { Achievement } from '@/game/achievements';
 import { blitzPool, dailyChallenge, reviewSession, surpriseSession } from '@/game/sessions';
 import { flat } from '@/game/root';
 import { dayKey } from '@/game/streak';
+import { RESUME_MAX_AGE, useResume, validExam, validRun } from '@/game/resume';
 import { useGame } from '@/game/store';
 import { useStudyContext } from '@/lib/studyClock';
 import { AnyChallengeView } from '@/ui/AnyChallenge';
@@ -49,9 +50,9 @@ function SessionRoute({ mode, scope, course }: { mode: string; scope?: string; c
   if (mode?.startsWith('boss-')) return <BossRun course={course} worldId={mode.slice(5)} />;
   if (mode?.startsWith('exam-')) {
     const w = worldById(mode.slice(5));
-    if (w) return <ExamRun course={course} planOf={() => worldExam(course, w, String(Date.now()))} />;
+    if (w) return <ExamRun course={course} resumeKey={mode} planOf={(seed) => worldExam(course, w, seed)} />;
   }
-  if (mode?.startsWith('cert-')) return <ExamRun course={course} planOf={() => certExam(course, mode.slice(5) as never, String(Date.now()))} />;
+  if (mode?.startsWith('cert-')) return <ExamRun course={course} resumeKey={mode} planOf={(seed) => certExam(course, mode.slice(5) as never, seed)} />;
   return (
     <Screen>
       <T>Sesión no encontrada</T>
@@ -116,11 +117,23 @@ function correctText(q: Question): string | null {
 
 // ───────────────────────── repaso espaciado ─────────────────────────
 
-function QuestionRun({ course, items, title, color, mode, onFinish, srsReview }: { course: CourseDef; items: QItem[]; title: string; color?: string; mode: 'lesson' | 'exam'; onFinish: (results: { item: QItem; correct: boolean }[]) => void; srsReview?: boolean }) {
-  const [pos, setPos] = useState(0);
-  const results = useRef<{ item: QItem; correct: boolean }[]>([]);
+/** Preguntas guardadas de una sesión interrumpida, si todavía son válidas para este curso. */
+function savedItems(key: string, course: CourseDef): QItem[] | null {
+  const r = useResume.getState().runs[key];
+  if (!r || Date.now() - r.ts > RESUME_MAX_AGE) return null;
+  const items = r.ids.map((id) => questionById(id));
+  return items.every((x) => !!x && x.course === course.id) ? (items as QItem[]) : null;
+}
+
+function QuestionRun({ course, items, title, color, mode, onFinish, srsReview, resumeKey, due }: { course: CourseDef; items: QItem[]; title: string; color?: string; mode: 'lesson' | 'exam'; onFinish: (results: { item: QItem; correct: boolean }[]) => void; srsReview?: boolean; resumeKey: string; due?: number }) {
+  // si el alumno salió a la mitad, se retoma en la pregunta donde lo dejó
+  const saved = useMemo(() => validRun(useResume.getState().runs[resumeKey], items.map((i) => i.id)), [resumeKey, items]);
+  const [pos, setPos] = useState(saved?.pos ?? 0);
+  const results = useRef<{ item: QItem; correct: boolean }[]>(saved ? saved.results.map((r, i) => ({ item: items[i], correct: r.correct })) : []);
   const [confirm, setConfirm] = useState(false);
   const item = items[pos];
+  const save = (next: number) =>
+    useResume.getState().setRun(resumeKey, { ids: items.map((i) => i.id), pos: next, results: results.current.map((r) => ({ id: r.item.id, correct: r.correct })), due, ts: Date.now() });
   return (
     <Screen edges={['top', 'bottom']} padded={false}>
       <TopBar pos={pos} total={items.length} color={color} onClose={() => setConfirm(true)} />
@@ -133,18 +146,45 @@ function QuestionRun({ course, items, title, color, mode, onFinish, srsReview }:
           onDone={(r: Result) => {
             useGame.getState().answer(course.id, item.id, r.correct, { review: srsReview });
             results.current.push({ item, correct: r.correct });
-            if (pos + 1 >= items.length) onFinish(results.current);
-            else setPos(pos + 1);
+            if (pos + 1 >= items.length) {
+              useResume.getState().clearRun(resumeKey);
+              onFinish(results.current);
+            } else {
+              save(pos + 1);
+              setPos(pos + 1);
+            }
           }}
         />
       )}
-      <ConfirmModal visible={confirm} title="¿Salir?" message="Se perderá el progreso de esta sesión." confirmLabel="Salir" cancelLabel="Seguir" danger onConfirm={() => router.back()} onCancel={() => setConfirm(false)} />
+      <ConfirmModal
+        visible={confirm}
+        title="¿Salir?"
+        message={pos > 0 ? `Tu avance se guarda: al volver seguirás en la pregunta ${pos + 1} de ${items.length}.` : 'Podrás empezar cuando quieras.'}
+        confirmLabel="Salir y guardar"
+        cancelLabel="Seguir"
+        extraLabel={pos > 0 ? 'Empezar de cero' : undefined}
+        onExtra={() => {
+          useResume.getState().clearRun(resumeKey);
+          results.current = [];
+          setPos(0);
+          setConfirm(false);
+        }}
+        onConfirm={() => {
+          if (pos > 0) save(pos);
+          router.back();
+        }}
+        onCancel={() => setConfirm(false)}
+      />
     </Screen>
   );
 }
 
 function ReviewRun({ course }: { course: CourseDef }) {
-  const plan = useMemo(() => reviewSession(flat(useGame.getState(), course.id), Date.now(), course, 10), [course]);
+  const plan = useMemo(() => {
+    const items = savedItems(`review-${course.id}`, course);
+    if (items) return { items, due: useResume.getState().runs[`review-${course.id}`]?.due ?? items.length, fresh: false };
+    return reviewSession(flat(useGame.getState(), course.id), Date.now(), course, 10);
+  }, [course]);
   const [res, setRes] = useState<null | { xp: number; correct: number; total: number; mistakes: Mistake[]; ach: Achievement[]; levelUp: number | null }>(null);
   if (!plan.items.length) {
     return (
@@ -182,6 +222,8 @@ function ReviewRun({ course }: { course: CourseDef }) {
       course={course}
       items={plan.items}
       title="Repaso"
+      resumeKey={`review-${course.id}`}
+      due={plan.due}
       color={courseColor(course.id)}
       mode="lesson"
       srsReview
@@ -200,12 +242,13 @@ function ReviewRun({ course }: { course: CourseDef }) {
 // ───────────────────────── examen sorpresa ─────────────────────────
 
 function SurpriseRun({ course }: { course: CourseDef }) {
-  const plan = useMemo(() => surpriseSession(flat(useGame.getState(), course.id), Date.now(), course), [course]);
-  const [started, setStarted] = useState(false);
+  const resumed = useMemo(() => savedItems(`surprise-${course.id}`, course), [course]);
+  const plan = useMemo(() => resumed ?? surpriseSession(flat(useGame.getState(), course.id), Date.now(), course), [course, resumed]);
+  const [started, setStarted] = useState(!!resumed);
   const [res, setRes] = useState<null | { xp: number; correct: number; total: number; ach: Achievement[]; mistakes: Mistake[] }>(null);
   useEffect(() => {
-    useGame.getState().markSurprise({ lastShown: Date.now() });
-  }, []);
+    if (!resumed) useGame.getState().markSurprise({ lastShown: Date.now() });
+  }, [resumed]);
   if (res)
     return (
       <Screen edges={['top', 'bottom']} padded={false}>
@@ -240,6 +283,7 @@ function SurpriseRun({ course }: { course: CourseDef }) {
       course={course}
       items={plan}
       title="Sorpresa"
+      resumeKey={`surprise-${course.id}`}
       color={colors.rose}
       mode="exam"
       onFinish={(r) => {
@@ -376,21 +420,66 @@ function BlitzRun({ course, initialScope }: { course: CourseDef; initialScope?: 
 
 // ───────────────────────── exámenes y certificaciones ─────────────────────────
 
-function ExamRun({ course, planOf }: { course: CourseDef; planOf: () => ExamPlan }) {
+function ExamRun({ course, planOf, resumeKey }: { course: CourseDef; planOf: (seed: string) => ExamPlan; resumeKey: string }) {
+  const key = `${course.id}:${resumeKey}`;
+  // la semilla se guarda con el avance: al reanudar se reconstruye el mismo examen
+  const seed = useRef<string>(useResume.getState().exams[key]?.seed ?? String(Date.now()));
   // eslint-disable-next-line react-hooks/exhaustive-deps -- el plan se genera una sola vez por examen
-  const plan = useMemo(planOf, []);
-  const [phase, setPhase] = useState<'intro' | 'q' | 'c' | 'end'>('intro');
-  const [pos, setPos] = useState(0);
-  const [cpos, setCpos] = useState(0);
-  const results = useRef<{ item: QItem; correct: boolean }[]>([]);
-  const solved = useRef(0);
+  const plan = useMemo(() => planOf(seed.current), []);
+  const saved = useMemo(() => validExam(useResume.getState().exams[key], plan.questions.map((q) => q.id), plan.challenges.length), [key, plan]);
+  const [phase, setPhase] = useState<'intro' | 'q' | 'c' | 'end'>(saved ? saved.phase : 'intro');
+  const [pos, setPos] = useState(saved?.pos ?? 0);
+  const [cpos, setCpos] = useState(saved?.cpos ?? 0);
+  const results = useRef<{ item: QItem; correct: boolean }[]>(saved ? saved.results.map((r) => ({ item: plan.questions.find((q) => q.id === r.id)!, correct: r.correct })).filter((r) => !!r.item) : []);
+  const solved = useRef(saved?.solved ?? 0);
   const [confirm, setConfirm] = useState(false);
   const [end, setEnd] = useState<null | { score: number; passed: boolean; xp: number; ach: Achievement[]; levelUp: number | null }>(null);
   const finish = useCallback(() => {
     setPhase('end');
   }, []);
-  const left = useCountdown(plan.seconds, phase === 'q' || phase === 'c', finish);
+  const left = useCountdown(saved?.left ?? plan.seconds, phase === 'q' || phase === 'c', finish);
+  const leftRef = useRef(left);
+  leftRef.current = left;
   const totalPts = plan.questions.length + plan.challenges.length * 3;
+
+  // el avance se guarda en cada paso; el reloj se detiene mientras el alumno está fuera
+  const persist = useCallback(() => {
+    useResume.getState().setExam(key, {
+      seed: seed.current,
+      qids: plan.questions.map((q) => q.id),
+      phase: phase === 'c' ? 'c' : 'q',
+      pos,
+      cpos,
+      results: results.current.map((r) => ({ id: r.item.id, correct: r.correct })),
+      solved: solved.current,
+      left: plan.seconds > 0 ? Math.max(1, leftRef.current) : 0,
+      ts: Date.now(),
+    });
+  }, [key, plan, phase, pos, cpos]);
+  useEffect(() => {
+    if (phase === 'q' || phase === 'c') persist();
+    else if (phase === 'end') useResume.getState().clearExam(key);
+  }, [phase, pos, cpos, persist, key]);
+
+  const exitModal = (
+    <ConfirmModal
+      visible={confirm}
+      title="¿Salir del examen?"
+      message="Tu avance se guarda y el reloj se detiene: al volver continuarás donde lo dejaste."
+      confirmLabel="Salir y guardar"
+      cancelLabel="Seguir"
+      extraLabel="Abandonar (no presentado)"
+      onExtra={() => {
+        useResume.getState().clearExam(key);
+        router.back();
+      }}
+      onConfirm={() => {
+        persist();
+        router.back();
+      }}
+      onCancel={() => setConfirm(false)}
+    />
+  );
 
   useEffect(() => {
     if (phase !== 'end' || end) return;
@@ -473,7 +562,7 @@ function ExamRun({ course, planOf }: { course: CourseDef; planOf: () => ExamPlan
             } else setPos(pos + 1);
           }}
         />
-        <ConfirmModal visible={confirm} title="¿Abandonar el examen?" message="Contará como no presentado." confirmLabel="Abandonar" cancelLabel="Seguir" danger onConfirm={() => router.back()} onCancel={() => setConfirm(false)} />
+        {exitModal}
       </Screen>
     );
   }
@@ -500,7 +589,7 @@ function ExamRun({ course, planOf }: { course: CourseDef; planOf: () => ExamPlan
       <View style={{ padding: 10 }}>
         <Button small kind="ghost" label="Saltar este reto" onPress={() => (cpos + 1 >= plan.challenges.length ? finish() : setCpos(cpos + 1))} />
       </View>
-      <ConfirmModal visible={confirm} title="¿Abandonar el examen?" message="Contará como no presentado." confirmLabel="Abandonar" cancelLabel="Seguir" danger onConfirm={() => router.back()} onCancel={() => setConfirm(false)} />
+      {exitModal}
     </Screen>
   );
 }

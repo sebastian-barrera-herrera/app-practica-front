@@ -1,10 +1,12 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import Animated, { FadeIn, FadeInRight } from 'react-native-reanimated';
 import { courseDef, lessonById, worldOfLesson } from '@/content';
 import type { Step } from '@/content/types';
+import { useResume, validLesson, type LessonStats } from '@/game/resume';
 import { useGame, type FinishOutcome } from '@/game/store';
+import { showToast } from '@/ui/Toast';
 import { useStudyContext } from '@/lib/studyClock';
 import { AnyChallengeView } from '@/ui/AnyChallenge';
 import { CodeLangProvider } from '@/ui/codeLang';
@@ -27,6 +29,16 @@ interface Item {
   step: Step;
   srsId?: string;
   retry?: boolean;
+}
+
+/** Cola de pasos: la lección entera o, al reanudar, la guardada (con las repeticiones de lo fallado). */
+function buildQueue(lesson: { id: string; steps: Step[] }, keys?: string[]): Item[] {
+  const at = (key: string): Item => {
+    const i = parseInt(key, 10);
+    const step = lesson.steps[i];
+    return { key, step, srsId: step.type === 'quiz' ? `${lesson.id}#${i}` : undefined, retry: key.endsWith('-retry') || undefined };
+  };
+  return (keys ?? lesson.steps.map((_, i) => String(i))).map(at);
 }
 
 export default function LessonScreen() {
@@ -54,16 +66,38 @@ function Player({ lessonId }: { lessonId: string }) {
   const course = courseDef(world.course);
   const store = useGame;
   useStudyContext(course.id);
-  const [queue, setQueue] = useState<Item[]>(() => lesson.steps.map((step, i) => ({ key: String(i), step, srsId: step.type === 'quiz' ? `${lesson.id}#${i}` : undefined })));
-  const [pos, setPos] = useState(0);
+  // si el alumno salió a la mitad, se retoma exactamente en el paso donde lo dejó
+  const saved = useMemo(() => validLesson(useResume.getState().lessons[lessonId], lesson.steps.length), [lessonId, lesson.steps.length]);
+  const [queue, setQueue] = useState<Item[]>(() => buildQueue(lesson, saved?.queue));
+  const [pos, setPos] = useState(saved?.pos ?? 0);
   const [outcome, setOutcome] = useState<FinishOutcome | null>(null);
   const [confirm, setConfirm] = useState(false);
   const [demoDone, setDemoDone] = useState(false);
-  const stats = useRef({ quizTotal: 0, quizFirstTry: 0, practices: 0, hintsUsed: 0 });
+  const stats = useRef<LessonStats>(saved ? { ...saved.stats } : { quizTotal: 0, quizFirstTry: 0, practices: 0, hintsUsed: 0 });
   const total = useMemo(() => queue.length, [queue.length]);
+
+  useEffect(() => {
+    if (saved && saved.pos > 0) showToast({ emoji: '▶️', title: 'Retomas donde lo dejaste', body: `Paso ${saved.pos + 1} de ${saved.queue.length}`, color: courseColor(course.id), ms: 2600 });
+  }, [saved, course.id]);
+
+  // cada avance se guarda: si sale de la lección o cierra la app, al volver continúa en este mismo paso
+  useEffect(() => {
+    if (outcome || pos === 0) return;
+    useResume.getState().setLesson(lesson.id, { n: lesson.steps.length, queue: queue.map((q) => q.key), pos, stats: { ...stats.current }, ts: Date.now() });
+  }, [pos, queue, outcome, lesson]);
+
+  const restart = useCallback(() => {
+    useResume.getState().clearLesson(lesson.id);
+    stats.current = { quizTotal: 0, quizFirstTry: 0, practices: 0, hintsUsed: 0 };
+    setQueue(buildQueue(lesson));
+    setPos(0);
+    setDemoDone(false);
+    setConfirm(false);
+  }, [lesson]);
 
   const finish = useCallback(() => {
     const out = store.getState().finishLesson(course.id, { lessonId: lesson.id, ...stats.current });
+    useResume.getState().clearLesson(lesson.id);
     setOutcome(out);
   }, [lesson.id, store, course.id]);
 
@@ -196,10 +230,11 @@ function Player({ lessonId }: { lessonId: string }) {
       <ConfirmModal
         visible={confirm}
         title="¿Salir de la lección?"
-        message="Perderás el progreso de esta lección."
-        confirmLabel="Salir"
+        message={pos > 0 ? `Tu avance se guarda: al volver retomarás en el paso ${pos + 1} de ${total}.` : 'Aún no has avanzado; podrás empezarla cuando quieras.'}
+        confirmLabel="Salir y guardar"
         cancelLabel="Seguir aprendiendo"
-        danger
+        extraLabel={pos > 0 ? 'Empezar de cero' : undefined}
+        onExtra={restart}
         onConfirm={() => {
           setConfirm(false);
           router.back();

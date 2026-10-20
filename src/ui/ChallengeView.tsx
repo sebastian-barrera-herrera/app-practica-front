@@ -4,12 +4,13 @@ import Animated, { FadeIn, SlideInDown, ZoomIn } from 'react-native-reanimated';
 import type { Challenge } from '@/content/types';
 import { evaluate } from '@/engine/check';
 import { Terminal } from '@/engine/terminal';
+import { getDraft, useResume } from '@/game/resume';
 import { openEditor } from '@/lib/editorBus';
 import { success as hapticSuccess } from '@/lib/haptics';
 import { Button } from './Button';
 import { Confetti } from './Confetti';
 import { CodeBlock, Inline, RichText } from './RichText';
-import { TerminalView } from './TerminalView';
+import { echoToTranscript, TerminalView } from './TerminalView';
 import { T } from './Text';
 import { colors, radius, makeStyles } from './theme';
 
@@ -30,8 +31,15 @@ interface Props {
   strict?: boolean;
 }
 
+/** Comandos que abren un programa interactivo: no se repiten al reanudar. */
+const INTERACTIVE = /^\s*(sudo\s+)?(nano|vi|vim|emacs|less|more|man|top|htop|watch|ssh|read|python3?|bc)\b/;
+
 export function ChallengeView({ challenge, onSolved, onRun, continueLabel = 'Continuar', strict }: Props) {
   const [nonce, setNonce] = useState(0);
+  const draftKey = `sh:${challenge.id}`;
+  // comandos que el alumno ya había ejecutado en este reto (si salió a la mitad): se repiten en silencio al volver
+  const cmds = useRef<string[]>(getDraft<string[]>(draftKey) ?? []);
+  const [replaying, setReplaying] = useState(false);
   const term = useMemo(() => {
     const t = new Terminal({ cols: 44, ...(challenge.setup ?? {}) });
     t.setEditor(openEditor);
@@ -56,6 +64,26 @@ export function ChallengeView({ challenge, onSolved, onRun, continueLabel = 'Con
   }, [challenge, nonce]);
 
   useEffect(() => {
+    const lines = nonce === 0 ? cmds.current.filter((l) => !INTERACTIVE.test(l)) : [];
+    if (!lines.length) return;
+    let alive = true;
+    setReplaying(true);
+    void (async () => {
+      for (const line of lines) {
+        if (!alive) return;
+        echoToTranscript(term, term.prompt() + line);
+        await Promise.race([term.run(line), new Promise((r) => setTimeout(r, 1500))]);
+        if (term.busy) term.signal('INT');
+      }
+      if (alive) setReplaying(false);
+    })();
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- solo al montar (o al cambiar de terminal)
+  }, [term]);
+
+  useEffect(() => {
     const a = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', () => setKbd(true));
     const b = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () => setKbd(false));
     return () => {
@@ -71,13 +99,17 @@ export function ChallengeView({ challenge, onSolved, onRun, continueLabel = 'Con
       const r = evaluate(challenge.check, term);
       if (r.ok) {
         hapticSuccess();
+        useResume.getState().clearDraft(draftKey);
         const info: SolvedInfo = { commands: term.runs.length, hintsUsed: hints, usedSolution: solution, ctrlC: ctrlC.current };
         setSolved(info);
-      } else if (term.last && term.last.status !== 0 && !term.last.stderr) {
-        setMsg(null);
-      } else setMsg(r.why ?? null);
+      } else {
+        cmds.current = [...cmds.current, line].slice(-40);
+        useResume.getState().setDraft(draftKey, cmds.current);
+        if (term.last && term.last.status !== 0 && !term.last.stderr) setMsg(null);
+        else setMsg(r.why ?? null);
+      }
     },
-    [challenge, term, hints, solution, solved, onRun],
+    [challenge, term, hints, solution, solved, onRun, draftKey],
   );
 
   const hintsLeft = challenge.hints.length - hints;
@@ -119,7 +151,14 @@ export function ChallengeView({ challenge, onSolved, onRun, continueLabel = 'Con
             <Pressable style={[styles.pill, (hintsLeft > 0 || solution) && { opacity: 0.4 }]} disabled={hintsLeft > 0 || solution} onPress={() => { setSolution(true); setOpen(true); }}>
               <T v="tiny" bold color={colors.violet}>👁 Ver solución</T>
             </Pressable>
-            <Pressable style={styles.pill} onPress={() => setNonce((n) => n + 1)}>
+            <Pressable
+              style={styles.pill}
+              onPress={() => {
+                cmds.current = [];
+                useResume.getState().clearDraft(draftKey);
+                setNonce((n) => n + 1);
+              }}
+            >
               <T v="tiny" bold color={colors.dim}>↺ Reiniciar</T>
             </Pressable>
           </View>
@@ -132,7 +171,7 @@ export function ChallengeView({ challenge, onSolved, onRun, continueLabel = 'Con
           onSignal={(s) => {
             if (s === 'INT') ctrlC.current = true;
           }}
-          disabled={!!solved}
+          disabled={!!solved || replaying}
           banner={['\x1b[2mEscribe comandos abajo. Usa las teclas especiales (Tab, ⌃C…) bajo el teclado.\x1b[0m']}
         />
         {msg && !solved && !compact ? (

@@ -91,6 +91,12 @@ alter table public.progress enable row level security;
 
 Todas son **locales** (no hay servidor de notificaciones): se reprograman a partir del estado (curso activo, meta cumplida, racha, ventana horaria) con `expo-notifications`. En Android 13+ la app pide el permiso al activarlas; los botones de acción («▶️ Empezar», «⏰ En 30 min», «🙈 Hoy no»…) y los sonidos (`assets/sounds`, generados con `scripts/make-sounds.mjs`) requieren un *build* nativo (APK o *development build*): Expo Go tiene limitaciones con `expo-notifications`, así que allí no se pueden probar todas las funciones. La versión web no programa notificaciones.
 
+**Con el móvil bloqueado o en reposo**: los avisos se entregan como una alarma (`delivery: 'alarmClock'`, con los permisos `SCHEDULE_EXACT_ALARM` y `USE_EXACT_ALARM` de `app.json`), así que suenan a su hora exacta aunque la pantalla esté apagada. Se puede desactivar en Ajustes ▸ Recordatorios ▸ «Sonar con el móvil bloqueado». Algunos fabricantes (Xiaomi, Oppo, Huawei, Samsung…) cierran las apps en segundo plano por ahorro de batería: Ajustes tiene un atajo a los ajustes de batería para permitir a Dev Dojo funcionar «sin restricciones». Los canales de Android son inmutables, por eso llevan sufijo de versión (`-v2`) y los antiguos se borran al arrancar.
+
+## Retomar donde lo dejaste
+
+Al salir a la mitad de una **lección**, un **repaso**, un **examen sorpresa** o un **examen de zona/certificación**, la app guarda el paso exacto (`src/game/resume.ts`, solo en el dispositivo; caduca a los 14 días o si el contenido cambió) y lo retoma al volver: la pantalla Hoy y la Ruta muestran «Retomar donde quedé · Paso 4 de 9». En los retos se conserva además lo escrito (código de Python) o los comandos ya ejecutados (terminal). El reloj de un examen se detiene mientras estás fuera. La prueba rápida (60 s) no se reanuda.
+
 ## Generar el APK
 
 La app se compila con **EAS Build** (en la nube de Expo; no necesitas Android Studio). Necesitas una cuenta gratuita en [expo.dev](https://expo.dev) y Node 20+.
@@ -109,6 +115,19 @@ Al terminar (≈10–20 min) EAS da un enlace y un QR para descargar el **.apk**
 **Builds siguientes sin interacción** (por ejemplo desde CI o desde un asistente): crea un token en *expo.dev → Account settings → Access tokens*, guárdalo como variable de entorno `EXPO_TOKEN` (nunca en el repositorio) y ejecuta `npx eas-cli build -p android --profile preview --non-interactive`.
 
 Datos del paquete: nombre `Dev Dojo`, id `com.devdojo.app` (en `app.json`). **La clave de firma vive en tu cuenta de Expo**: sin ella no podrás publicar actualizaciones que se instalen encima de la versión anterior; descárgala con `npx eas-cli credentials` si quieres una copia de seguridad.
+
+## Actualizaciones por internet (EAS Update)
+
+La app incluye `expo-updates`: el contenido de los cursos, las pantallas y los arreglos de JavaScript se publican **sin generar un APK nuevo** y llegan al móvil la siguiente vez que se abre la app (o desde Ajustes ▸ Actualizaciones ▸ «Buscar actualizaciones»).
+
+```bash
+# canal «preview» (los APK del perfil preview/arm64 lo escuchan)
+npx eas-cli update --channel preview --message "Qué cambia"
+```
+
+- `runtimeVersion` usa la política `appVersion`: una actualización solo llega a las apps con la **misma `version` de `app.json`**. Si cambias algo **nativo** (una librería con código nativo, permisos, plugins, iconos…), sube `version` (p. ej. `2.0.0` → `2.1.0`) y genera un APK nuevo; las apps con la versión anterior seguirán recibiendo solo las actualizaciones de su versión.
+- Canales (`eas.json`): `development`, `preview` (también `arm64`) y `production`.
+- Solo funciona en la app instalada desde un build de EAS (no en `expo start` ni en web). La primera vez hay que instalar un APK que ya incluya `expo-updates`.
 
 ## Privacidad
 

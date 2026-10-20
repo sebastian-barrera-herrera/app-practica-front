@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo } from 'react';
 import { Dimensions, StyleSheet, View } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
+import { celebrate } from '@/lib/haptics';
 import { colors } from './theme';
 
 const palette = () => [colors.mint, colors.cyan, colors.amber, colors.rose, colors.violet, colors.orange];
@@ -24,6 +25,10 @@ function Piece({ i, w, h }: { i: number; w: number; h: number }) {
 
 export function Confetti({ count = 46 }: { count?: number }) {
   const { width, height } = Dimensions.get('window');
+  // el confeti viene siempre con una vibración de celebración
+  useEffect(() => {
+    celebrate();
+  }, []);
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
       {Array.from({ length: count }, (_, i) => (

@@ -39,6 +39,8 @@ export interface ReminderSettings {
   days: boolean[];
   sound: SoundId;
   vibrate: boolean;
+  /** Android: entrega como una alarma (a la hora exacta aunque el móvil esté bloqueado o en reposo). */
+  alarm: boolean;
   /** No avisar si ya cumpliste la meta de hoy. */
   skipIfDone: boolean;
   /** Avisos suaves tras varios días sin entrar. */
@@ -115,6 +117,7 @@ export const defaultReminders = (): ReminderSettings => ({
   days: [true, true, true, true, true, true, true],
   sound: 'campana',
   vibrate: true,
+  alarm: true,
   skipIfDone: true,
   comeback: true,
 });

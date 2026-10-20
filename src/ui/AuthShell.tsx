@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import React from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
+import { KeyboardSafe } from './KeyboardSafe';
 import { Mascot, type Mood } from './Mascot';
 import { Screen } from './Screen';
 import { T } from './Text';
@@ -10,7 +11,7 @@ import { colors } from './theme';
 export function AuthShell({ title, subtitle, mood = 'happy', back = true, children }: { title: string; subtitle?: string; mood?: Mood; back?: boolean; children: React.ReactNode }) {
   return (
     <Screen edges={['top', 'bottom']}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+      <KeyboardSafe>
         <ScrollView contentContainerStyle={{ flexGrow: 1, gap: 18, paddingVertical: 14 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           {back ? (
             <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace('/welcome'))} hitSlop={12} accessibilityLabel="Volver" style={{ alignSelf: 'flex-start' }}>
@@ -24,7 +25,7 @@ export function AuthShell({ title, subtitle, mood = 'happy', back = true, childr
           </View>
           {children}
         </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardSafe>
     </Screen>
   );
 }

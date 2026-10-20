@@ -23,7 +23,9 @@
       "predictiveBackGestureEnabled": false,
       "permissions": [
         "POST_NOTIFICATIONS",
-        "VIBRATE"
+        "VIBRATE",
+        "SCHEDULE_EXACT_ALARM",
+        "USE_EXACT_ALARM"
       ],
       "blockedPermissions": [
         "android.permission.RECORD_AUDIO",
@@ -80,6 +82,14 @@
         "projectId": "c5ecf436-313e-4366-ac18-a217187d9204"
       }
     },
-    "owner": "sebasbh"
+    "owner": "sebasbh",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/c5ecf436-313e-4366-ac18-a217187d9204",
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    }
   }
 }

@@ -11,6 +11,7 @@ import {
   solveChallenge as solveChallengeFn, trackCommands as trackCommandsFn,
   type LessonOutcome, type LessonResult, type ProgressState, type Settings,
 } from './progress';
+import { useResume } from './resume';
 import {
   addStudySeconds, flat, initialRoot, mergeSettings, migrateRoot, ROOT_VERSION, unflat, unlockAchievements, withCourse,
   type RootState, type StudyResult,
@@ -166,7 +167,10 @@ export const useGame = create<Store>()(
 
         replaceRoot: (root) => set({ ...root }),
         setOwner: (owner) => set({ owner }),
-        resetAll: () => set({ ...initialRoot(), updatedAt: now() }),
+        resetAll: () => {
+          useResume.getState().clearAll();
+          set({ ...initialRoot(), updatedAt: now() });
+        },
       };
     },
     {

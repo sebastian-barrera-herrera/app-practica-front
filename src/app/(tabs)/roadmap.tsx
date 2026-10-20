@@ -5,6 +5,7 @@ import Animated, { Easing, FadeInDown, useAnimatedStyle, useSharedValue, withRep
 import type { CourseDef } from '@/content';
 import type { WorldDef } from '@/content/types';
 import { lessonDone, lessonUnlocked, nextLesson, worldComplete, worldProgress, worldUnlocked } from '@/game/progress';
+import { lessonResumeLabel, useResume } from '@/game/resume';
 import { useCourse } from '@/game/store';
 import { CourseHeader, CourseSwitcher } from '@/ui/CourseSwitcher';
 import { courseColor } from '@/ui/courseColors';
@@ -31,7 +32,7 @@ function Pulse({ color, children }: { color: string; children: React.ReactNode }
   );
 }
 
-function Node({ emoji, state, color, title, stars, onPress, offset, delay }: { emoji: string; state: 'locked' | 'open' | 'done'; color: string; title: string; stars?: number; onPress: () => void; offset: number; delay: number }) {
+function Node({ emoji, state, color, title, stars, onPress, offset, delay, hint }: { emoji: string; state: 'locked' | 'open' | 'done'; color: string; title: string; stars?: number; onPress: () => void; offset: number; delay: number; hint?: string }) {
   const circle = (
     <View style={[styles.node, state === 'locked' && { backgroundColor: colors.card2, borderColor: colors.line }, state === 'open' && { backgroundColor: color, borderColor: '#ffffff55' }, state === 'done' && { backgroundColor: color + '33', borderColor: color }]}>
       <T style={{ fontSize: 30, opacity: state === 'locked' ? 0.4 : 1 }}>{state === 'locked' ? '🔒' : emoji}</T>
@@ -44,6 +45,7 @@ function Node({ emoji, state, color, title, stars, onPress, offset, delay }: { e
       </Pressable>
       {state === 'done' && stars ? <T style={{ fontSize: 12, marginTop: 2 }}>{'⭐'.repeat(stars)}</T> : null}
       <T v="tiny" bold center color={state === 'locked' ? colors.faint : colors.text} style={{ marginTop: 4, maxWidth: 130 }}>{title}</T>
+      {hint ? <T v="tiny" bold center color={ink(color)}>▶ {hint}</T> : null}
     </Animated.View>
   );
 }
@@ -55,6 +57,7 @@ function WorldSection({ w, wi, course }: { w: WorldDef; wi: number; course: Cour
   const prog = worldProgress(s, w);
   const complete = worldComplete(s, w);
   const exam = s.exams[`exam-${w.id}`];
+  const resumes = useResume((r) => r.lessons);
   return (
     <View style={{ marginBottom: 12 }}>
       <Card accent={w.color} style={{ opacity: unlocked ? 1 : 0.6 }} onPress={() => (unlocked ? undefined : warn())}>
@@ -86,6 +89,7 @@ function WorldSection({ w, wi, course }: { w: WorldDef; wi: number; course: Cour
               state={state}
               color={w.color}
               stars={s.lessons[l.id]?.stars}
+              hint={done ? undefined : lessonResumeLabel(resumes[l.id], l.steps.length)}
               delay={li * 50}
               offset={Math.sin(li * 1.15) * 54}
               onPress={() => {
@@ -132,6 +136,9 @@ export default function Roadmap() {
   const WORLDS = course.worlds;
   // eslint-disable-next-line react-hooks/exhaustive-deps -- solo depende de las lecciones completadas
   const next = useMemo(() => nextLesson(s, WORLDS), [s.lessons, course.id]);
+  const resumes = useResume((r) => r.lessons);
+  const nextLes = next ? next.world.lessons[next.lessonIndex] : null;
+  const where = nextLes ? lessonResumeLabel(resumes[nextLes.id], nextLes.steps.length) : undefined;
   const total = WORLDS.reduce((n, w) => n + w.lessons.length, 0);
   const doneCount = WORLDS.reduce((n, w) => n + w.lessons.filter((l) => s.lessons[l.id]?.done).length, 0);
   return (
@@ -156,7 +163,7 @@ export default function Roadmap() {
               <View style={{ flex: 1, gap: 6 }}>
                 {next ? (
                   <>
-                    <T v="tiny" color={col} bold>CONTINÚA TU RUTA</T>
+                    <T v="tiny" color={col} bold>{where ? `RETOMA DONDE QUEDASTE · ${where.toUpperCase()}` : 'CONTINÚA TU RUTA'}</T>
                     <T v="h3">{next.world.lessons[next.lessonIndex].emoji} {next.world.lessons[next.lessonIndex].title}</T>
                     <T v="tiny" color={colors.dim}>{doneCount}/{total} lecciones · ~{next.world.lessons[next.lessonIndex].minutes} min</T>
                   </>
@@ -172,7 +179,7 @@ export default function Roadmap() {
               <Button
                 style={{ marginTop: 12 }}
                 color={col}
-                label="Empezar lección"
+                label={where ? 'Retomar lección' : 'Empezar lección'}
                 onPress={() => router.push({ pathname: '/lesson/[id]', params: { id: next.world.lessons[next.lessonIndex].id } })}
               />
             )}

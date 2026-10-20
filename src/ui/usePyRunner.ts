@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PyOptions, PyRunResult, PySessionApi, RunOptions } from '@/pyengine/types';
+import { error as hapticError } from '@/lib/haptics';
 import { pyEngine, type OutChunk } from '@/lib/pyrun';
 
 export interface InputRequest {
@@ -77,6 +78,8 @@ export function usePyRunner() {
         });
         // si el motor no emitió el traceback por la salida, lo mostramos igualmente
         if (!result.ok && result.error && !emittedErr.current) push({ text: result.error.traceback + '\n', err: true });
+        // un error de Python (o un bucle infinito cortado) avisa con una vibración
+        if (!result.ok && (result.error || result.timedOut)) hapticError();
       } finally {
         flush();
         if (alive.current) {

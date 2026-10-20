@@ -4,7 +4,21 @@ import { Button } from './Button';
 import { T } from './Text';
 import { colors, radius, makeStyles } from './theme';
 
-export function ConfirmModal({ visible, title, message, confirmLabel = 'Aceptar', cancelLabel = 'Cancelar', danger, onConfirm, onCancel }: { visible: boolean; title: string; message: string; confirmLabel?: string; cancelLabel?: string; danger?: boolean; onConfirm: () => void; onCancel: () => void }) {
+interface Props {
+  visible: boolean;
+  title: string;
+  message: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  danger?: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+  /** Tercera acción opcional (p. ej. «Empezar de cero»). */
+  extraLabel?: string;
+  onExtra?: () => void;
+}
+
+export function ConfirmModal({ visible, title, message, confirmLabel = 'Aceptar', cancelLabel = 'Cancelar', danger, onConfirm, onCancel, extraLabel, onExtra }: Props) {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
       <Pressable style={styles.backdrop} onPress={onCancel}>
@@ -13,6 +27,7 @@ export function ConfirmModal({ visible, title, message, confirmLabel = 'Aceptar'
           <T color={colors.dim}>{message}</T>
           <View style={{ gap: 10, marginTop: 8 }}>
             <Button label={confirmLabel} kind={danger ? 'danger' : 'primary'} onPress={onConfirm} />
+            {extraLabel && onExtra ? <Button label={extraLabel} kind="secondary" onPress={onExtra} /> : null}
             <Button label={cancelLabel} kind="ghost" onPress={onCancel} />
           </View>
         </Pressable>
