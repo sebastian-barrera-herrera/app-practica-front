@@ -3,6 +3,8 @@ import React, { useEffect, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { PY_REF_CATEGORY, refByName, type PyRef } from '@/content/py/reference';
 import { useGame } from '@/game/store';
+import { pyEngine } from '@/lib/pyrun';
+import { splitReplChunks } from '@/lib/pyrepl';
 import { useStudyContext } from '@/lib/studyClock';
 import { Button } from './Button';
 import { Card } from './Card';
@@ -14,6 +16,18 @@ import { Screen } from './Screen';
 import { T } from './Text';
 import { colors, fonts, ink } from './theme';
 import { usePyRunner } from './usePyRunner';
+
+/** Ejecuta el ejemplo «como en el intérprete»: cada sentencia por separado, mostrando el valor de las expresiones. */
+async function runExample(runner: ReturnType<typeof usePyRunner>, code: string) {
+  const eng = pyEngine();
+  const session = new eng.PySession({});
+  runner.clear();
+  for (const chunk of splitReplChunks(code, eng.isIncomplete)) {
+    const { result } = await runner.run(chunk + '\n', { session, mode: 'repl', keep: true });
+    if (result.value !== undefined) runner.push({ text: result.value + '\n', err: false });
+    if (!result.ok) break;
+  }
+}
 
 function Example({ code, note }: { code: string; note?: string }) {
   const runner = usePyRunner();
@@ -31,7 +45,7 @@ function Example({ code, note }: { code: string; note?: string }) {
             disabled={runner.running}
             onPress={() => {
               setShown(true);
-              void runner.run(code);
+              void runExample(runner, code);
             }}
           />
         </View>

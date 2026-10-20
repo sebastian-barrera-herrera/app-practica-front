@@ -25,6 +25,8 @@ export const STDLIB: PyRef[] = [
     seeAlso: ['type', 'import'],
   }),
 
+  s('isinstance', 'función', '¿Es el objeto de ese tipo (o de uno de ellos)?', 'isinstance(objeto, tipo | (tipos…)) → bool', [['print(isinstance(5, int), isinstance("5", int))'], ['print(isinstance(3.5, (int, float)))', 'Acepta una tupla de tipos'], ['print(isinstance(True, int))', 'Un `bool` es también un `int`']], { details: 'Respeta la herencia: una instancia de una subclase también cuenta como instancia de su clase base. Es preferible a comparar `type(x) == int`.', category: 'basicos', seeAlso: ['type'] }),
+
   // ── math ──
   s('math.sqrt', 'función', 'Raíz cuadrada (siempre devuelve `float`).', 'math.sqrt(x) → float', [['import math\nprint(math.sqrt(16), math.sqrt(2))'], ['import math\nmath.sqrt(-1)', 'ValueError: math domain error']], { seeAlso: ['math.hypot'] }),
   s('math.floor', 'función', 'Redondea hacia abajo y devuelve un entero.', 'math.floor(x) → int', [['import math\nprint(math.floor(3.7), math.floor(-2.5))']], { seeAlso: ['math.ceil', 'round'] }),
@@ -36,6 +38,7 @@ export const STDLIB: PyRef[] = [
   s('math.pi', 'concepto', 'La constante π (y `math.e` para el número e).', 'math.pi', [['import math\nprint(math.pi)\nprint(round(math.pi * 5 ** 2, 2), "área de un círculo de radio 5")']]),
 
   // ── random ──
+  s('random.uniform', 'función', 'Decimal al azar entre a y b.', 'random.uniform(a, b) → float', [['import random\nrandom.seed(2)\nprint(round(random.uniform(1.5, 3.5), 3))']], { seeAlso: ['random.random', 'random.randint'] }),
   s('random.random', 'función', 'Decimal al azar en [0, 1).', 'random.random() → float', [['import random\nrandom.seed(1)\nprint(random.random())']], { seeAlso: ['random.uniform', 'random.seed'] }),
   s('random.randint', 'función', 'Entero al azar entre a y b, **ambos incluidos**.', 'random.randint(a, b) → int', [['import random\nrandom.seed(42)\nprint(random.randint(1, 6))', 'Un dado reproducible']], { seeAlso: ['random.choice', 'random.seed'] }),
   s('random.choice', 'función', 'Un elemento al azar de una secuencia.', 'random.choice(secuencia)', [['import random\nrandom.seed(3)\nprint(random.choice(["piedra", "papel", "tijera"]))']], { details: 'Con una secuencia vacía lanza `IndexError`.', seeAlso: ['random.sample'] }),

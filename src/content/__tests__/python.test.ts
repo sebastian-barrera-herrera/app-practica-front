@@ -169,3 +169,38 @@ describe('curso de Python: demostraciones', () => {
     }
   });
 });
+
+describe('biblioteca de Python: ejemplos', () => {
+  const cases = PY_REFERENCE.flatMap((r) => r.examples.map(([code, note], i) => [`${r.name}#${i}`, r, code, note ?? ''] as const));
+  test('los nombres son únicos y los «seeAlso» existen', () => {
+    const names = PY_REFERENCE.map((r) => r.name);
+    expect(names.filter((n, i) => names.indexOf(n) !== i)).toEqual([]);
+    const set = new Set(names);
+    const missing = PY_REFERENCE.flatMap((r) => (r.seeAlso ?? []).filter((x) => !set.has(x)).map((x) => `${r.name} → ${x}`));
+    expect(missing).toEqual([]);
+  });
+
+  // Como en la ficha de la biblioteca: sentencia a sentencia, mostrando el valor de las expresiones.
+  test.each(cases)('%s se ejecuta y muestra algo', async (_id, r, code, note) => {
+    const eng = pyEngine();
+    const s = new eng.PySession({ stdin: /\b(int|float)\(input/.test(code) ? ['42'] : ['Ada'] });
+    let out = '';
+    let err: { type: string } | undefined;
+    for (const chunk of splitReplChunks(code, eng.isIncomplete)) {
+      const res = await s.run(chunk + '\n', { mode: 'repl' });
+      out += res.stdout + (res.value !== undefined ? res.value + '\n' : '');
+      if (!res.ok) {
+        err = res.error;
+        break;
+      }
+    }
+    if (err) {
+      // Un ejemplo puede fallar a propósito, pero debe decirlo (nota, nombre de la ficha o categoría de errores).
+      const short = err.type.split('.').pop() ?? err.type;
+      const declared = note.includes(short) || r.name === short || r.category === 'errores' || /\b(raise|assert)\b/.test(code);
+      if (!declared) throw new Error(`${r.name}: falla con ${err.type} sin que la nota lo indique`);
+    } else {
+      expect(out.trim().length).toBeGreaterThan(0);
+    }
+  });
+});

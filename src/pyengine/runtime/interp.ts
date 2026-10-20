@@ -6,6 +6,7 @@ import {
   Frame, PyBaseException, PyDict, PyModule, PyObject, type PyType,
 } from './objects';
 import { StepLimit, Aborted } from './errors';
+import { setActive } from './state';
 import { VFS } from './vfs';
 import { utf8Decode, utf8Encode } from './pystr';
 
@@ -108,7 +109,13 @@ export class Interp {
 
   /** vuelca al sistema de archivos virtual los datos pendientes de los archivos abiertos */
   flushFiles(): void {
-    for (const f of this.openFiles) f.flushNow();
+    // los archivos abiertos consultan el intérprete activo: puede no estar fijado (p. ej. al terminar una ejecución)
+    const prev = setActive(this);
+    try {
+      for (const f of this.openFiles) f.flushNow();
+    } finally {
+      setActive(prev);
+    }
   }
 
   /** instante virtual actual en ms */
