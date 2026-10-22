@@ -72,7 +72,7 @@ export function PanelView({ p }: { p: Panel }) {
                 <View style={{ minWidth: 38, height: 38, paddingHorizontal: 6, borderRadius: 9, borderWidth: c.hot ? 2 : 1, borderColor: col, backgroundColor: col + (c.hot ? '30' : '14'), alignItems: 'center', justifyContent: 'center', opacity: c.dim ? 0.35 : 1 }}>
                   <T style={{ fontFamily: fonts.monoBold, fontSize: 14, lineHeight: 19 }} color={colors.text}>{c.text}</T>
                 </View>
-                <T style={{ fontFamily: fonts.mono, fontSize: 11, lineHeight: 14 }} color={p.pointer === i ? colors.amber : 'transparent'}>▲</T>
+                <T style={{ fontFamily: fonts.mono, fontSize: 11, lineHeight: 14, opacity: p.pointer === i ? 1 : 0 }} color={colors.amber}>▲</T>
               </View>
             );
           })}

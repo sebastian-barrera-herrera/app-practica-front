@@ -180,18 +180,6 @@ export function PyEditor({ value, onChange, minHeight = 150, maxHeight, placehol
       <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="always" style={{ flex: 1, minWidth: 0 }} onLayout={onLayout}>
         <View style={{ width: contentW, minHeight }}>
           {focused && !readOnly && <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, top: PAD + cursorLine * LH, height: LH, backgroundColor: 'rgba(255,255,255,0.045)' }} />}
-          <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-            <Text allowFontScaling={false} style={[TEXT, { position: 'absolute', left: PAD, top: PAD, width: contentW - PAD * 2, color: PY_COLOR.text }]}>
-              {lines.map((line, i) => (
-                <React.Fragment key={i}>
-                  {line.map((t, j) => (
-                    <Text key={j} style={{ color: tokColor(t) }}>{t.s}</Text>
-                  ))}
-                  {i < lines.length - 1 ? '\n' : ' '}
-                </React.Fragment>
-              ))}
-            </Text>
-          </View>
           <TextInput
             ref={input}
             value={value}
@@ -230,10 +218,24 @@ export function PyEditor({ value, onChange, minHeight = 150, maxHeight, placehol
             accessibilityLabel="Editor de código"
             style={[
               TEXT,
-              { color: 'transparent', padding: PAD, margin: 0, width: contentW, minHeight },
+              // «transparent» no vale en Android: lo toma como «sin color» y pinta la letra en negro; un alfa mínimo sí se respeta
+              { color: 'rgba(0,0,0,0.004)', padding: PAD, margin: 0, width: contentW, minHeight },
               (Platform.OS === 'web' ? { outlineStyle: 'none', caretColor: darkColors.mint, resize: 'none', overflow: 'hidden' } : null) as object,
             ]}
           />
+          {/* el texto coloreado va ENCIMA del campo (que no recibe toques): si el sistema pintara la letra del campo, quedaría tapada */}
+          <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+            <Text allowFontScaling={false} style={[TEXT, { position: 'absolute', left: PAD, top: PAD, width: contentW - PAD * 2, color: PY_COLOR.text }]}>
+              {lines.map((line, i) => (
+                <React.Fragment key={i}>
+                  {line.map((t, j) => (
+                    <Text key={j} style={{ color: tokColor(t) }}>{t.s}</Text>
+                  ))}
+                  {i < lines.length - 1 ? '\n' : ' '}
+                </React.Fragment>
+              ))}
+            </Text>
+          </View>
         </View>
       </ScrollView>
     </View>
