@@ -1,11 +1,14 @@
-import React, { useCallback, useRef, useState } from 'react';
-import { Platform, Pressable, ScrollView, TextInput, View, type TextInputSelectionChangeEvent } from 'react-native';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type LayoutChangeEvent, type TextInputSelectionChangeEvent } from 'react-native';
 import { select } from '@/lib/haptics';
+import { highlightPython } from './pyhighlight';
+import { KEYWORD_CONTROL, PY_COLOR, tokColor } from './pycolors';
+import { SNIPPETS, suggest, type Completion } from './pycomplete';
 import { T } from './Text';
 import { darkColors, fonts, radius } from './theme';
 
-const KEYS: { label: string; text?: string; pair?: string; act?: 'dedent' }[] = [
-  { label: '⇥', text: '    ' },
+const KEYS: { label: string; text?: string; pair?: string; act?: 'dedent' | 'tab' }[] = [
+  { label: '⇥', act: 'tab' },
   { label: '⇤', act: 'dedent' },
   { label: '( )', text: '()', pair: ')' },
   { label: '[ ]', text: '[]', pair: ']' },
@@ -29,6 +32,18 @@ const KEYS: { label: string; text?: string; pair?: string; act?: 'dedent' }[] = 
   { label: '\\', text: '\\' },
 ];
 
+// Medidas del texto. El código se dibuja dos veces con EXACTAMENTE la misma tipografía y relleno: el campo de texto
+// (con letra transparente, para escribir) y, debajo, el texto coloreado. Por eso no hay ajuste de línea: cada línea
+// del código es una sola línea en pantalla y los números de línea cuadran siempre. Las líneas largas se desplazan en horizontal.
+const FS = 14;
+const LH = 21;
+const PAD = 12;
+/** Ancho de un carácter de JetBrains Mono: 600/1000 de em. */
+const CHAR = FS * 0.6;
+const TEXT = { fontFamily: fonts.mono, fontSize: FS, lineHeight: LH, includeFontPadding: false } as const;
+const NUM_COLOR = '#6E7681';
+const NUM_ACTIVE = '#C6C6C6';
+
 interface Props {
   value: string;
   onChange: (v: string) => void;
@@ -37,36 +52,87 @@ interface Props {
   placeholder?: string;
   readOnly?: boolean;
   autoFocus?: boolean;
-  /** Muestra la barra de símbolos sobre el teclado. */
+  /** Muestra las barras de atajos, sugerencias y símbolos sobre el teclado. */
   keys?: boolean;
+  /** Números de línea (por defecto, sí). */
+  lineNumbers?: boolean;
 }
 
-/** Editor de código sencillo y cómodo en el móvil: sangrado automático tras «:», barra de símbolos y pares. */
-export function PyEditor({ value, onChange, minHeight = 150, maxHeight, placeholder, readOnly, autoFocus, keys = true }: Props) {
+const candColor = (c: Completion) =>
+  c.kind === 'var' ? PY_COLOR.text : c.kind === 'kw' ? KEYWORD_CONTROL : c.kind === 'cls' ? PY_COLOR.cls : c.kind === 'snippet' ? darkColors.mint : PY_COLOR.fn;
+
+/** Editor de código del móvil: números de línea, colores como en VS Code, autocompletado, atajos, sangrado automático y pares. */
+export function PyEditor({ value, onChange, minHeight = 150, maxHeight, placeholder, readOnly, autoFocus, keys = true, lineNumbers = true }: Props) {
   const sel = useRef({ start: value.length, end: value.length });
+  const [selection, setSelection] = useState({ start: value.length, end: value.length });
   const [forced, setForced] = useState<{ start: number; end: number } | undefined>(undefined);
+  const [focused, setFocused] = useState(false);
+  const [viewW, setViewW] = useState(0);
   const input = useRef<React.ComponentRef<typeof TextInput>>(null);
+  const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const place = useCallback((cursor: number) => {
-    sel.current = { start: cursor, end: cursor };
-    setForced({ start: cursor, end: cursor });
+    const s = { start: cursor, end: cursor };
+    sel.current = s;
+    setSelection(s);
+    setForced(s);
     // se suelta el control del cursor tras aplicarlo para que el usuario pueda moverlo libremente
     setTimeout(() => setForced(undefined), 30);
   }, []);
 
   const onSel = (e: TextInputSelectionChangeEvent) => {
     sel.current = e.nativeEvent.selection;
+    setSelection(e.nativeEvent.selection);
   };
 
+  // ───── lo que se dibuja ─────
+  const lines = useMemo(() => highlightPython(value), [value]);
+  const longest = useMemo(() => value.split('\n').reduce((m, l) => Math.max(m, l.length), 0), [value]);
+  const contentW = Math.max(viewW, Math.ceil((longest + 3) * CHAR) + PAD * 2);
+  const cursor = Math.min(selection.start, value.length);
+  const cursorLine = value.slice(0, cursor).split('\n').length - 1;
+  const gutterW = Math.max(2, String(lines.length).length) * CHAR + 18;
+
+  // ───── autocompletado ─────
+  const sugg = useMemo(() => (focused && !readOnly && selection.start === selection.end ? suggest(value, cursor) : null), [focused, readOnly, value, cursor, selection.start, selection.end]);
+  const items = sugg?.items ?? [];
+
+  const replace = (start: number, end: number, text: string, caret: number) => {
+    onChange(value.slice(0, start) + text + value.slice(end));
+    place(start + caret);
+    input.current?.focus();
+  };
+
+  const accept = (c: Completion) => {
+    select();
+    const { start: s, end: e } = sel.current;
+    // las sugerencias sustituyen a la palabra que se está escribiendo; los atajos, a lo seleccionado (o se insertan)
+    const from = c.kind === 'snippet' ? s : sugg?.start ?? s;
+    const ls = value.lastIndexOf('\n', from - 1) + 1;
+    const indent = /^[ \t]*/.exec(value.slice(ls))![0];
+    // los atajos de varias líneas heredan el sangrado de la línea donde se insertan
+    const text = c.insert.replace(/\n/g, '\n' + indent);
+    // el cursor se desplaza el sangrado añadido en cada salto de línea que queda antes de él
+    const caret = c.caret ?? c.insert.length;
+    const breaks = c.insert.slice(0, caret).split('\n').length - 1;
+    replace(from, Math.max(e, from), text, caret + indent.length * breaks);
+  };
+
+  // ───── teclas y pares ─────
   const insert = (text: string, pair?: string) => {
     const { start, end } = sel.current;
     const chosen = value.slice(start, end);
     // con texto seleccionado, los pares lo envuelven
     const ins = pair && chosen ? text[0] + chosen + pair : text;
-    const next = value.slice(0, start) + ins + value.slice(end);
-    onChange(next);
+    onChange(value.slice(0, start) + ins + value.slice(end));
     place(pair && !chosen ? start + 1 : start + ins.length);
     input.current?.focus();
+  };
+
+  const tab = () => {
+    // con una sugerencia a la vista, «⇥» la acepta; si no, sangra
+    if (items.length) accept(items[0]);
+    else insert('    ');
   };
 
   const dedent = () => {
@@ -98,37 +164,107 @@ export function PyEditor({ value, onChange, minHeight = 150, maxHeight, placehol
     onChange(text);
   };
 
+  const onLayout = (e: LayoutChangeEvent) => setViewW(Math.floor(e.nativeEvent.layout.width));
+
+  const body = (
+    <View style={{ flexDirection: 'row' }}>
+      {lineNumbers && (
+        <View style={{ width: gutterW, paddingTop: PAD, paddingBottom: PAD, paddingRight: 8, backgroundColor: darkColors.bg2, borderRightWidth: 1, borderRightColor: darkColors.line, alignItems: 'flex-end' }}>
+          {lines.map((_, i) => (
+            <Text key={i} allowFontScaling={false} style={[TEXT, { color: focused && i === cursorLine ? NUM_ACTIVE : NUM_COLOR }]}>
+              {i + 1}
+            </Text>
+          ))}
+        </View>
+      )}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="always" style={{ flex: 1, minWidth: 0 }} onLayout={onLayout}>
+        <View style={{ width: contentW, minHeight }}>
+          {focused && !readOnly && <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, top: PAD + cursorLine * LH, height: LH, backgroundColor: 'rgba(255,255,255,0.045)' }} />}
+          <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+            <Text allowFontScaling={false} style={[TEXT, { position: 'absolute', left: PAD, top: PAD, width: contentW - PAD * 2, color: PY_COLOR.text }]}>
+              {lines.map((line, i) => (
+                <React.Fragment key={i}>
+                  {line.map((t, j) => (
+                    <Text key={j} style={{ color: tokColor(t) }}>{t.s}</Text>
+                  ))}
+                  {i < lines.length - 1 ? '\n' : ' '}
+                </React.Fragment>
+              ))}
+            </Text>
+          </View>
+          <TextInput
+            ref={input}
+            value={value}
+            onChangeText={handleChange}
+            onSelectionChange={onSel}
+            onFocus={() => {
+              if (blurTimer.current) clearTimeout(blurTimer.current);
+              setFocused(true);
+            }}
+            // un instante de gracia: al tocar un botón de sugerencias el campo puede perder el foco un momento
+            onBlur={() => {
+              if (blurTimer.current) clearTimeout(blurTimer.current);
+              blurTimer.current = setTimeout(() => setFocused(false), 250);
+            }}
+            selection={forced}
+            multiline
+            editable={!readOnly}
+            autoFocus={autoFocus}
+            autoCapitalize="none"
+            autoCorrect={false}
+            spellCheck={false}
+            autoComplete="off"
+            allowFontScaling={false}
+            textAlignVertical="top"
+            scrollEnabled={false}
+            placeholder={placeholder}
+            placeholderTextColor={darkColors.faint}
+            selectionColor={darkColors.mint}
+            cursorColor={darkColors.mint}
+            onKeyPress={(e) => {
+              if (Platform.OS === 'web' && (e.nativeEvent as { key?: string }).key === 'Tab') {
+                (e as unknown as { preventDefault?: () => void }).preventDefault?.();
+                tab();
+              }
+            }}
+            accessibilityLabel="Editor de código"
+            style={[
+              TEXT,
+              { color: 'transparent', padding: PAD, margin: 0, width: contentW, minHeight },
+              (Platform.OS === 'web' ? { outlineStyle: 'none', caretColor: darkColors.mint, resize: 'none', overflow: 'hidden' } : null) as object,
+            ]}
+          />
+        </View>
+      </ScrollView>
+    </View>
+  );
+
   return (
     <View style={{ borderRadius: radius.md, borderWidth: 1, borderColor: darkColors.line, backgroundColor: darkColors.termBg, overflow: 'hidden' }}>
-      <TextInput
-        ref={input}
-        value={value}
-        onChangeText={handleChange}
-        onSelectionChange={onSel}
-        selection={forced}
-        multiline
-        editable={!readOnly}
-        autoFocus={autoFocus}
-        autoCapitalize="none"
-        autoCorrect={false}
-        spellCheck={false}
-        autoComplete="off"
-        textAlignVertical="top"
-        placeholder={placeholder}
-        placeholderTextColor={darkColors.faint}
-        selectionColor={darkColors.mint}
-        scrollEnabled={!!maxHeight}
-        onKeyPress={(e) => {
-          if (Platform.OS === 'web' && (e.nativeEvent as { key?: string }).key === 'Tab') {
-            (e as unknown as { preventDefault?: () => void }).preventDefault?.();
-            insert('    ');
-          }
-        }}
-        accessibilityLabel="Editor de código"
-        style={{ minHeight, maxHeight, padding: 12, color: darkColors.termText, fontFamily: fonts.mono, fontSize: 14, lineHeight: 21, outlineStyle: 'none' } as object}
-      />
+      {maxHeight ? (
+        <ScrollView style={{ maxHeight }} nestedScrollEnabled keyboardShouldPersistTaps="handled">
+          {body}
+        </ScrollView>
+      ) : (
+        body
+      )}
       {keys && !readOnly && (
         <View style={{ borderTopWidth: 1, borderTopColor: darkColors.line, backgroundColor: darkColors.bg2 }}>
+          {/* sugerencias de lo que estás escribiendo o, si no hay, atajos (print(), input(), for…) */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="always" contentContainerStyle={{ paddingHorizontal: 8, paddingTop: 6, gap: 6, alignItems: 'center' }}>
+            {(items.length ? items : SNIPPETS).map((c) => (
+              <Pressable
+                key={`${c.kind}-${c.label}`}
+                onPress={() => accept(c)}
+                accessibilityRole="button"
+                accessibilityLabel={items.length ? `Autocompletar ${c.label}` : `Insertar ${c.label}`}
+                style={{ height: 34, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 8, backgroundColor: c.kind === 'snippet' && c.label === 'print()' ? darkColors.mint + '22' : darkColors.card2, borderWidth: 1, borderColor: c.kind === 'snippet' && c.label === 'print()' ? darkColors.mint : items.length ? candColor(c) + '88' : darkColors.line }}
+              >
+                <T style={{ fontFamily: fonts.monoBold, fontSize: 13 }} color={candColor(c)}>{items.length && (c.kind === 'fn' || c.kind === 'bi' || c.kind === 'method') ? `${c.label}()` : c.label}</T>
+                {!items.length && c.hint ? <T style={{ fontSize: 11 }} color={darkColors.faint}>{c.hint}</T> : null}
+              </Pressable>
+            ))}
+          </ScrollView>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="always" contentContainerStyle={{ paddingHorizontal: 8, paddingVertical: 6, gap: 6 }}>
             {KEYS.map((k) => (
               <Pressable
@@ -136,6 +272,7 @@ export function PyEditor({ value, onChange, minHeight = 150, maxHeight, placehol
                 onPress={() => {
                   select();
                   if (k.act === 'dedent') dedent();
+                  else if (k.act === 'tab') tab();
                   else insert(k.text ?? '', k.pair);
                 }}
                 accessibilityRole="button"

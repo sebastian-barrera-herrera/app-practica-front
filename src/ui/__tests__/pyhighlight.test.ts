@@ -35,3 +35,25 @@ describe('resaltado de Python', () => {
     expect(l[3][0].k).toBe('prompt');
   });
 });
+
+describe('colores del código (paleta de VS Code)', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { tokColor, PY_COLOR, KEYWORD_CONTROL } = require('../pycolors') as typeof import('../pycolors');
+  const first = (src: string) => highlightPython(src)[0].find((t) => t.s.trim() !== '')!;
+
+  test('control de flujo en violeta, el resto de palabras clave en azul', () => {
+    expect(tokColor(first('if x: pass'))).toBe(KEYWORD_CONTROL);
+    expect(tokColor(first('for i in x: pass'))).toBe(KEYWORD_CONTROL);
+    expect(tokColor(first('def f(): pass'))).toBe(PY_COLOR.kw);
+    expect(tokColor(first('None'))).toBe(PY_COLOR.kw);
+  });
+
+  test('variables en celeste, funciones en amarillo, textos en naranja, números en verde claro', () => {
+    expect(tokColor(first('edad = 3'))).toBe(PY_COLOR.text);
+    expect(tokColor(first('print(1)'))).toBe(PY_COLOR.bi);
+    expect(tokColor(first('mi_funcion(1)'))).toBe(PY_COLOR.fn);
+    expect(tokColor(first('"hola"'))).toBe(PY_COLOR.str);
+    expect(tokColor(first('42'))).toBe(PY_COLOR.num);
+    expect(tokColor(first('# nota'))).toBe(PY_COLOR.com);
+  });
+});

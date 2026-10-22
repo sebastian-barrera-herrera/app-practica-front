@@ -66,6 +66,8 @@ Ejecuta `npm test`: el validador te dice qué solución no supera su propia comp
 
 `src/pyengine` ejecuta Python **sin servidor ni código nativo**: lexer, parser, compilador a cierres, runtime fiel a CPython 3.13 (tracebacks idénticos, MRO, descriptores, generadores, `async`, `except*`, `match`…) y una biblioteca estándar híbrida (módulos de CPython empaquetados + módulos nativos). El reloj es virtual y determinista y `input()` se puede reproducir, de modo que los retos son corregibles automáticamente. Se verifica contra `python3` con una batería de pruebas «golden». Más detalles, límites conocidos y cómo ampliarlo en [`src/pyengine/README.md`](src/pyengine/README.md).
 
+
+**Editor de Python** (`src/ui/PyEditor.tsx`): números de línea, colores de la paleta *Dark+* de VS Code (`pycolors.ts`, la misma en las cajas de código de las lecciones), sangrado automático, pares `()` `[]` `{}` `""`, atajos (`print()`, `input()`, `for`, `if`, `while`, `def`, `f""`…) y **autocompletado** (`pycomplete.ts`, función pura con tests): propone las variables y funciones que ya escribiste, las funciones de Python, las palabras clave y, tras un punto, los métodos más usados; no sugiere dentro de textos ni comentarios. El texto se dibuja dos veces con la misma tipografía (el campo, con letra transparente, y debajo el texto coloreado), por eso no hay ajuste de línea: las líneas largas se desplazan en horizontal y los números cuadran siempre.
 ## Cuentas en la nube (Neon)
 
 Se usa **Neon Auth** (registro, inicio de sesión, recuperación de contraseña con código por correo) y la **Neon Data API** para guardar el progreso en una tabla con seguridad por filas:
