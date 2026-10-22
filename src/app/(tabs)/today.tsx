@@ -121,9 +121,9 @@ function CourseNext({ course }: { course: CourseDef }) {
       {course.lessons.length > 0 && <ProgressBar value={done / course.lessons.length} color={col} height={8} style={{ marginTop: 10 }} />}
       {course.worlds.length > 0 && (
         <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
-          <View style={{ flex: 1.4 }}>
+          <View style={{ flex: 1 }}>
             <Button
-              label={lesson ? (where ? 'Retomar donde quedé' : started ? 'Continuar' : 'Empezar') : 'Practicar'}
+              label={lesson ? (where ? 'Retomar' : started ? 'Continuar' : 'Empezar') : 'Practicar'}
               color={col}
               onPress={() => {
                 if (lesson) router.push({ pathname: '/lesson/[id]', params: { id: lesson.id } });

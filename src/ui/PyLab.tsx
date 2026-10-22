@@ -148,16 +148,13 @@ function EditorMode({ code, onChange, onSamples, onClear, onRun }: { code: strin
   return (
     <View style={{ gap: 12 }}>
       <PyEditor value={code} onChange={onChange} minHeight={230} placeholder="# Escribe tu código aquí" />
-      <View style={{ flexDirection: 'row', gap: 10 }}>
-        <View style={{ flex: 2 }}>
-          <Button label={runner.running ? 'Ejecutando…' : '▶  Ejecutar'} kind="accent" disabled={runner.running || !code.trim()} onPress={run} />
-        </View>
+      {/* «Ejecutar» ocupa lo que sobra; los otros dos, lo que necesite su texto (antes se repartían por pesos y no cabían) */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
         <View style={{ flex: 1 }}>
-          <Button label="Ejemplos" kind="secondary" onPress={onSamples} />
+          <Button icon={runner.running ? undefined : '▶'} label={runner.running ? 'Ejecutando…' : 'Ejecutar'} kind="accent" style={{ paddingHorizontal: 14 }} disabled={runner.running || !code.trim()} onPress={run} />
         </View>
-        <View style={{ flex: 1 }}>
-          <Button label="Vaciar" kind="ghost" onPress={onClear} />
-        </View>
+        <Button small full={false} style={{ alignSelf: 'center' }} label="Ejemplos" kind="secondary" onPress={onSamples} />
+        <Button small full={false} style={{ alignSelf: 'center' }} label="Vaciar" kind="ghost" onPress={onClear} />
       </View>
       <PyOutput chunks={runner.chunks} running={runner.running} asking={!!runner.request} onSubmitInput={runner.submitInput} onStop={runner.stop} maxHeight={320} />
       {ran && (

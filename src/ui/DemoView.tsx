@@ -96,15 +96,11 @@ export function DemoView({ lines, setup, intro, onComplete }: { lines: DemoLine[
         </ScrollView>
       </View>
       {!done ? (
-        <View style={{ flexDirection: 'row', gap: 10 }}>
-          <View style={{ flex: 2 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <View style={{ flex: 1 }}>
             <Button label={idx === 0 ? '▶  Ejecutar' : '▶  Siguiente comando'} onPress={runNext} disabled={running} kind="accent" />
           </View>
-          {idx < lines.length - 1 && (
-            <View style={{ flex: 1 }}>
-              <Button label="Todo" onPress={runAll} disabled={running} kind="secondary" />
-            </View>
-          )}
+          {idx < lines.length - 1 && <Button small full={false} style={{ alignSelf: 'center' }} label="Todo" onPress={runAll} disabled={running} kind="secondary" />}
         </View>
       ) : (
         <T v="small" color={colors.green} center>✓ Demostración completa</T>

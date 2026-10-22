@@ -51,8 +51,8 @@ export function Button({ label, onPress, kind = 'primary', icon, disabled, small
     >
       <View style={styles.row}>
         {icon ? <T v="h3" style={{ marginRight: 8 }}>{icon}</T> : null}
-        {/* flexShrink: una etiqueta larga se parte en dos líneas en vez de salirse del botón y cortarse */}
-        <T v={small ? 'small' : 'h3'} color={palette.fg} bold center style={{ letterSpacing: 0.3, flexShrink: 1 }}>{label}</T>
+        {/* una sola línea: si no cabe, la letra se encoge un poco (antes se partía sílaba a sílaba o se cortaba) */}
+        <T v={small ? 'small' : 'h3'} color={palette.fg} bold center numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75} style={{ letterSpacing: 0.3, flexShrink: 1 }}>{label}</T>
       </View>
     </AnimatedPressable>
   );

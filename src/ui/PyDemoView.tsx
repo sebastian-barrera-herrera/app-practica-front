@@ -117,15 +117,11 @@ export function PyDemoView({ cells, setup, intro, onComplete }: { cells: PyCell[
         <T v="tiny" color={colors.dim}>⌨ Entrada simulada: {stdin.map((l) => `«${l}»`).join(' · ')}</T>
       )}
       {!finished ? (
-        <View style={{ flexDirection: 'row', gap: 10 }}>
-          <View style={{ flex: 2 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <View style={{ flex: 1 }}>
             <Button label={done.length === 0 ? '▶  Ejecutar' : '▶  Siguiente celda'} onPress={runNext} disabled={running} kind="accent" />
           </View>
-          {done.length < cells.length - 1 && (
-            <View style={{ flex: 1 }}>
-              <Button label="Todo" onPress={runAll} disabled={running} kind="secondary" />
-            </View>
-          )}
+          {done.length < cells.length - 1 && <Button small full={false} style={{ alignSelf: 'center' }} label="Todo" onPress={runAll} disabled={running} kind="secondary" />}
         </View>
       ) : (
         <T v="small" color={colors.green} center>✓ Demostración completa</T>
