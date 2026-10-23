@@ -51,8 +51,8 @@ export function Button({ label, onPress, kind = 'primary', icon, disabled, small
     >
       <View style={styles.row}>
         {icon ? <T v="h3" style={{ marginRight: 8 }}>{icon}</T> : null}
-        {/* una sola línea: si no cabe, la letra se encoge un poco (antes se partía sílaba a sílaba o se cortaba) */}
-        <T v={small ? 'small' : 'h3'} color={palette.fg} bold center numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75} style={{ letterSpacing: 0.3, flexShrink: 1 }}>{label}</T>
+        {/* una sola línea (si no cabe, acaba en «…»). Sin `adjustsFontSizeToFit`: en Android encogía la letra a casi nada al reactivarse el botón */}
+        <T v={small ? 'small' : 'h3'} color={palette.fg} bold center numberOfLines={1} ellipsizeMode="tail" style={{ letterSpacing: 0.3, flexShrink: 1 }}>{label}</T>
       </View>
     </AnimatedPressable>
   );

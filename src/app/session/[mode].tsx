@@ -131,6 +131,8 @@ function QuestionRun({ course, items, title, color, mode, onFinish, srsReview, r
   const [pos, setPos] = useState(saved?.pos ?? 0);
   const results = useRef<{ item: QItem; correct: boolean }[]>(saved ? saved.results.map((r, i) => ({ item: items[i], correct: r.correct })) : []);
   const [confirm, setConfirm] = useState(false);
+  // un toque doble en «Continuar» no debe contar la misma pregunta dos veces
+  const answeredAt = useRef(-1);
   const item = items[pos];
   const save = (next: number) =>
     useResume.getState().setRun(resumeKey, { ids: items.map((i) => i.id), pos: next, results: results.current.map((r) => ({ id: r.item.id, correct: r.correct })), due, ts: Date.now() });
@@ -144,6 +146,8 @@ function QuestionRun({ course, items, title, color, mode, onFinish, srsReview, r
           mode={mode}
           continueLabel={pos + 1 >= items.length ? 'Terminar' : 'Continuar'}
           onDone={(r: Result) => {
+            if (answeredAt.current === pos) return;
+            answeredAt.current = pos;
             useGame.getState().answer(course.id, item.id, r.correct, { review: srsReview });
             results.current.push({ item, correct: r.correct });
             if (pos + 1 >= items.length) {
@@ -166,6 +170,7 @@ function QuestionRun({ course, items, title, color, mode, onFinish, srsReview, r
         onExtra={() => {
           useResume.getState().clearRun(resumeKey);
           results.current = [];
+          answeredAt.current = -1;
           setPos(0);
           setConfirm(false);
         }}
@@ -432,6 +437,7 @@ function ExamRun({ course, planOf, resumeKey }: { course: CourseDef; planOf: (se
   const [cpos, setCpos] = useState(saved?.cpos ?? 0);
   const results = useRef<{ item: QItem; correct: boolean }[]>(saved ? saved.results.map((r) => ({ item: plan.questions.find((q) => q.id === r.id)!, correct: r.correct })).filter((r) => !!r.item) : []);
   const solved = useRef(saved?.solved ?? 0);
+  const answeredAt = useRef(-1);
   const [confirm, setConfirm] = useState(false);
   const [end, setEnd] = useState<null | { score: number; passed: boolean; xp: number; ach: Achievement[]; levelUp: number | null }>(null);
   const finish = useCallback(() => {
@@ -554,6 +560,8 @@ function ExamRun({ course, planOf, resumeKey }: { course: CourseDef; planOf: (se
           mode="exam"
           continueLabel="Siguiente"
           onDone={(r) => {
+            if (answeredAt.current === pos) return;
+            answeredAt.current = pos;
             useGame.getState().answer(course.id, item.id, r.correct);
             results.current.push({ item, correct: r.correct });
             if (pos + 1 >= plan.questions.length) {

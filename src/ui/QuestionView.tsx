@@ -34,7 +34,19 @@ interface Props {
   continueLabel?: string;
 }
 
-export function QuestionView({ q, seed, mode = 'lesson', onDone, continueLabel = 'Continuar' }: Props) {
+/**
+ * Se vuelve a montar en cada pregunta (clave = `seed`): así el estado de cada tipo de pregunta (opción elegida, piezas,
+ * texto escrito) nunca se arrastra de la anterior. Sin esto, en repasos y exámenes, con dos preguntas seguidas del
+ * mismo tipo quedaba una opción «elegida» a medias, el botón Comprobar deshabilitado y tocar esa opción no hacía nada.
+ */
+export function QuestionView(props: Props) {
+  return <QuestionBody key={props.seed} {...props} />;
+}
+
+/** Tiempo máximo para evaluar una respuesta (los comandos y los programas de Python se ejecutan de verdad). */
+const CHECK_TIMEOUT_MS = 8000;
+
+function QuestionBody({ q, seed, mode = 'lesson', onDone, continueLabel = 'Continuar' }: Props) {
   const [checked, setChecked] = useState<null | Result>(null);
   const [ready, setReady] = useState(false);
   const [answerText, setAnswerText] = useState('');
@@ -48,8 +60,20 @@ export function QuestionView({ q, seed, mode = 'lesson', onDone, continueLabel =
     setAnswerText('');
   }, [seed]);
 
+  const checking = useRef(false);
   const check = async () => {
-    const r = await getAnswerRef.current();
+    // una comprobación a la vez, y con tiempo máximo: si la respuesta no se puede evaluar (p. ej. un comando que espera
+    // datos del teclado) no se queda el botón «sin hacer nada»; cuenta como fallo
+    if (checking.current || checked) return;
+    checking.current = true;
+    let r: Result;
+    try {
+      r = await Promise.race([Promise.resolve(getAnswerRef.current()), new Promise<Result>((res) => setTimeout(() => res({ correct: false, given: answerText }), CHECK_TIMEOUT_MS))]);
+    } catch {
+      r = { correct: false, given: answerText };
+    } finally {
+      checking.current = false;
+    }
     setChecked(r);
     if (r.correct) hapticSuccess();
     else hapticError();
@@ -212,7 +236,9 @@ function Cmd({ q, locked, setReady, getRef, text, setText, onSubmit }: SubProps 
   getRef.current = async () => {
     if (q.check) {
       const t = new Terminal({ instant: true, ...(q.setup ?? {}) });
-      await t.exec(text);
+      // un comando que espera entrada del teclado (cat, grep sin archivo…) no puede dejar la pregunta colgada
+      await Promise.race([t.exec(text), new Promise((r) => setTimeout(r, 2500))]);
+      if (t.busy) t.signal('INT');
       return { correct: evaluate(q.check, t).ok, given: text };
     }
     return { correct: cmdMatches(text, q.answers, q.regex), given: text };
