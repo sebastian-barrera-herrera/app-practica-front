@@ -51,7 +51,10 @@ export interface Settings {
   name: string;
   /** Meta de XP diaria (secundaria; la meta principal es el tiempo). */
   dailyGoal: number;
+  /** Interruptor general de la vibración de la app. */
   haptics: boolean;
+  /** Vibración suave al tocar botones y opciones (con `haptics` apagado no vibra nada). */
+  hapticsTouch: boolean;
   /** Efectos de sonido dentro de la app. */
   sfx: boolean;
   theme: ThemePref;
@@ -126,6 +129,7 @@ export const defaultSettings = (): Settings => ({
   name: '',
   dailyGoal: 50,
   haptics: true,
+  hapticsTouch: true,
   sfx: true,
   theme: 'system',
   goalMinutes: { linux: 60, python: 60 },

@@ -214,6 +214,20 @@ export default function Settings() {
           <Options<ThemePref> value={st.theme} options={['system', 'light', 'dark']} fmt={(v) => (v === 'system' ? '📱 Sistema' : v === 'light' ? '☀️ Claro' : '🌙 Oscuro')} onChange={(theme) => set({ theme })} />
         </Card>
 
+        {/* ── sonido y vibración ── */}
+        <SectionTitle>Sonido y vibración</SectionTitle>
+        <Card>
+          <Row title="📳 Vibración" desc={st.haptics ? 'Activada: vibra al acertar, al equivocarte y con el confeti' : 'Desactivada: la app no vibra nunca'} right={<Toggle label="Vibración" value={st.haptics} onChange={(haptics) => set({ haptics })} />} />
+          {st.haptics && (
+            <>
+              <Divider />
+              <Row title="Al tocar botones y opciones" desc="Un toque suave en cada pulsación" right={<Toggle label="Vibración al tocar" value={st.hapticsTouch} onChange={(hapticsTouch) => set({ hapticsTouch })} />} />
+            </>
+          )}
+          <Divider />
+          <Row title="🔊 Efectos de sonido" desc="Al acertar, fallar, completar lecciones y cumplir metas" right={<Toggle label="Efectos de sonido" value={st.sfx} onChange={(sfx) => set({ sfx })} />} />
+        </Card>
+
         {/* ── metas ── */}
         <SectionTitle>Metas diarias</SectionTitle>
         <Card>
@@ -340,14 +354,6 @@ export default function Settings() {
           )}
         </Card>
         {(note || testMsg) && <T v="small" color={colors.amber}>{note ?? testMsg}</T>}
-
-        {/* ── sonido y vibración ── */}
-        <SectionTitle>Sonido y tacto</SectionTitle>
-        <Card>
-          <Row title="Efectos de sonido" desc="Al acertar, fallar, completar lecciones y cumplir metas" right={<Toggle label="Efectos de sonido" value={st.sfx} onChange={(sfx) => set({ sfx })} />} />
-          <Divider />
-          <Row title="Vibración al tocar" desc="Vibra al tocar, al acertar, al equivocarte y con el confeti" right={<Toggle label="Vibración" value={st.haptics} onChange={(haptics) => set({ haptics })} />} />
-        </Card>
 
         {/* ── actualizaciones ── */}
         {ota.enabled && (

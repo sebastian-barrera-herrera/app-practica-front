@@ -29,6 +29,7 @@ export default function RootLayout() {
   const onboarded = useGame((s) => s.settings.onboarded);
   const pref = useGame((s) => s.settings.theme);
   const haptics = useGame((s) => s.settings.haptics);
+  const hapticsTouch = useGame((s) => s.settings.hapticsTouch);
   const sfxOn = useGame((s) => s.settings.sfx);
   const system = useColorScheme();
 
@@ -39,7 +40,7 @@ export default function RootLayout() {
   useEffect(() => {
     SystemUI.setBackgroundColorAsync(colors.bg).catch(() => {});
   }, [mode]);
-  useEffect(() => setHaptics(haptics), [haptics]);
+  useEffect(() => setHaptics(haptics, hapticsTouch), [haptics, hapticsTouch]);
   useEffect(() => setSfxEnabled(sfxOn), [sfxOn]);
 
   // cuenta: recupera la sesión guardada

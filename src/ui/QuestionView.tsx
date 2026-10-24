@@ -4,6 +4,7 @@ import Animated, { FadeIn, FadeInDown, SlideInDown, ZoomIn } from 'react-native-
 import { evaluate } from '@/engine/check';
 import { Terminal } from '@/engine/terminal';
 import type { Question } from '@/content/types';
+import { knownPyout } from '@/content/pyoutAnswers';
 import { cmdMatches, seededShuffle } from '@/lib/cmdnorm';
 import { error as hapticError, select, success as hapticSuccess } from '@/lib/haptics';
 import { pyEngine, pythonStdout } from '@/lib/pyrun';
@@ -61,18 +62,23 @@ function QuestionBody({ q, seed, mode = 'lesson', onDone, continueLabel = 'Conti
   }, [seed]);
 
   const checking = useRef(false);
+  const [busy, setBusy] = useState(false);
   const check = async () => {
     // una comprobación a la vez, y con tiempo máximo: si la respuesta no se puede evaluar (p. ej. un comando que espera
     // datos del teclado) no se queda el botón «sin hacer nada»; cuenta como fallo
     if (checking.current || checked) return;
     checking.current = true;
+    setBusy(true);
     let r: Result;
     try {
+      // el código de Python se ejecuta en el hilo de la interfaz: primero se deja pintar «Comprobando…» para que no parezca colgado
+      await new Promise((res) => setTimeout(res, 40));
       r = await Promise.race([Promise.resolve(getAnswerRef.current()), new Promise<Result>((res) => setTimeout(() => res({ correct: false, given: answerText }), CHECK_TIMEOUT_MS))]);
     } catch {
       r = { correct: false, given: answerText };
     } finally {
       checking.current = false;
+      setBusy(false);
     }
     setChecked(r);
     if (r.correct) hapticSuccess();
@@ -119,11 +125,11 @@ function QuestionBody({ q, seed, mode = 'lesson', onDone, continueLabel = 'Conti
       </ScrollView>
       {mode === 'blitz' ? (
         <View style={{ padding: 16 }}>
-          {!checked ? <Button label="Comprobar" disabled={!ready} onPress={check} /> : <T center bold color={checked.correct ? colors.green : colors.rose}>{checked.correct ? '¡Correcto!' : 'Incorrecto'}</T>}
+          {!checked ? <Button label={busy ? 'Comprobando…' : 'Comprobar'} disabled={!ready || busy} onPress={check} /> : <T center bold color={checked.correct ? colors.green : colors.rose}>{checked.correct ? '¡Correcto!' : 'Incorrecto'}</T>}
         </View>
       ) : !checked ? (
         <View style={{ padding: 16 }}>
-          <Button label="Comprobar" disabled={!ready} onPress={check} />
+          <Button label={busy ? 'Comprobando…' : 'Comprobar'} disabled={!ready || busy} onPress={check} />
         </View>
       ) : (
         <Animated.View entering={SlideInDown.duration(260)} style={[styles.feedback, { backgroundColor: checked.correct ? colors.okBg : colors.badBg, borderTopColor: checked.correct ? colors.green : colors.rose }]}>
@@ -411,24 +417,31 @@ function Match({ q, seed, locked, setReady, getRef }: SubProps & { q: Extract<Qu
 
 function Output({ q, seed, locked, setReady, getRef }: SubProps & { q: Extract<Question, { t: 'output' }>; seed: string }) {
   const [correct, setCorrect] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
   const [sel, setSel] = useState<number | null>(null);
   useEffect(() => {
     let alive = true;
     (async () => {
-      const t = new Terminal({ instant: true, ...(q.setup ?? {}) });
-      const r = await t.exec(q.cmd);
-      if (alive) setCorrect(r.text.trimEnd());
+      try {
+        const t = new Terminal({ instant: true, ...(q.setup ?? {}) });
+        const r = await Promise.race([t.exec(q.cmd), new Promise<never>((_, no) => setTimeout(() => no(new Error('tiempo agotado')), 4000))]);
+        if (alive) setCorrect(r.text.trimEnd());
+      } catch {
+        if (alive) setFailed(true);
+      }
     })();
     return () => {
       alive = false;
     };
   }, [q]);
   const options = useMemo(() => (correct === null ? [] : seededShuffle([correct, ...q.wrong.map((w) => w.trimEnd())], seed)), [correct, q, seed]);
-  useEffect(() => setReady(sel !== null), [sel, setReady]);
+  // si la salida no se pudo preparar, «Comprobar» sigue disponible para no dejar la sesión atascada
+  useEffect(() => setReady(sel !== null || failed), [sel, failed, setReady]);
   getRef.current = () => ({ correct: sel !== null && options[sel] === correct, given: sel !== null ? options[sel] : '' });
   return (
     <View style={{ gap: 12 }}>
       <CodeBlock lines={[`$ ${q.cmd}`]} />
+      {correct === null ? <T v="small" color={failed ? colors.amber : colors.dim}>{failed ? 'No se pudo preparar esta pregunta. Toca «Comprobar» para continuar.' : 'Preparando las opciones…'}</T> : null}
       <View style={{ gap: 10 }}>
         {options.map((o, i) => {
           let st: 'idle' | 'selected' | 'right' | 'wrong' | 'dim' = sel === i ? 'selected' : 'idle';
@@ -443,23 +456,37 @@ function Output({ q, seed, locked, setReady, getRef }: SubProps & { q: Extract<Q
 // ───────────────────────── Python: predecir la salida ─────────────────────────
 
 function PyOut({ q, seed, locked, setReady, getRef }: SubProps & { q: Extract<Question, { t: 'pyout' }>; seed: string }) {
-  const [correct, setCorrect] = useState<string | null>(null);
+  // la salida casi siempre viene precalculada (ver pyoutAnswers.ts): ejecutar Python aquí congelaría la pantalla
+  const known = useMemo(() => knownPyout(q.code, q.setup), [q]);
+  const [computed, setComputed] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
   const [sel, setSel] = useState<number | null>(null);
   useEffect(() => {
+    if (known !== undefined) return undefined;
     let alive = true;
-    pythonStdout(q.code, q.setup).then((out) => {
-      if (alive) setCorrect(out);
-    });
+    // sin salida precalculada: se ejecuta, pero después de pintar la pregunta
+    const t = setTimeout(() => {
+      pythonStdout(q.code, q.setup)
+        .then((out) => {
+          if (alive) setComputed(out);
+        })
+        .catch(() => {
+          if (alive) setFailed(true);
+        });
+    }, 80);
     return () => {
       alive = false;
+      clearTimeout(t);
     };
-  }, [q]);
+  }, [q, known]);
+  const correct = known ?? computed;
   const options = useMemo(() => (correct === null ? [] : seededShuffle([correct, ...q.wrong.map((w) => w.trimEnd())], seed)), [correct, q, seed]);
-  useEffect(() => setReady(sel !== null), [sel, setReady]);
+  useEffect(() => setReady(sel !== null || failed), [sel, failed, setReady]);
   getRef.current = () => ({ correct: sel !== null && options[sel] === correct, given: sel !== null ? options[sel] : '' });
   return (
     <View style={{ gap: 12 }}>
       <PyCode code={q.code} />
+      {correct === null ? <T v="small" color={failed ? colors.amber : colors.dim}>{failed ? 'No se pudo preparar esta pregunta. Toca «Comprobar» para continuar.' : 'Preparando las opciones…'}</T> : null}
       <View style={{ gap: 10 }}>
         {options.map((o, i) => {
           let st: 'idle' | 'selected' | 'right' | 'wrong' | 'dim' = sel === i ? 'selected' : 'idle';

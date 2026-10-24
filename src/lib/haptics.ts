@@ -2,13 +2,16 @@ import { Platform, Vibration } from 'react-native';
 import * as Haptics from 'expo-haptics';
 
 let enabled = true;
-export const setHaptics = (v: boolean) => {
+let touchOn = true;
+/** `v`: interruptor general de la vibración. `touch`: la vibración suave al tocar botones y opciones (los avisos de acierto, error y confeti no dependen de ella). */
+export const setHaptics = (v: boolean, touch = true) => {
   enabled = v;
+  touchOn = touch;
   if (!v && Platform.OS === 'android') Vibration.cancel();
 };
 
-const run = (fn: () => Promise<void> | void) => {
-  if (!enabled || Platform.OS === 'web') return;
+const run = (fn: () => Promise<void> | void, soft = false) => {
+  if (!enabled || (soft && !touchOn) || Platform.OS === 'web') return;
   try {
     const r = fn();
     if (r) r.catch(() => {});
@@ -34,10 +37,10 @@ const buzz = (name: keyof typeof PATTERNS, system: () => Promise<void>) =>
     return system();
   });
 
-export const tap = () => run(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light));
+export const tap = () => run(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light), true);
 export const success = () => buzz('success', () => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success));
 export const error = () => buzz('error', () => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error));
 export const warn = () => buzz('warn', () => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning));
-export const select = () => run(() => Haptics.selectionAsync());
+export const select = () => run(() => Haptics.selectionAsync(), true);
 /** Celebración: sale con el confeti (reto superado, lección completada…). */
 export const celebrate = () => buzz('celebrate', () => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success));
