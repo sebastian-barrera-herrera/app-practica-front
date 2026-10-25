@@ -6,7 +6,8 @@ import { signOutAndWipe } from '@/cloud/session';
 import { syncNow, useSync } from '@/cloud/sync';
 import { COURSE_LIST } from '@/content';
 import { allAchievements } from '@/game/achievements';
-import { enabledCourses, goalStreak } from '@/game/root';
+import { balance } from '@/game/economy';
+import { enabledCourses, goalStreak, shownCourses } from '@/game/root';
 import { useGame } from '@/game/store';
 import { dayKey, streakAlive } from '@/game/streak';
 import { levelProgress } from '@/game/xp';
@@ -88,7 +89,10 @@ export default function Profile() {
   }, [root.study]);
   const goalTotal = on.reduce((n, c) => n + root.settings.goalMinutes[c], 0) || 60;
 
-  const list = useMemo(() => allAchievements(COURSE_LIST), []);
+  const shown = shownCourses(root);
+  const shownKey = shown.join(',');
+  // solo cuentan los logros de los cursos que sigue (o ha practicado)
+  const list = useMemo(() => allAchievements(COURSE_LIST).filter((a) => !a.course || shownKey.split(',').includes(a.course)), [shownKey]);
   const unlocked = list.filter((a) => root.achievements[a.id]);
   const recent = [...unlocked].sort((a, b) => (root.achievements[b.id] ?? 0) - (root.achievements[a.id] ?? 0)).slice(0, 8);
   const hours = totalSeconds / 3600;
@@ -119,9 +123,13 @@ export default function Profile() {
           </Pressable>
         </View>
 
-        <Card>
+        <Card onPress={() => router.push('/levels')}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <T v="small" bold>{lp.emoji} Nivel {lp.level} · {lp.title}</T>
+            <T v="small" bold color={colors.violet}>Ver niveles ›</T>
+          </View>
           <ProgressBar value={lp.pct} color={colors.cyan} height={12} />
-          <T v="tiny" color={colors.dim} style={{ marginTop: 6 }}>{lp.need - lp.into} XP para el nivel {lp.level + 1}</T>
+          <T v="tiny" color={colors.dim} style={{ marginTop: 6 }}>{lp.need - lp.into} XP para el nivel {lp.level + 1} · 🪙 {balance(root.xp, root.extras).toLocaleString('es')} monedas</T>
         </Card>
 
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
@@ -132,7 +140,7 @@ export default function Profile() {
         </View>
 
         <T v="label" color={colors.dim}>Por curso</T>
-        {COURSE_LIST.map((c) => {
+        {COURSE_LIST.filter((c) => shown.includes(c.id)).map((c) => {
           const s = root.courses[c.id];
           const col = courseColor(c.id);
           const done = Object.values(s.lessons).filter((l) => l.done).length;
@@ -144,13 +152,15 @@ export default function Profile() {
               key={c.id}
               accent={col}
               onPress={() => {
+                // un curso que ya no sigue lleva al catálogo para volver a añadirlo
+                if (!root.settings.courseOn[c.id]) return router.push('/courses');
                 useGame.getState().setActive(c.id);
                 router.push('/(tabs)/roadmap');
               }}
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 }}>
                 <T style={{ fontSize: 26 }}>{c.emoji}</T>
-                <T v="h3" color={col} style={{ flex: 1 }}>{c.name}</T>
+                <T v="h3" color={col} style={{ flex: 1 }}>{c.name}{root.settings.courseOn[c.id] ? '' : ' · pausado'}</T>
                 <T v="tiny" color={colors.dim}>{(secs / 3600).toFixed(1)} h</T>
               </View>
               <ProgressBar value={c.lessons.length ? done / c.lessons.length : 0} color={col} height={8} />
@@ -158,7 +168,7 @@ export default function Profile() {
                 <T v="small" color={colors.dim}>📘 {done}/{c.lessons.length || '—'} lecciones</T>
                 <T v="small" color={colors.dim}>⭐ {stars}</T>
                 <T v="small" color={colors.dim}>🎯 {acc} %</T>
-                <T v="small" color={colors.dim}>{c.id === 'linux' ? '⌨️' : '🖥️'} {s.stats.challenges}</T>
+                <T v="small" color={colors.dim}>{c.id === 'linux' ? '⌨️' : c.id === 'sql' ? '🗃️' : '🖥️'} {s.stats.challenges}</T>
               </View>
               <View style={{ flexDirection: 'row', gap: 14, marginTop: 10 }}>
                 {c.levels.map((lv) => (

@@ -83,6 +83,9 @@ export default function RootLayout() {
             <Stack.Screen name="session/[mode]" options={{ gestureEnabled: false, animation: 'slide_from_bottom' }} />
             <Stack.Screen name="go/[course]" options={{ animation: 'fade' }} />
             <Stack.Screen name="settings" />
+            <Stack.Screen name="courses" />
+            <Stack.Screen name="levels" />
+            <Stack.Screen name="shop" />
             <Stack.Screen name="achievements" />
             <Stack.Screen name="library/index" />
             <Stack.Screen name="library/[cmd]" />

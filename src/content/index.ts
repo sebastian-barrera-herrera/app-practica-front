@@ -28,7 +28,7 @@ export interface CourseDef {
   emoji: string;
   tagline: string;
   /** Laboratorio de práctica libre. */
-  lab: { title: string; emoji: string; kind: 'terminal' | 'python'; blurb: string };
+  lab: { title: string; emoji: string; kind: 'terminal' | 'python' | 'sql'; blurb: string };
   /** Sustantivos del curso para textos de la interfaz. */
   nouns: { challenge: string; challenges: string; library: string; libraryBlurb: string; item: string };
   worlds: WorldDef[];
@@ -59,9 +59,19 @@ export const COURSES: Record<CourseId, CourseDef> = {
     worlds: PY_WORLDS,
     levels: LEVELS,
   }),
+  sql: mk({
+    id: 'sql',
+    name: 'SQL',
+    emoji: '🗃️',
+    tagline: 'Consulta, une, agrupa y diseña bases de datos de cero a experto',
+    lab: { title: 'Consultas', emoji: '🔎', kind: 'sql', blurb: 'Bases de datos de ejemplo donde puedes lanzar cualquier consulta y ver el resultado al instante.' },
+    nouns: { challenge: 'reto de SQL', challenges: 'retos de SQL', library: 'Biblioteca de SQL', libraryBlurb: 'Cláusulas, funciones y patrones con ejemplos', item: 'cláusula' },
+    worlds: [],
+    levels: LEVELS,
+  }),
 };
 
-export const COURSE_IDS: CourseId[] = ['linux', 'python'];
+export const COURSE_IDS: CourseId[] = ['linux', 'python', 'sql'];
 export const COURSE_LIST: CourseDef[] = COURSE_IDS.map((id) => COURSES[id]);
 export const courseDef = (id: CourseId): CourseDef => COURSES[id];
 

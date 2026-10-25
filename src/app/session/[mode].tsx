@@ -5,13 +5,18 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import { courseDef, worldById, type CourseDef } from '@/content';
 import { FAST_TYPES, questionById, type QItem } from '@/content/pool';
 import type { AnyChallenge, CourseId, Question } from '@/content/types';
-import { certExam, worldExam, type ExamPlan } from '@/game/exams';
+import { certExam, skipExam, skippedWorlds, skipWait, worldExam, type ExamPlan } from '@/game/exams';
+import { worldComplete } from '@/game/progress';
+import { SKIP_COOLDOWN_MS } from '@/game/shop';
 import type { Achievement } from '@/game/achievements';
 import { blitzPool, dailyChallenge, reviewSession, surpriseSession } from '@/game/sessions';
 import { flat } from '@/game/root';
 import { dayKey } from '@/game/streak';
 import { RESUME_MAX_AGE, useResume, validExam, validRun } from '@/game/resume';
 import { useGame } from '@/game/store';
+import { COINS, owned } from '@/game/economy';
+import { comboXp } from '@/game/xp';
+import { success as hapticSuccess } from '@/lib/haptics';
 import { useStudyContext } from '@/lib/studyClock';
 import { AnyChallengeView } from '@/ui/AnyChallenge';
 import { CodeLangProvider } from '@/ui/codeLang';
@@ -32,7 +37,7 @@ export default function SessionScreen() {
   const { mode, scope, course: courseParam } = useLocalSearchParams<{ mode: string; scope?: string; course?: string }>();
   const active = useGame((s) => s.active);
   // los exámenes y misiones de una zona saben a qué curso pertenecen; el resto lo indica el parámetro `course`
-  const worldCourse = mode?.startsWith('boss-') || mode?.startsWith('exam-') ? worldById(mode.slice(mode.indexOf('-') + 1))?.course : undefined;
+  const worldCourse = mode?.startsWith('boss-') || mode?.startsWith('exam-') || mode?.startsWith('skip-') ? worldById(mode.slice(mode.indexOf('-') + 1))?.course : undefined;
   const cid: CourseId = worldCourse ?? (courseParam === 'python' || courseParam === 'linux' ? courseParam : active);
   useStudyContext(cid);
   return (
@@ -51,6 +56,20 @@ function SessionRoute({ mode, scope, course }: { mode: string; scope?: string; c
   if (mode?.startsWith('exam-')) {
     const w = worldById(mode.slice(5));
     if (w) return <ExamRun course={course} resumeKey={mode} planOf={(seed) => worldExam(course, w, seed)} />;
+  }
+  if (mode?.startsWith('skip-')) {
+    const w = worldById(mode.slice(5));
+    if (w)
+      return (
+        <ExamRun
+          course={course}
+          resumeKey={mode}
+          planOf={(seed) => {
+            const s = flat(useGame.getState(), course.id);
+            return skipExam(course, w, skippedWorlds(course, w, (x) => worldComplete(s, x)), seed);
+          }}
+        />
+      );
   }
   if (mode?.startsWith('cert-')) return <ExamRun course={course} resumeKey={mode} planOf={(seed) => certExam(course, mode.slice(5) as never, seed)} />;
   return (
@@ -125,7 +144,7 @@ function savedItems(key: string, course: CourseDef): QItem[] | null {
   return items.every((x) => !!x && x.course === course.id) ? (items as QItem[]) : null;
 }
 
-function QuestionRun({ course, items, title, color, mode, onFinish, srsReview, resumeKey, due }: { course: CourseDef; items: QItem[]; title: string; color?: string; mode: 'lesson' | 'exam'; onFinish: (results: { item: QItem; correct: boolean }[]) => void; srsReview?: boolean; resumeKey: string; due?: number }) {
+function QuestionRun({ course, items, title, color, mode, onFinish, srsReview, resumeKey, due }: { course: CourseDef; items: QItem[]; title: string; color?: string; mode: 'lesson' | 'exam'; onFinish: (results: { item: QItem; correct: boolean }[], bestCombo: number) => void; srsReview?: boolean; resumeKey: string; due?: number }) {
   // si el alumno salió a la mitad, se retoma en la pregunta donde lo dejó
   const saved = useMemo(() => validRun(useResume.getState().runs[resumeKey], items.map((i) => i.id)), [resumeKey, items]);
   const [pos, setPos] = useState(saved?.pos ?? 0);
@@ -133,12 +152,30 @@ function QuestionRun({ course, items, title, color, mode, onFinish, srsReview, r
   const [confirm, setConfirm] = useState(false);
   // un toque doble en «Continuar» no debe contar la misma pregunta dos veces
   const answeredAt = useRef(-1);
+  // combo: aciertos seguidos (se rompe con un fallo)
+  const [combo, setCombo] = useState(0);
+  const bestCombo = useRef(0);
   const item = items[pos];
   const save = (next: number) =>
     useResume.getState().setRun(resumeKey, { ids: items.map((i) => i.id), pos: next, results: results.current.map((r) => ({ id: r.item.id, correct: r.correct })), due, ts: Date.now() });
   return (
     <Screen edges={['top', 'bottom']} padded={false}>
-      <TopBar pos={pos} total={items.length} color={color} onClose={() => setConfirm(true)} />
+      <TopBar
+        pos={pos}
+        total={items.length}
+        color={color}
+        onClose={() => setConfirm(true)}
+        right={
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            {combo >= 2 ? (
+              <View accessibilityLabel={`Combo de ${combo} aciertos`} style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, backgroundColor: colors.orange + '22', borderWidth: 1, borderColor: colors.orange }}>
+                <T v="tiny" bold color={colors.orange}>🔥 ×{combo}</T>
+              </View>
+            ) : null}
+            <T v="tiny" color={colors.dim}>{pos}/{items.length}</T>
+          </View>
+        }
+      />
       {item && (
         <QuestionView
           q={item.q}
@@ -150,9 +187,13 @@ function QuestionRun({ course, items, title, color, mode, onFinish, srsReview, r
             answeredAt.current = pos;
             useGame.getState().answer(course.id, item.id, r.correct, { review: srsReview });
             results.current.push({ item, correct: r.correct });
+            const nextCombo = r.correct ? combo + 1 : 0;
+            if (nextCombo === 5 || nextCombo === 8 || nextCombo === 12) hapticSuccess();
+            bestCombo.current = Math.max(bestCombo.current, nextCombo);
+            setCombo(nextCombo);
             if (pos + 1 >= items.length) {
               useResume.getState().clearRun(resumeKey);
-              onFinish(results.current);
+              onFinish(results.current, bestCombo.current);
             } else {
               save(pos + 1);
               setPos(pos + 1);
@@ -171,6 +212,8 @@ function QuestionRun({ course, items, title, color, mode, onFinish, srsReview, r
           useResume.getState().clearRun(resumeKey);
           results.current = [];
           answeredAt.current = -1;
+          bestCombo.current = 0;
+          setCombo(0);
           setPos(0);
           setConfirm(false);
         }}
@@ -190,7 +233,7 @@ function ReviewRun({ course }: { course: CourseDef }) {
     if (items) return { items, due: useResume.getState().runs[`review-${course.id}`]?.due ?? items.length, fresh: false };
     return reviewSession(flat(useGame.getState(), course.id), Date.now(), course, 10);
   }, [course]);
-  const [res, setRes] = useState<null | { xp: number; correct: number; total: number; mistakes: Mistake[]; ach: Achievement[]; levelUp: number | null }>(null);
+  const [res, setRes] = useState<null | { xp: number; correct: number; total: number; mistakes: Mistake[]; ach: Achievement[]; levelUp: number | null; combo: number; coins: number }>(null);
   if (!plan.items.length) {
     return (
       <Screen edges={['top', 'bottom']}>
@@ -211,7 +254,7 @@ function ReviewRun({ course }: { course: CourseDef }) {
           subtitle="La memoria se entrena como un músculo"
           mood={res.correct === res.total ? 'cheer' : 'happy'}
           big={`${res.correct}/${res.total}`}
-          rows={[{ label: 'Preguntas', value: String(res.total) }, { label: 'Aciertos', value: String(res.correct), color: colors.green }, { label: 'Pendientes tras repasar', value: String(Math.max(0, plan.due - res.total)) }]}
+          rows={[{ label: 'Preguntas', value: String(res.total) }, { label: 'Aciertos', value: String(res.correct), color: colors.green }, { label: 'Pendientes tras repasar', value: String(Math.max(0, plan.due - res.total)) }, ...(res.combo >= 2 ? [{ label: 'Mejor combo', value: `🔥 ×${res.combo}`, color: colors.orange }] : []), { label: 'Monedas', value: `+🪙 ${res.coins}`, color: colors.amber }]}
           xp={res.xp}
           achievements={res.ach}
           mistakes={res.mistakes}
@@ -232,13 +275,16 @@ function ReviewRun({ course }: { course: CourseDef }) {
       color={courseColor(course.id)}
       mode="lesson"
       srsReview
-      onFinish={(r) => {
+      onFinish={(r, combo) => {
         const correct = r.filter((x) => x.correct).length;
-        const xp = Math.min(40, correct * 3 + 4);
+        const xp = Math.min(40, correct * 3 + 4) + comboXp(combo);
         const g = useGame.getState();
+        const coins = COINS.review(correct);
+        g.giveCoins(coins);
+        g.noteCombo(combo);
         const a = g.awardXp(course.id, xp);
         const ach = g.checkAchievements();
-        setRes({ xp, correct, total: r.length, levelUp: a.levelUp, ach, mistakes: r.filter((x) => !x.correct).map((x) => ({ q: x.item.q.q, correct: correctText(x.item.q), why: x.item.q.why })) });
+        setRes({ xp, correct, total: r.length, levelUp: a.levelUp, ach, combo, coins, mistakes: r.filter((x) => !x.correct).map((x) => ({ q: x.item.q.q, correct: correctText(x.item.q), why: x.item.q.why })) });
       }}
     />
   );
@@ -440,6 +486,10 @@ function ExamRun({ course, planOf, resumeKey }: { course: CourseDef; planOf: (se
   const answeredAt = useRef(-1);
   const [confirm, setConfirm] = useState(false);
   const [end, setEnd] = useState<null | { score: number; passed: boolean; xp: number; ach: Achievement[]; levelUp: number | null }>(null);
+  // examen de salto: tras suspender hay que esperar un poco (o gastar un pase sin espera)
+  const exam = useGame((s) => s.courses[course.id].exams[plan.id]);
+  const passes = useGame((s) => owned(s.extras, 'pass'));
+  const wait = plan.unlocks ? skipWait(exam?.lastAt, exam?.passed, Date.now(), SKIP_COOLDOWN_MS) : 0;
   const finish = useCallback(() => {
     setPhase('end');
   }, []);
@@ -477,6 +527,8 @@ function ExamRun({ course, planOf, resumeKey }: { course: CourseDef; planOf: (se
       extraLabel="Abandonar (no presentado)"
       onExtra={() => {
         useResume.getState().clearExam(key);
+        // abandonar un examen de salto cuenta como intento fallido (si no, bastaría con mirar las preguntas y salir)
+        if (plan.unlocks) useGame.getState().recordExam(course.id, plan.id, 0, plan.passMark, 0);
         router.back();
       }}
       onConfirm={() => {
@@ -493,6 +545,7 @@ function ExamRun({ course, planOf, resumeKey }: { course: CourseDef; planOf: (se
     const score = totalPts ? got / totalPts : 0;
     const g = useGame.getState();
     const r = g.recordExam(course.id, plan.id, score, plan.passMark, plan.bonusXp);
+    if (r.passed && plan.unlocks) g.unlockZone(course.id, plan.unlocks.worldIndex);
     setEnd({ score, passed: r.passed, xp: r.passed ? plan.bonusXp : Math.round(plan.bonusXp * 0.15), ach: r.newAchievements, levelUp: r.levelUp });
   }, [phase, end, plan, totalPts, course.id]);
 
@@ -511,9 +564,18 @@ function ExamRun({ course, planOf, resumeKey }: { course: CourseDef; planOf: (se
               <T v="small">🎯  Para aprobar: <T v="small" bold>{Math.round(plan.passMark * 100)} %</T></T>
               <T v="small">🧩  Sin pistas ni explicaciones hasta el final</T>
               <T v="small">💎  Premio: <T v="small" bold color={colors.amber}>+{plan.bonusXp} XP</T></T>
+              {plan.unlocks ? <T v="small">🔓  Si apruebas se abre <T v="small" bold>{plan.unlocks.worldTitle}</T> y todas las zonas anteriores</T> : null}
+              {plan.unlocks ? <T v="small">🚪  Si abandonas o suspendes, esperas {Math.round(SKIP_COOLDOWN_MS / 60000)} min para repetirlo</T> : null}
             </View>
           </Card>
-          <Button label="Empezar examen" onPress={() => setPhase(plan.questions.length ? 'q' : 'c')} />
+          {wait > 0 ? (
+            <Card accent={colors.amber}>
+              <T bold color={colors.amber}>⏳ Podrás intentarlo de nuevo en {Math.ceil(wait / 60000)} min</T>
+              <T v="small" color={colors.dim}>Aprovecha para repasar las zonas que te faltan.</T>
+              {passes > 0 ? <Button style={{ marginTop: 10 }} label={`Usar un pase sin espera (tienes ${passes})`} kind="secondary" onPress={() => useGame.getState().spendPass(course.id, plan.id)} /> : <T v="tiny" color={colors.faint} style={{ marginTop: 8 }}>En la tienda hay un 🎟️ Pase sin espera.</T>}
+            </Card>
+          ) : null}
+          <Button label="Empezar examen" disabled={wait > 0} onPress={() => setPhase(plan.questions.length ? 'q' : 'c')} />
           <Button label="Ahora no" kind="ghost" onPress={() => router.back()} />
         </View>
       </Screen>
@@ -534,6 +596,7 @@ function ExamRun({ course, planOf, resumeKey }: { course: CourseDef; planOf: (se
             { label: 'Preguntas acertadas', value: `${results.current.filter((r) => r.correct).length}/${plan.questions.length}`, color: colors.green },
             ...(plan.challenges.length ? [{ label: 'Retos superados', value: `${solved.current}/${plan.challenges.length}`, color: colors.cyan }] : []),
             { label: 'Resultado', value: end.passed ? 'APROBADO' : 'NO APROBADO', color: end.passed ? colors.green : colors.rose },
+            ...(plan.unlocks && end.passed ? [{ label: 'Zona abierta', value: `🔓 ${plan.unlocks.worldTitle}`, color: colors.green }] : []),
           ]}
           xp={end.xp}
           achievements={end.ach}

@@ -228,23 +228,39 @@ export default function Settings() {
           <Row title="🔊 Efectos de sonido" desc="Al acertar, fallar, completar lecciones y cumplir metas" right={<Toggle label="Efectos de sonido" value={st.sfx} onChange={(sfx) => set({ sfx })} />} />
         </Card>
 
+        {/* ── cursos ── */}
+        <SectionTitle>Mis cursos</SectionTitle>
+        <Card>
+          <T v="small" color={colors.dim}>Tú eliges qué aprender: solo los cursos marcados aparecen en la app y cuentan para tus metas y avisos. Quitar uno no borra su progreso.</T>
+          {COURSE_LIST.map((c) => {
+            const id = c.id as CourseId;
+            const soon = c.worlds.length === 0;
+            return (
+              <View key={c.id} style={{ marginTop: 12 }}>
+                <Row
+                  title={`${c.emoji} ${c.name}`}
+                  desc={soon ? 'Próximamente' : st.courseOn[id] ? 'En mis cursos' : 'No lo sigues'}
+                  right={<Toggle label={`Curso de ${c.name}`} value={!!st.courseOn[id]} onChange={(v) => useGame.getState().setCourseOn(id, v)} />}
+                />
+              </View>
+            );
+          })}
+          <View style={{ marginTop: 12 }}>
+            <Button label="Ver catálogo de cursos" kind="secondary" small onPress={() => router.push('/courses')} />
+          </View>
+        </Card>
+
         {/* ── metas ── */}
         <SectionTitle>Metas diarias</SectionTitle>
         <Card>
-          <T v="small" color={colors.dim}>Tiempo de práctica activa que quieres cumplir cada día. El día cuenta como cumplido cuando alcanzas la meta de todos los cursos activos.</T>
-          {COURSE_LIST.map((c) => {
+          <T v="small" color={colors.dim}>Tiempo de práctica activa que quieres cumplir cada día. El día cuenta como cumplido cuando alcanzas la meta de todos tus cursos.</T>
+          {COURSE_LIST.filter((c) => st.courseOn[c.id]).map((c) => {
             const col = courseColor(c.id);
             const id = c.id as CourseId;
             return (
-              <View key={c.id} style={{ marginTop: 14 }}>
-                <Row
-                  title={`${c.emoji} ${c.name}`}
-                  desc={st.courseOn[id] ? `${st.goalMinutes[id]} min al día` : 'No cuenta para la meta'}
-                  right={<Toggle label={`Meta de ${c.name}`} value={st.courseOn[id]} onChange={(v) => set({ courseOn: { ...st.courseOn, [id]: v } })} />}
-                />
-                {st.courseOn[id] && (
-                  <Options value={st.goalMinutes[id]} options={[15, 30, 45, 60, 90, 120]} color={col} fmt={minutesLabel} onChange={(m) => set({ goalMinutes: { ...st.goalMinutes, [id]: m } })} />
-                )}
+              <View key={c.id} style={{ marginTop: 14, gap: 8 }}>
+                <T v="h3">{c.emoji} {c.name} · {minutesLabel(st.goalMinutes[id])} al día</T>
+                <Options value={st.goalMinutes[id]} options={[15, 30, 45, 60, 90, 120]} color={col} fmt={minutesLabel} onChange={(m) => set({ goalMinutes: { ...st.goalMinutes, [id]: m } })} />
               </View>
             );
           })}

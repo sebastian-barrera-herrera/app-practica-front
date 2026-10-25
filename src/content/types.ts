@@ -3,7 +3,7 @@ import type { Files, WorldOptions } from '@/engine/world';
 import type { PyCheck, PyOptions } from '@/pyengine/types';
 
 /** Cursos disponibles. Cada curso tiene su ruta, su laboratorio, su progreso y su meta diaria. */
-export type CourseId = 'linux' | 'python';
+export type CourseId = 'linux' | 'python' | 'sql';
 
 export type LevelId = 'basico' | 'intermedio' | 'avanzado';
 

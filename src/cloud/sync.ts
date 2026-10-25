@@ -5,7 +5,7 @@
  */
 import { AppState } from 'react-native';
 import { create } from 'zustand';
-import { initialRoot, ROOT_VERSION, type RootState } from '@/game/root';
+import { byCourse, initialRoot, ROOT_VERSION, type RootState } from '@/game/root';
 import { useGame } from '@/game/store';
 import { getJwt, refreshSession, useAuth } from './auth';
 import { API_URL } from './config';
@@ -27,8 +27,8 @@ interface Row {
 const rootOf = (): RootState => {
   const s = useGame.getState();
   // quita las acciones: solo el estado
-  const { xp, streak, dailyXp, achievements, settings, surprise, active, courses, study, goalDays, goalBonus, owner, updatedAt } = s;
-  return { xp, streak, dailyXp, achievements, settings, surprise, active, courses, study, goalDays, goalBonus, owner, updatedAt };
+  const { xp, streak, dailyXp, achievements, settings, surprise, extras, active, courses, study, goalDays, goalBonus, owner, updatedAt } = s;
+  return { xp, streak, dailyXp, achievements, settings, surprise, extras, active, courses, study, goalDays, goalBonus, owner, updatedAt };
 };
 
 async function api(path: string, init: RequestInit & { prefer?: string } = {}): Promise<Response> {
@@ -132,7 +132,7 @@ async function doSync(): Promise<'ok' | 'offline' | 'error'> {
       const keepSandbox = sameOwner;
       useGame.getState().replaceRoot({
         ...finalRoot,
-        courses: keepSandbox ? { linux: { ...finalRoot.courses.linux, sandbox: local.courses.linux.sandbox }, python: { ...finalRoot.courses.python, sandbox: local.courses.python.sandbox } } : finalRoot.courses,
+        courses: keepSandbox ? byCourse((c) => ({ ...finalRoot.courses[c], sandbox: local.courses[c].sandbox })) : finalRoot.courses,
       });
     } else if (local.owner !== userId) {
       useGame.getState().setOwner(userId);

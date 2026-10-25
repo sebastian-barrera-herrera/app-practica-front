@@ -40,6 +40,8 @@ export function generalAchievements(): Achievement[] {
     { id: 'goal-7', title: 'Semana de acero', desc: '7 días cumpliendo la meta', emoji: '🗓️', xp: 80, check: (_s, r) => goalDayCount(r) >= 7, progress: (_s, r) => frac(goalDayCount(r), 7) },
     { id: 'goal-30', title: 'Disciplina total', desc: '30 días cumpliendo la meta', emoji: '🏆', xp: 250, check: (_s, r) => goalDayCount(r) >= 30, progress: (_s, r) => frac(goalDayCount(r), 30) },
     { id: 'goal-both', title: 'Doble dojo', desc: 'Cumple la meta de dos cursos el mismo día', emoji: '☯️', xp: 80, check: (_s, r) => Object.values(r.goalDays).some((d) => d.length >= 2) },
+    { id: 'combo-8', title: 'En racha', desc: 'Encadena 8 aciertos a la primera', emoji: '🔥', xp: 30, check: (_s, r) => r.extras.bestCombo >= 8, progress: (_s, r) => frac(r.extras.bestCombo, 8) },
+    { id: 'combo-12', title: 'Sin fallos', desc: 'Encadena 12 aciertos a la primera', emoji: '☄️', xp: 70, check: (_s, r) => r.extras.bestCombo >= 12, progress: (_s, r) => frac(r.extras.bestCombo, 12) },
     { id: 'polyglot', title: 'Políglota', desc: 'Completa una lección en dos cursos distintos', emoji: '🌐', xp: 40, check: (_s, r) => Object.values(r.courses).filter((c) => Object.values(c.lessons).some((l) => l.done)).length >= 2 },
   ];
 }

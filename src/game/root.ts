@@ -6,12 +6,16 @@ import type { CourseDef } from '@/content';
 import type { CourseId } from '@/content/types';
 import { allAchievements, LEGACY_ACHIEVEMENT_IDS, type Achievement } from './achievements';
 import { defaultSettings, defaultStats, addXp, initialState, type ProgressState, type Settings } from './progress';
+import { addCoins, COINS, mergeExtras } from './economy';
 import { dayKey, emptyStreak } from './streak';
 
-export const COURSE_KEYS: CourseId[] = ['linux', 'python'];
+export const COURSE_KEYS: CourseId[] = ['linux', 'python', 'sql'];
 
-type GlobalKeys = 'xp' | 'streak' | 'dailyXp' | 'achievements' | 'settings' | 'surprise';
-const GLOBAL_KEYS: GlobalKeys[] = ['xp', 'streak', 'dailyXp', 'achievements', 'settings', 'surprise'];
+/** Construye un registro con un valor por curso. */
+export const byCourse = <T,>(f: (c: CourseId) => T): Record<CourseId, T> => Object.fromEntries(COURSE_KEYS.map((c) => [c, f(c)])) as Record<CourseId, T>;
+
+type GlobalKeys = 'xp' | 'streak' | 'dailyXp' | 'achievements' | 'settings' | 'surprise' | 'extras';
+const GLOBAL_KEYS: GlobalKeys[] = ['xp', 'streak', 'dailyXp', 'achievements', 'settings', 'surprise', 'extras'];
 
 export type GlobalPart = Pick<ProgressState, GlobalKeys>;
 export type SlicePart = Omit<ProgressState, GlobalKeys>;
@@ -35,8 +39,8 @@ export interface RootState extends GlobalPart {
 export const ROOT_VERSION = 2;
 
 export function emptySlice(): SlicePart {
-  const { xp, streak, dailyXp, achievements, settings, surprise, ...slice } = initialState();
-  void xp; void streak; void dailyXp; void achievements; void settings; void surprise;
+  const { xp, streak, dailyXp, achievements, settings, surprise, extras, ...slice } = initialState();
+  void xp; void streak; void dailyXp; void achievements; void settings; void surprise; void extras;
   return slice;
 }
 
@@ -50,9 +54,10 @@ export function initialRoot(): RootState {
     achievements: base.achievements,
     settings: base.settings,
     surprise: base.surprise,
+    extras: base.extras,
     active: 'linux',
     courses,
-    study: { linux: {}, python: {} },
+    study: byCourse(() => ({})),
     goalDays: {},
     goalBonus: {},
     owner: null,
@@ -70,6 +75,7 @@ export function flat(root: RootState, course: CourseId): ProgressState {
     achievements: root.achievements,
     settings: root.settings,
     surprise: root.surprise,
+    extras: root.extras,
     ...root.courses[course],
   };
 }
@@ -85,6 +91,7 @@ export function unflat(root: RootState, course: CourseId, s: ProgressState): Roo
     achievements: s.achievements,
     settings: s.settings,
     surprise: s.surprise,
+    extras: s.extras,
     courses: { ...root.courses, [course]: slice as SlicePart },
   };
 }
@@ -115,7 +122,8 @@ export function unlockAchievements(root: RootState, now: number, courses: Course
     }
     if (!batch.length) break;
     unlocked.push(...batch);
-    state = { ...state, achievements: ach, xp: state.xp + batch.reduce((n, a) => n + a.xp, 0) };
+    // cada logro da XP y también algunas monedas
+    state = { ...state, achievements: ach, xp: state.xp + batch.reduce((n, a) => n + a.xp, 0), extras: addCoins(state.extras, batch.reduce((n, a) => n + COINS.achievement(a.xp), 0)) };
   }
   return { root: state, unlocked };
 }
@@ -128,6 +136,26 @@ export const goalSeconds = (root: RootState, course: CourseId) => Math.max(1, ro
 export const studySeconds = (root: RootState, course: CourseId, day: string) => root.study[course]?.[day] ?? 0;
 export const goalMet = (root: RootState, course: CourseId, day: string) => studySeconds(root, course, day) >= goalSeconds(root, course);
 export const enabledCourses = (root: RootState): CourseId[] => COURSE_KEYS.filter((c) => root.settings.courseOn[c]);
+
+/** ¿El alumno ha practicado algo en este curso? (lecciones, retos o tiempo de estudio) */
+export const courseHasProgress = (root: RootState, course: CourseId): boolean =>
+  Object.keys(root.courses[course].lessons).length > 0 || Object.keys(root.courses[course].challenges).length > 0 || Object.keys(root.study[course] ?? {}).length > 0;
+
+/** Cursos que se enseñan en perfil y logros: los elegidos y los que ya tienen progreso (aunque se hayan quitado después). */
+export const shownCourses = (root: RootState): CourseId[] => COURSE_KEYS.filter((c) => root.settings.courseOn[c] || courseHasProgress(root, c));
+
+/**
+ * Añade o quita un curso de «Mis cursos». Siempre queda al menos uno, y el curso activo (Ruta, Practicar, Laboratorio)
+ * es siempre uno de los elegidos. Quitar un curso no borra su progreso: se conserva por si el alumno vuelve.
+ */
+export function setCourseOn(root: RootState, course: CourseId, on: boolean): RootState {
+  const cur = root.settings.courseOn;
+  if (!!cur[course] === on) return root;
+  const next = { ...cur, [course]: on };
+  if (!COURSE_KEYS.some((c) => next[c])) return root;
+  const active = next[root.active] ? root.active : COURSE_KEYS.find((c) => next[c])!;
+  return { ...root, settings: { ...root.settings, courseOn: next }, active };
+}
 
 /** ¿Se cumplieron las metas de todos los cursos activos en ese día? */
 export function dayComplete(root: RootState, day: string): boolean {
@@ -201,7 +229,8 @@ export function addStudySeconds(root: RootState, course: CourseId, seconds: numb
       next = { ...next, goalBonus: { ...next.goalBonus, [day]: [...(next.goalBonus[day] ?? []), course] } };
       const r = addXp(flat(next, course), GOAL_BONUS_XP, now);
       next = unflat(next, course, r.state);
-      bonusXp = GOAL_BONUS_XP;
+      next = { ...next, extras: addCoins(next.extras, COINS.goal) };
+      bonusXp = r.gained;
       levelUp = r.levelUp;
     }
     // limitar el histórico de metas
@@ -253,21 +282,22 @@ export function migrateRoot(persisted: unknown): RootState {
     achievements: p.achievements ?? {},
     settings: mergeSettings(p.settings),
     surprise: { ...base.surprise, ...(p.surprise ?? {}) },
-    active: p.active === 'python' ? 'python' : 'linux',
+    extras: mergeExtras(p.extras),
+    active: COURSE_KEYS.includes(p.active) ? p.active : 'linux',
     goalDays: p.goalDays ?? {},
     goalBonus: p.goalBonus ?? {},
-    study: { linux: p.study?.linux ?? {}, python: p.study?.python ?? {} },
+    study: byCourse((c) => p.study?.[c] ?? {}),
     owner: typeof p.owner === 'string' ? p.owner : null,
     updatedAt: typeof p.updatedAt === 'number' ? p.updatedAt : 0,
     courses: base.courses,
   };
   if (p.courses && typeof p.courses === 'object') {
-    out.courses = { linux: mergeSlice(p.courses.linux), python: mergeSlice(p.courses.python) };
+    out.courses = byCourse((c) => mergeSlice(p.courses[c]));
   } else if (p.lessons) {
     // v1: todo el progreso era de Linux
-    const { xp, streak, dailyXp, achievements, settings, surprise, ...slice } = p;
-    void xp; void streak; void dailyXp; void achievements; void settings; void surprise;
-    out.courses = { linux: mergeSlice(slice as Partial<SlicePart>), python: emptySlice() };
+    const { xp, streak, dailyXp, achievements, settings, surprise, extras, ...slice } = p;
+    void xp; void streak; void dailyXp; void achievements; void settings; void surprise; void extras;
+    out.courses = byCourse((c) => (c === 'linux' ? mergeSlice(slice as Partial<SlicePart>) : emptySlice()));
     const ach: Record<string, number> = {};
     for (const [id, t] of Object.entries(out.achievements)) {
       const renamed = LEGACY_ACHIEVEMENT_IDS[id] ?? (id.startsWith('world-') ? `linux:${id}` : id);

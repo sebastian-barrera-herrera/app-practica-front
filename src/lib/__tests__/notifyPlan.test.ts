@@ -35,7 +35,7 @@ describe('plan de notificaciones', () => {
   });
 
   test('si hoy ya cumpliste todas las metas, hoy no se avisa', () => {
-    let r = base({ surpriseEnabled: false, goalMinutes: { linux: 1, python: 1 }, reminders: { ...base().settings.reminders, comeback: false, times: ['19:30'] } });
+    let r = base({ surpriseEnabled: false, goalMinutes: { linux: 1, python: 1, sql: 1 }, reminders: { ...base().settings.reminders, comeback: false, times: ['19:30'] } });
     r = addStudySeconds(r, 'linux', 90, NOW).root;
     r = addStudySeconds(r, 'python', 90, NOW).root;
     const rem = planNotifications(r, NOW).filter((p) => p.kind === 'reminder');

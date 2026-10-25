@@ -1,7 +1,8 @@
 /** Partes sincronizables del progreso y fusión determinista de dos copias (dispositivo ↔ nube). */
 import type { CourseId } from '@/content/types';
-import { COURSE_KEYS, initialRoot, mergeSettings, migrateRoot, type RootState, type SlicePart } from '@/game/root';
+import { byCourse, COURSE_KEYS, initialRoot, mergeSettings, migrateRoot, type RootState, type SlicePart } from '@/game/root';
 import type { LessonRecord, ChallengeRecord, ExamRecord, ProgressState } from '@/game/progress';
+import type { DayAct, Extras } from '@/game/economy';
 import type { SrsItem } from '@/game/srs';
 
 export type Scope = 'global' | CourseId;
@@ -22,19 +23,19 @@ export function splitRoot(root: RootState): Record<Scope, any> {
       achievements: root.achievements,
       settings: root.settings,
       surprise: root.surprise,
+      extras: root.extras,
       study: root.study,
       goalDays: root.goalDays,
       goalBonus: root.goalBonus,
       active: root.active,
     },
-    linux: slice('linux'),
-    python: slice('python'),
+    ...(Object.fromEntries(COURSE_KEYS.map((c) => [c, slice(c)])) as Record<CourseId, any>),
   };
 }
 
 /** Reconstruye una raíz desde las filas de la nube (lo que falte queda en blanco). */
 export function joinRoot(parts: Parts, owner: string | null, updatedAt: number): RootState {
-  const raw = { ...(parts.global ?? {}), courses: { linux: parts.linux ?? {}, python: parts.python ?? {} }, owner, updatedAt };
+  const raw = { ...(parts.global ?? {}), courses: Object.fromEntries(COURSE_KEYS.map((c) => [c, parts[c] ?? {}])), owner, updatedAt };
   return migrateRoot(raw);
 }
 
@@ -60,10 +61,25 @@ function mergeSlice(a: SlicePart, b: SlicePart): SlicePart {
     daily: a.daily.day >= b.daily.day ? a.daily : b.daily,
     sandbox: a.sandbox ?? b.sandbox ?? null,
     seenCommands: mergeRecords<number>(a.seenCommands, b.seenCommands, (x, y) => Math.max(x, y)),
+    skipTo: Math.max(a.skipTo ?? -1, b.skipTo ?? -1),
   };
 }
 
 const mergeDayMap = (a: Record<string, number>, b: Record<string, number>) => mergeRecords<number>(a, b, (x, y) => Math.max(x, y));
+
+/** Las monedas, compras y la actividad del día solo crecen: se fusionan por máximo (o por unión). */
+function mergeExtrasOf(a: Extras, b: Extras): Extras {
+  return {
+    coinsEarned: Math.max(a.coinsEarned, b.coinsEarned),
+    coinsSpent: Math.max(a.coinsSpent, b.coinsSpent),
+    boostUntil: Math.max(a.boostUntil, b.boostUntil),
+    bought: mergeDayMap(a.bought, b.bought),
+    used: mergeDayMap(a.used, b.used),
+    claimed: mergeRecords<string[]>(a.claimed, b.claimed, (x, y) => [...new Set([...x, ...y])]),
+    act: mergeRecords<DayAct>(a.act, b.act, (x, y) => ({ q: Math.max(x.q, y.q), ok: Math.max(x.ok, y.ok), ch: Math.max(x.ch, y.ch), rv: Math.max(x.rv, y.rv) })),
+    bestCombo: Math.max(a.bestCombo, b.bestCombo),
+  };
+}
 const unionMap = <T,>(a: Record<string, T[]>, b: Record<string, T[]>) => mergeRecords<T[]>(a, b, (x, y) => [...new Set([...x, ...y])]);
 
 /**
@@ -87,9 +103,10 @@ export function mergeRoots(a: RootState, b: RootState): RootState {
     // el onboarding ni el nombre que ya había en la otra
     settings: mergeSettings({ ...newer.settings, onboarded: newer.settings.onboarded || older.settings.onboarded, name: newer.settings.name || older.settings.name }),
     surprise: { lastShown: Math.max(a.surprise.lastShown, b.surprise.lastShown), scheduledUntil: Math.max(a.surprise.scheduledUntil, b.surprise.scheduledUntil) },
+    extras: mergeExtrasOf(a.extras, b.extras),
     active: newer.active,
     courses: Object.fromEntries(COURSE_KEYS.map((c) => [c, mergeSlice(a.courses[c], b.courses[c])])) as RootState['courses'],
-    study: { linux: mergeDayMap(a.study.linux ?? {}, b.study.linux ?? {}), python: mergeDayMap(a.study.python ?? {}, b.study.python ?? {}) },
+    study: byCourse((c) => mergeDayMap(a.study[c] ?? {}, b.study[c] ?? {})),
     goalDays: unionMap(a.goalDays, b.goalDays),
     goalBonus: unionMap(a.goalBonus, b.goalBonus),
     owner: a.owner ?? b.owner,

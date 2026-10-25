@@ -26,7 +26,7 @@ export interface PlannedNotification {
   category: 'study' | 'surprise';
 }
 
-export const COURSE_LABEL: Record<CourseId, string> = { linux: '🐧 Linux', python: '🐍 Python' };
+export const COURSE_LABEL: Record<CourseId, string> = { linux: '🐧 Linux', python: '🐍 Python', sql: '🗃️ SQL' };
 
 const HORIZON_DAYS = 10;
 const MAX_PLANNED = 56; // iOS admite 64 notificaciones pendientes
@@ -61,7 +61,7 @@ function reminderText(root: RootState, course: CourseId | 'all', todayLeft: Part
   const left = on.map((c) => ({ c, s: todayLeft[c] ?? goalSeconds(root, c) }));
   const name = root.settings.name ? `, ${root.settings.name.split(' ')[0]}` : '';
   if (course === 'all' || on.length > 1) {
-    const parts = left.filter((x) => x.s > 0).map((x) => `${fmtMin(x.s)} de ${COURSE_LABEL[x.c].slice(3)}`);
+    const parts = left.filter((x) => x.s > 0).map((x) => `${fmtMin(x.s)} de ${COURSE_LABEL[x.c].replace(/^\S+\s/, '')}`);
     const title = pick([`⏱️ Hora de practicar${name}`, `🥋 Tu dojo te espera${name}`, `🔥 Un ratito de código${name}`, `🧠 Toca entrenar${name}`], seed + 't');
     const body = parts.length
       ? pick([`Hoy te faltan ${parts.join(' y ')}. ¡Empieza con una lección!`, `Meta del día: ${parts.join(' + ')}. Cada minuto cuenta.`], seed + 'b')
@@ -186,7 +186,7 @@ export function planNotifications(root: RootState, now: number, opts: { horizonD
         out.push({
           key: `sur-${dk}-${i}`,
           at: when,
-          title: `${COURSE_LABEL[course].slice(0, 2)} ${pick(SURPRISE_TITLES, dk + i)}`,
+          title: `${COURSE_LABEL[course].split(' ')[0]} ${pick(SURPRISE_TITLES, dk + i)}`,
           body: pick(SURPRISE_BODIES, dk + 'b' + i),
           kind: 'surprise',
           course,

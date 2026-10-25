@@ -20,8 +20,8 @@ import { T } from '@/ui/Text';
 import { colors } from '@/ui/theme';
 
 const STARTS = [
-  { id: 'zero', title: 'Empiezo desde cero', desc: 'Voy paso a paso: cada zona se desbloquea al terminar la anterior.', emoji: '🥋' },
-  { id: 'open', title: 'Ya sé algo', desc: 'Todo desbloqueado desde el inicio para saltar a lo que quiera.', emoji: '🧭' },
+  { id: 'zero', title: 'Empiezo desde cero', desc: 'Voy paso a paso: cada zona se abre al terminar la anterior. Si ya sé algo, puedo saltar con un examen de salto.', emoji: '🥋' },
+  { id: 'open', title: 'Quiero verlo todo', desc: 'Todo desbloqueado desde el inicio, sin exámenes de salto.', emoji: '🧭' },
 ];
 
 const SLOTS = [
@@ -36,14 +36,15 @@ const STEPS = 6;
 export default function Onboarding() {
   const name = useGame((s) => s.settings.name).split(' ')[0];
   const [step, setStep] = useState(0);
-  const [on, setOn] = useState<Record<CourseId, boolean>>({ linux: true, python: true });
-  const [minutes, setMinutes] = useState<Record<CourseId, number>>({ linux: 60, python: 60 });
+  // nada preseleccionado: el alumno decide qué aprender
+  const [on, setOn] = useState<Record<CourseId, boolean>>({ linux: false, python: false, sql: false });
+  const [minutes, setMinutes] = useState<Record<CourseId, number>>({ linux: 60, python: 60, sql: 60 });
   const [times, setTimes] = useState<string[]>(['07:30', '20:30']);
   const [sound, setSound] = useState<SoundId>('campana');
   const [start, setStart] = useState<'zero' | 'open'>('zero');
   const [perm, setPerm] = useState<'unknown' | 'granted' | 'denied'>('unknown');
 
-  const anyCourse = on.linux || on.python;
+  const anyCourse = COURSE_LIST.some((c) => on[c.id] && c.worlds.length > 0);
   const mood: Mood = step === 0 ? 'cheer' : step === 1 ? 'happy' : step === 2 ? 'think' : step === 3 ? 'cool' : step === 4 ? 'happy' : 'cheer';
   const total = COURSE_LIST.reduce((n, c) => n + (on[c.id] ? minutes[c.id] : 0), 0);
 
@@ -56,8 +57,8 @@ export default function Onboarding() {
       unlockAll: start === 'open',
       onboarded: true,
     });
-    // el curso que se enseña primero es el primero que activó
-    g.setActive(on.linux ? 'linux' : 'python');
+    // el curso que se enseña primero es el primero que eligió
+    g.setActive(COURSE_LIST.find((c) => on[c.id])?.id ?? 'linux');
     router.replace('/(tabs)/today');
   };
 
@@ -83,7 +84,7 @@ export default function Onboarding() {
             <Card>
               <View style={{ gap: 10 }}>
                 {[
-                  ['📚', 'Dos cursos, de básico a avanzado: Linux y Python'],
+                  ['📚', 'Cursos de Linux, Python y SQL, de básico a avanzado: tú eliges cuáles'],
                   ['⏱️', 'Una meta de práctica diaria para crear el hábito'],
                   ['🔔', 'Recordatorios y exámenes sorpresa con botones'],
                   ['🏅', 'XP, niveles, rachas y logros para no soltarlo'],
@@ -101,18 +102,20 @@ export default function Onboarding() {
         {step === 1 && (
           <Animated.View entering={FadeInDown} style={{ gap: 12 }}>
             <T v="h1" center>¿Qué quieres practicar?</T>
-            <T center color={colors.dim}>Elige uno o los dos. Cada curso tiene su propia ruta, su laboratorio y su progreso; no se mezclan.</T>
+            <T center color={colors.dim}>Elige uno, varios o todos. Cada curso tiene su propia ruta, su laboratorio y su progreso; no se mezclan, y podrás añadir o quitar cursos cuando quieras.</T>
             {COURSE_LIST.map((c) => {
               const col = courseColor(c.id);
               const sel = on[c.id];
+              const soon = c.worlds.length === 0;
               return (
-                <Pressable key={c.id} onPress={() => { select(); setOn({ ...on, [c.id]: !sel }); }} accessibilityRole="checkbox" accessibilityState={{ checked: sel }} accessibilityLabel={c.name}>
+                <Pressable key={c.id} disabled={soon} onPress={() => { select(); setOn({ ...on, [c.id]: !sel }); }} accessibilityRole="checkbox" accessibilityState={{ checked: sel, disabled: soon }} accessibilityLabel={c.name} style={{ opacity: soon ? 0.6 : 1 }}>
                   <Card accent={sel ? col : undefined} style={sel ? { backgroundColor: col + '1A' } : undefined}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
                       <T style={{ fontSize: 34 }}>{c.emoji}</T>
                       <View style={{ flex: 1 }}>
                         <T v="h2" color={sel ? col : colors.text}>{c.name}</T>
                         <T v="small" color={colors.dim}>{c.tagline}</T>
+                        {soon ? <T v="tiny" bold color={colors.amber}>Próximamente</T> : null}
                       </View>
                       <T style={{ fontSize: 22 }} color={sel ? col : colors.faint}>{sel ? '✔' : '○'}</T>
                     </View>
@@ -121,13 +124,14 @@ export default function Onboarding() {
               );
             })}
             {!anyCourse && <T v="small" center color={colors.amber}>Elige al menos un curso para continuar.</T>}
+            {anyCourse && <T v="small" center color={colors.dim}>Puedes empezar con uno y añadir los demás más adelante.</T>}
           </Animated.View>
         )}
 
         {step === 2 && (
           <Animated.View entering={FadeInDown} style={{ gap: 12 }}>
             <T v="h1" center>Tu meta diaria</T>
-            <T center color={colors.dim}>¿Cuánto tiempo quieres practicar cada día en cada curso? Solo cuenta el tiempo activo. Una hora por curso es una gran meta.</T>
+            <T center color={colors.dim}>¿Cuánto tiempo quieres practicar cada día en cada curso? Solo cuenta el tiempo activo. Con varios cursos, elige una meta que de verdad puedas cumplir.</T>
             {COURSE_LIST.filter((c) => on[c.id]).map((c) => {
               const col = courseColor(c.id);
               return (

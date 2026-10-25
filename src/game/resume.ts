@@ -16,6 +16,8 @@ export interface LessonStats {
   quizFirstTry: number;
   practices: number;
   hintsUsed: number;
+  /** Mejor combo de aciertos a la primera. */
+  combo?: number;
 }
 
 export interface LessonResume {

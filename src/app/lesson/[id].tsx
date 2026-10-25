@@ -6,6 +6,7 @@ import { courseDef, lessonById, worldOfLesson } from '@/content';
 import { buildQueue, insertRetry, type QueueItem } from '@/game/lessonQueue';
 import { useResume, validLesson, type LessonStats } from '@/game/resume';
 import { useGame, type FinishOutcome } from '@/game/store';
+import { success } from '@/lib/haptics';
 import { showToast } from '@/ui/Toast';
 import { useStudyContext } from '@/lib/studyClock';
 import { AnyChallengeView } from '@/ui/AnyChallenge';
@@ -56,7 +57,9 @@ function Player({ lessonId }: { lessonId: string }) {
   const [outcome, setOutcome] = useState<FinishOutcome | null>(null);
   const [confirm, setConfirm] = useState(false);
   const [demoDone, setDemoDone] = useState(false);
-  const stats = useRef<LessonStats>(saved ? { ...saved.stats } : { quizTotal: 0, quizFirstTry: 0, practices: 0, hintsUsed: 0 });
+  // combo: aciertos seguidos a la primera (se ve junto a la barra de progreso)
+  const [combo, setCombo] = useState(0);
+  const stats = useRef<LessonStats>(saved ? { ...saved.stats } : { quizTotal: 0, quizFirstTry: 0, practices: 0, hintsUsed: 0, combo: 0 });
   // pasos ya contados: si el alumno vuelve atrás y repite una pregunta o un reto, no se cuenta dos veces
   const counted = useRef(new Set<string>(saved ? buildQueue(lesson, saved.queue).slice(0, saved.pos).map((q) => q.key) : []));
   const total = useMemo(() => queue.length, [queue.length]);
@@ -73,8 +76,9 @@ function Player({ lessonId }: { lessonId: string }) {
 
   const restart = useCallback(() => {
     useResume.getState().clearLesson(lesson.id);
-    stats.current = { quizTotal: 0, quizFirstTry: 0, practices: 0, hintsUsed: 0 };
+    stats.current = { quizTotal: 0, quizFirstTry: 0, practices: 0, hintsUsed: 0, combo: 0 };
     counted.current = new Set();
+    setCombo(0);
     setQueue(buildQueue(lesson));
     setPos(0);
     setDemoDone(false);
@@ -136,6 +140,11 @@ function Player({ lessonId }: { lessonId: string }) {
         <View style={{ flex: 1 }}>
           <ProgressBar value={pos / total} color={world.color || courseColor(course.id)} height={12} />
         </View>
+        {combo >= 2 ? (
+          <View accessibilityLabel={`Combo de ${combo} aciertos`} style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, backgroundColor: colors.orange + '22', borderWidth: 1, borderColor: colors.orange }}>
+            <T v="tiny" bold color={colors.orange}>🔥 ×{combo}</T>
+          </View>
+        ) : null}
         <T v="tiny" color={colors.dim}>{pos + 1}/{total}</T>
       </View>
       <Animated.View key={item.key + (item.retry ? 'r' : '')} entering={FadeInRight.duration(260)} style={{ flex: 1 }}>
@@ -181,6 +190,11 @@ function Player({ lessonId }: { lessonId: string }) {
               if (!item.retry && first) {
                 stats.current.quizTotal += 1;
                 if (r.correct) stats.current.quizFirstTry += 1;
+                // el combo sube con cada acierto a la primera y se rompe con un fallo
+                const next = r.correct ? combo + 1 : 0;
+                if (next === 5 || next === 8 || next === 12) success();
+                stats.current.combo = Math.max(stats.current.combo ?? 0, next);
+                setCombo(next);
                 if (item.srsId) store.getState().answer(course.id, item.srsId, r.correct);
               }
               // la repetimos un poco más adelante

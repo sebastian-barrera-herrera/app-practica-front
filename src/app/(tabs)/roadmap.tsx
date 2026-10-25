@@ -4,7 +4,7 @@ import { Pressable, ScrollView, View } from 'react-native';
 import Animated, { Easing, FadeInDown, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 import type { CourseDef } from '@/content';
 import type { WorldDef } from '@/content/types';
-import { lessonDone, lessonUnlocked, nextLesson, worldComplete, worldProgress, worldUnlocked } from '@/game/progress';
+import { lessonDone, lessonUnlocked, nextLesson, openedBySkip, worldComplete, worldProgress, worldUnlocked } from '@/game/progress';
 import { lessonResumeLabel, useResume } from '@/game/resume';
 import { useCourse } from '@/game/store';
 import { CourseHeader, CourseSwitcher } from '@/ui/CourseSwitcher';
@@ -58,6 +58,9 @@ function WorldSection({ w, wi, course }: { w: WorldDef; wi: number; course: Cour
   const complete = worldComplete(s, w);
   const exam = s.exams[`exam-${w.id}`];
   const resumes = useResume((r) => r.lessons);
+  // las pruebas de la zona se abren al completarla o al abrir la zona con un examen de salto
+  const testsOpen = complete || s.settings.unlockAll || wi <= s.skipTo;
+  const bySkip = openedBySkip(s, WORLDS, wi);
   return (
     <View style={{ marginBottom: 12 }}>
       <Card accent={w.color} style={{ opacity: unlocked ? 1 : 0.6 }} onPress={() => (unlocked ? undefined : warn())}>
@@ -75,7 +78,20 @@ function WorldSection({ w, wi, course }: { w: WorldDef; wi: number; course: Cour
           <ProgressBar value={prog.pct} color={w.color} height={8} />
           <T v="tiny" color={colors.dim}>{prog.done}/{prog.total} lecciones{exam?.passed ? ' · 📝 examen aprobado' : ''}</T>
         </View>
+        {bySkip ? <T v="tiny" bold color={colors.amber} style={{ marginTop: 6 }}>⚡ Abierta con un examen de salto</T> : null}
       </Card>
+      {!unlocked && wi > 0 ? (
+        <Card accent={colors.amber} style={{ marginTop: 8 }}>
+          <T v="small" color={colors.dim}>🔒 Termina la zona anterior… o demuestra que ya lo sabes y salta directo.</T>
+          <Button
+            style={{ marginTop: 10 }}
+            label="⚡ Examen de salto"
+            kind="secondary"
+            small
+            onPress={() => router.push({ pathname: '/session/[mode]', params: { mode: `skip-${w.id}`, course: course.id } })}
+          />
+        </Card>
+      ) : null}
       <View style={{ alignItems: 'center', paddingVertical: 10 }}>
         {w.lessons.map((l, li) => {
           const done = lessonDone(s, l.id);
@@ -107,23 +123,23 @@ function WorldSection({ w, wi, course }: { w: WorldDef; wi: number; course: Cour
           <Node
             emoji="🥋"
             title="Misión final"
-            state={!complete && !s.settings.unlockAll ? 'locked' : s.challenges[w.boss.id]?.solved ? 'done' : 'open'}
+            state={!testsOpen ? 'locked' : s.challenges[w.boss.id]?.solved ? 'done' : 'open'}
             color={colors.rose}
             stars={s.challenges[w.boss.id]?.solved ? 3 : undefined}
             delay={w.lessons.length * 50}
             offset={Math.sin(w.lessons.length * 1.15) * 54}
-            onPress={() => (complete || s.settings.unlockAll ? router.push({ pathname: '/session/[mode]', params: { mode: `boss-${w.id}`, course: course.id } }) : warn())}
+            onPress={() => (testsOpen ? router.push({ pathname: '/session/[mode]', params: { mode: `boss-${w.id}`, course: course.id } }) : warn())}
           />
         )}
         <Node
           emoji="📝"
           title="Examen de la zona"
-          state={!complete && !s.settings.unlockAll ? 'locked' : exam?.passed ? 'done' : 'open'}
+          state={!testsOpen ? 'locked' : exam?.passed ? 'done' : 'open'}
           color={colors.violet}
           stars={exam?.passed ? (exam.best >= 0.95 ? 3 : exam.best >= 0.85 ? 2 : 1) : undefined}
           delay={(w.lessons.length + 1) * 50}
           offset={Math.sin((w.lessons.length + 1) * 1.15) * 54}
-          onPress={() => (complete || s.settings.unlockAll ? router.push({ pathname: '/session/[mode]', params: { mode: `exam-${w.id}`, course: course.id } }) : warn())}
+          onPress={() => (testsOpen ? router.push({ pathname: '/session/[mode]', params: { mode: `exam-${w.id}`, course: course.id } }) : warn())}
         />
       </View>
     </View>

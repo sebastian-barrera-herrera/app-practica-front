@@ -11,9 +11,13 @@ import {
   solveChallenge as solveChallengeFn, trackCommands as trackCommandsFn,
   type LessonOutcome, type LessonResult, type ProgressState, type Settings,
 } from './progress';
+import { addCoins } from './economy';
+import { claimMission as claimMissionFn } from './missions';
 import { useResume } from './resume';
+import { buy as buyFn, consumePass as consumePassFn, type ShopId } from './shop';
+import { dayKey } from './streak';
 import {
-  addStudySeconds, flat, initialRoot, mergeSettings, migrateRoot, ROOT_VERSION, unflat, unlockAchievements, withCourse,
+  addStudySeconds, flat, initialRoot, mergeSettings, migrateRoot, ROOT_VERSION, setCourseOn as setCourseOnFn, unflat, unlockAchievements, withCourse,
   type RootState, type StudyResult,
 } from './root';
 
@@ -29,6 +33,20 @@ export interface Actions {
   awardXp: (course: CourseId, n: number) => { levelUp: number | null };
   recordExam: (course: CourseId, id: string, score: number, passMark: number, bonusXp: number) => { passed: boolean; newAchievements: Achievement[]; levelUp: number | null };
   setSettings: (patch: Partial<Settings>) => void;
+  /** Añade o quita un curso de «Mis cursos»; devuelve false si no se pudo (siempre debe quedar uno). */
+  setCourseOn: (course: CourseId, on: boolean) => boolean;
+  /** Abre una zona (y las anteriores) tras aprobar su examen de salto. */
+  unlockZone: (course: CourseId, worldIndex: number) => void;
+  /** Suma monedas 🪙 (repasos, etc.). */
+  giveCoins: (n: number) => void;
+  /** Anota el mejor combo de aciertos. */
+  noteCombo: (n: number) => void;
+  /** Reclama una misión diaria terminada; devuelve las monedas ganadas (0 si no se pudo). */
+  claimMission: (id: string) => number;
+  /** Compra un objeto de la tienda. */
+  buyItem: (id: ShopId) => { ok: boolean; reason?: string };
+  /** Gasta un pase sin espera, si hay, y quita la espera del examen de salto indicado. */
+  spendPass: (course: CourseId, examId: string) => boolean;
   bump: (course: CourseId, patch: Partial<ProgressState['stats']>) => Achievement[];
   setStat: (course: CourseId, key: keyof ProgressState['stats'], value: number) => Achievement[];
   checkAchievements: () => Achievement[];
@@ -73,7 +91,58 @@ export const useGame = create<Store>()(
       return {
         ...initialRoot(),
 
-        setActive: (course) => set({ active: course }),
+        // solo se puede estar en un curso de «Mis cursos»
+        setActive: (course) => {
+          if (get().settings.courseOn[course]) set({ active: course });
+        },
+
+        unlockZone: (course, worldIndex) => {
+          const root = state();
+          const s = flat(root, course);
+          if (worldIndex <= s.skipTo) return;
+          commit(unflat(root, course, { ...s, skipTo: worldIndex }));
+        },
+
+        giveCoins: (n) => {
+          const root = state();
+          set({ extras: addCoins(root.extras, n), updatedAt: now() });
+        },
+
+        noteCombo: (n) => {
+          const ex = state().extras;
+          if (n > ex.bestCombo) commit({ ...state(), extras: { ...ex, bestCombo: n } });
+        },
+
+        claimMission: (id) => {
+          const r = claimMissionFn(state(), id, dayKey(now()));
+          if (r.coins > 0) commit(r.root);
+          return r.coins;
+        },
+
+        buyItem: (id) => {
+          const r = buyFn(state(), id, now());
+          if (r.ok) set({ xp: r.root.xp, streak: r.root.streak, extras: r.root.extras, updatedAt: now() });
+          return { ok: r.ok, reason: r.reason };
+        },
+
+        spendPass: (course, examId) => {
+          const root = state();
+          const next = consumePassFn(root);
+          if (!next) return false;
+          const s = flat(next, course);
+          const ex = s.exams[examId];
+          const exams = ex ? { ...s.exams, [examId]: { ...ex, lastAt: undefined } } : s.exams;
+          set({ ...unflat(next, course, { ...s, exams }), updatedAt: now() });
+          return true;
+        },
+
+        setCourseOn: (course, on) => {
+          const before = get();
+          const next = setCourseOnFn(before, course, on);
+          if (next === before) return false;
+          set({ settings: next.settings, active: next.active, updatedAt: now() });
+          return true;
+        },
 
         finishLesson: (course, r) => {
           const t = now();

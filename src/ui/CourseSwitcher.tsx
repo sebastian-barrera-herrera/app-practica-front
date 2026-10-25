@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import React from 'react';
 import { Pressable, View } from 'react-native';
 import { COURSE_LIST, type CourseDef } from '@/content';
@@ -14,25 +15,32 @@ function pct(course: CourseDef, lessons: Record<string, { done: boolean }>): num
   return Math.round((course.lessons.filter((l) => lessons[l.id]?.done).length / total) * 100);
 }
 
-/** Selector de curso (Linux / Python). Cambia el curso activo de Ruta, Practicar y Laboratorio. */
+/**
+ * Selector de curso: solo los cursos que el alumno eligió («Mis cursos»). El «＋» abre el catálogo para añadir otros.
+ * Cambia el curso activo de Ruta, Practicar y Laboratorio.
+ */
 export function CourseSwitcher() {
   const active = useGame((s) => s.active);
   const courses = useGame((s) => s.courses);
+  const on = useGame((s) => s.settings.courseOn);
   const setActive = useGame((s) => s.setActive);
+  const mine = COURSE_LIST.filter((c) => on[c.id]);
+  const hasMore = COURSE_LIST.some((c) => !on[c.id]);
+  const compact = mine.length >= 3;
   return (
-    <View style={{ flexDirection: 'row', gap: 10 }} accessibilityRole="tablist">
-      {COURSE_LIST.map((c) => {
-        const on = c.id === active;
+    <View style={{ flexDirection: 'row', gap: 8 }} accessibilityRole="tablist">
+      {mine.map((c) => {
+        const sel = c.id === active;
         const col = courseColor(c.id);
         const p = pct(c, courses[c.id].lessons);
         return (
           <Pressable
             key={c.id}
             accessibilityRole="tab"
-            accessibilityState={{ selected: on }}
+            accessibilityState={{ selected: sel }}
             accessibilityLabel={`Curso ${c.name}, ${p} % completado`}
             onPress={() => {
-              if (!on) {
+              if (!sel) {
                 select();
                 setActive(c.id as CourseId);
               }
@@ -41,24 +49,37 @@ export function CourseSwitcher() {
               flex: 1,
               flexDirection: 'row',
               alignItems: 'center',
-              gap: 10,
+              gap: compact ? 6 : 10,
               paddingVertical: 10,
-              paddingHorizontal: 12,
+              paddingHorizontal: compact ? 8 : 12,
               borderRadius: radius.lg,
               borderWidth: 2,
-              borderColor: on ? col : colors.line,
-              backgroundColor: on ? col + '22' : colors.card,
-              opacity: on ? 1 : 0.8,
+              borderColor: sel ? col : colors.line,
+              backgroundColor: sel ? col + '22' : colors.card,
+              opacity: sel ? 1 : 0.8,
             }}
           >
-            <T style={{ fontSize: 26 }}>{c.emoji}</T>
+            <T style={{ fontSize: compact ? 22 : 26 }}>{c.emoji}</T>
             <View style={{ flex: 1 }}>
-              <T v="h3" color={on ? col : colors.text}>{c.name}</T>
-              <T v="tiny" color={colors.dim}>{c.worlds.length ? `${p} % completado` : 'Próximamente'}</T>
+              <T v="h3" numberOfLines={1} color={sel ? col : colors.text}>{c.name}</T>
+              {compact ? null : <T v="tiny" color={colors.dim}>{c.worlds.length ? `${p} % completado` : 'Próximamente'}</T>}
             </View>
           </Pressable>
         );
       })}
+      {hasMore && (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Añadir otro curso"
+          onPress={() => {
+            select();
+            router.push('/courses');
+          }}
+          style={{ width: 48, alignItems: 'center', justifyContent: 'center', borderRadius: radius.lg, borderWidth: 2, borderStyle: 'dashed', borderColor: colors.line, backgroundColor: colors.card }}
+        >
+          <T style={{ fontSize: 22 }} color={colors.dim}>＋</T>
+        </Pressable>
+      )}
     </View>
   );
 }

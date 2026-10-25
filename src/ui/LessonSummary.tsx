@@ -3,7 +3,8 @@ import { ScrollView, View } from 'react-native';
 import Animated, { FadeInDown, ZoomIn } from 'react-native-reanimated';
 import type { Lesson } from '@/content/types';
 import type { FinishOutcome } from '@/game/store';
-import { levelTitle } from '@/game/xp';
+import { levelReward } from '@/game/economy';
+import { levelRank } from '@/game/xp';
 import { success } from '@/lib/haptics';
 import { Button } from './Button';
 import { Card } from './Card';
@@ -47,13 +48,17 @@ export function LessonSummary({ lesson, outcome, hasNext, onNext, onBack }: { le
               <T v="h3">Total</T>
               <T v="h3" color={colors.amber}>+{outcome.xp.total} XP</T>
             </View>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              <T v="small" color={colors.dim}>Monedas</T>
+              <T v="small" bold color={colors.amber}>+🪙 {outcome.coins}</T>
+            </View>
             <T v="tiny" color={colors.dim}>Precisión: {Math.round(outcome.accuracy * 100)} %</T>
           </View>
         </Card>
         {outcome.levelUp && (
           <Card accent={colors.violet} style={{ alignSelf: 'stretch' }}>
             <T v="h3" color={colors.violet} center>⬆️ ¡Subes al nivel {outcome.levelUp}!</T>
-            <T v="small" color={colors.dim} center>Ahora eres «{levelTitle(outcome.levelUp)}»</T>
+            <T v="small" color={colors.dim} center>Ahora eres {levelRank(outcome.levelUp).emoji} «{levelRank(outcome.levelUp).title}» · +🪙 {levelReward(outcome.levelUp)}</T>
           </Card>
         )}
         {outcome.streak.current > 0 && (

@@ -2,8 +2,9 @@ import { router, useLocalSearchParams } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import { FlatList, Pressable, View } from 'react-native';
 import { COURSE_LIST } from '@/content';
+import type { CourseId } from '@/content/types';
 import { allAchievements } from '@/game/achievements';
-import { flat } from '@/game/root';
+import { COURSE_KEYS, flat, shownCourses } from '@/game/root';
 import { useGame } from '@/game/store';
 import { Card } from '@/ui/Card';
 import { Chip } from '@/ui/Chip';
@@ -13,19 +14,21 @@ import { Screen } from '@/ui/Screen';
 import { T } from '@/ui/Text';
 import { colors } from '@/ui/theme';
 
-type Filter = 'all' | 'general' | 'linux' | 'python';
+type Filter = 'all' | 'general' | CourseId;
 
 export default function Achievements() {
   const params = useLocalSearchParams<{ course?: string }>();
   const root = useGame();
-  const [filter, setFilter] = useState<Filter>(params.course === 'linux' || params.course === 'python' ? params.course : 'all');
+  const [filter, setFilter] = useState<Filter>(COURSE_KEYS.includes(params.course as CourseId) ? (params.course as CourseId) : 'all');
+  // solo los logros de los cursos que sigue (o ha practicado): no se llena la lista con cursos que no ha elegido
+  const shown = useMemo(() => shownCourses(root), [root.settings.courseOn, root.courses, root.study]); // eslint-disable-line react-hooks/exhaustive-deps
   const list = useMemo(() => {
-    const all = allAchievements(COURSE_LIST).filter((a) => (filter === 'all' ? true : filter === 'general' ? !a.course : a.course === filter));
+    const all = allAchievements(COURSE_LIST).filter((a) => (!a.course || shown.includes(a.course)) && (filter === 'all' ? true : filter === 'general' ? !a.course : a.course === filter));
     return all
       .map((a) => ({ a, at: root.achievements[a.id], p: root.achievements[a.id] ? 1 : a.progress ? Math.min(1, a.progress(flat(root, a.course ?? root.active), root)) : 0 }))
       .sort((x, y) => (x.at ? 0 : 1) - (y.at ? 0 : 1) || (y.at ?? 0) - (x.at ?? 0) || y.p - x.p);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- depende solo de las porciones relevantes del estado
-  }, [root.achievements, root.courses, root.xp, root.streak, root.goalDays, filter]);
+  }, [root.achievements, root.courses, root.xp, root.streak, root.goalDays, filter, shown]);
   const got = list.filter((x) => x.at).length;
 
   return (
@@ -40,7 +43,7 @@ export default function Achievements() {
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
         <Chip label="Todos" active={filter === 'all'} onPress={() => setFilter('all')} />
         <Chip label="⭐ General" active={filter === 'general'} color={colors.amber} onPress={() => setFilter('general')} />
-        {COURSE_LIST.map((c) => (
+        {COURSE_LIST.filter((c) => shown.includes(c.id)).map((c) => (
           <Chip key={c.id} label={`${c.emoji} ${c.name}`} active={filter === c.id} color={courseColor(c.id)} onPress={() => setFilter(c.id)} />
         ))}
       </View>
