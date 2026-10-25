@@ -1,6 +1,7 @@
 import type { Check } from '@/engine/check';
 import type { Files, WorldOptions } from '@/engine/world';
 import type { PyCheck, PyOptions } from '@/pyengine/types';
+import type { SqlCheck, SqlSetup } from '@/sqlengine/judge';
 
 /** Cursos disponibles. Cada curso tiene su ruta, su laboratorio, su progreso y su meta diaria. */
 export type CourseId = 'linux' | 'python' | 'sql';
@@ -55,7 +56,17 @@ export type IllustrationId =
   | 'py-decorator-wrap'
   | 'py-event-loop'
   | 'py-recursion-tree'
-  | 'py-big-o';
+  | 'py-big-o'
+  | 'sql-table-anatomy'
+  | 'sql-eval-order'
+  | 'sql-join-types'
+  | 'sql-group-flow'
+  | 'sql-window-frame'
+  | 'sql-index-tree'
+  | 'sql-transaction'
+  | 'sql-er-model'
+  | 'sql-normalization'
+  | 'sql-set-ops';
 
 // ───────────────────────── preguntas ─────────────────────────
 
@@ -76,7 +87,11 @@ export type Question =
   /** Python: escribir código que cumpla `check` (mini reto dentro del quiz). */
   | { t: 'pycode'; q: string; starter?: string; setup?: PyOptions; check: PyCheck; solution: string; hint?: string; why: string }
   /** Python: predecir la salida. La respuesta correcta se obtiene ejecutando `code` con el intérprete. */
-  | { t: 'pyout'; q: string; code: string; setup?: PyOptions; wrong: string[]; why: string };
+  | { t: 'pyout'; q: string; code: string; setup?: PyOptions; wrong: string[]; why: string }
+  /** SQL: escribir una consulta (o sentencia) que se comprueba ejecutándola contra la base de datos del ejercicio. */
+  | { t: 'sqlcode'; q: string; setup: SqlSetup; starter?: string; check: SqlCheck; solution: string; hint?: string; why: string }
+  /** SQL: predecir el resultado de una consulta. La respuesta correcta es lo que devuelve `sql`; `wrong` son resultados falsos (en texto). */
+  | { t: 'sqlout'; q: string; setup: SqlSetup; sql: string; wrong: string[]; why: string };
 
 export type QuestionKind = Question['t'];
 
@@ -123,8 +138,27 @@ export interface PyChallenge {
   expectInitialFail?: boolean;
 }
 
-export type AnyChallenge = Challenge | PyChallenge;
+/** Reto de SQL: el alumno escribe una consulta o sentencia que se corrige comparando con la solución sobre la misma base de datos. */
+export interface SqlChallenge {
+  lang: 'sql';
+  id: string;
+  prompt: string;
+  goal: string;
+  setup: SqlSetup;
+  starter?: string;
+  check: SqlCheck;
+  /** Solución de referencia (se verifica en los tests). */
+  solution: string;
+  hints: string[];
+  explain: string;
+  par?: number;
+  commands?: string[];
+  expectInitialFail?: boolean;
+}
+
+export type AnyChallenge = Challenge | PyChallenge | SqlChallenge;
 export const isPyChallenge = (c: AnyChallenge): c is PyChallenge => (c as PyChallenge).lang === 'py';
+export const isSqlChallenge = (c: AnyChallenge): c is SqlChallenge => (c as SqlChallenge).lang === 'sql';
 
 // ───────────────────────── pasos de lección ─────────────────────────
 
@@ -143,7 +177,18 @@ export type Step =
   | { type: 'practice'; challenge: Challenge }
   /** Python: celdas de código que se ejecutan una a una en una sesión compartida (como un cuaderno). */
   | { type: 'pydemo'; title?: string; intro?: string; setup?: PyOptions; cells: PyCell[] }
-  | { type: 'pypractice'; challenge: PyChallenge };
+  | { type: 'pypractice'; challenge: PyChallenge }
+  /** SQL: sentencias que se ejecutan una a una sobre una base de datos de ejemplo, mostrando cada resultado. */
+  | { type: 'sqldemo'; title?: string; intro?: string; setup: SqlSetup; cells: SqlCell[] }
+  | { type: 'sqlpractice'; challenge: SqlChallenge };
+
+export interface SqlCell {
+  sql: string;
+  /** Explicación bajo el resultado. */
+  note?: string;
+  /** true ⇒ la sentencia falla A PROPÓSITO (para enseñar a leer errores); el test lo exige. */
+  error?: boolean;
+}
 
 export interface PyCell {
   code: string;

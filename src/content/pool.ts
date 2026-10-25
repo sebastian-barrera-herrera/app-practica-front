@@ -45,7 +45,7 @@ export function questionsOfLevel(course: CourseId, level: LevelId) {
 }
 
 /** Tipos adecuados para pruebas rápidas (respuesta breve). */
-export const FAST_TYPES = new Set(['mc', 'tf', 'cmd', 'fill', 'order', 'output', 'pyout']);
+export const FAST_TYPES = new Set(['mc', 'tf', 'cmd', 'fill', 'order', 'output', 'pyout', 'sqlout']);
 
 /** Elige n preguntas variando tipos y lecciones. */
 export function pickVaried(pool: QItem[], n: number, seed: string): QItem[] {
@@ -70,7 +70,7 @@ export function challengesOfWorld(course: CourseId, worldId: string): AnyChallen
   const w = COURSES[course].worlds.find((x) => x.id === worldId);
   if (!w) return [];
   const list: AnyChallenge[] = [];
-  for (const l of w.lessons) for (const s of l.steps) if (s.type === 'practice' || s.type === 'pypractice') list.push(s.challenge);
+  for (const l of w.lessons) for (const s of l.steps) if (s.type === 'practice' || s.type === 'pypractice' || s.type === 'sqlpractice') list.push(s.challenge);
   return list;
 }
 

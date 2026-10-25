@@ -7,6 +7,7 @@ import { CallStack, Collections, Comprehension, ExceptionsFlow, FileModes, IfFlo
 import { BigO, ClassInstance, DecoratorWrap, EventLoop, GeneratorPause, IteratorProtocol, Mro, RecursionTree } from './PyAdvanced';
 import { PathWalk } from './PathWalk';
 import { ShellVsKernel } from './ShellVsKernel';
+import { TableAnatomy } from './SqlBasics';
 import { CronFields, ProcessStates, Signals, TarBox, UsersGroups } from './SystemViz';
 import { TerminalAnatomy } from './TerminalAnatomy';
 import { AwkFields, EnvInherit, ExitStatus, GlobExpansion, GrepScan, LsLong, PermBits, PipeFlow, RegexCheat, ScriptAnatomy, Streams } from './TextTools';
@@ -61,6 +62,8 @@ const MAP: Partial<Record<IllustrationId, React.ComponentType>> = {
   'py-event-loop': EventLoop,
   'py-recursion-tree': RecursionTree,
   'py-big-o': BigO,
+  // SQL
+  'sql-table-anatomy': TableAnatomy,
 };
 
 export function Illustration({ id }: { id: IllustrationId }) {

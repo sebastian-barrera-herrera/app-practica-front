@@ -75,7 +75,7 @@ export function resolveColumn(scope: Scope, e: Extract<Expr, { k: 'col' }>, alia
   const near = closestWord(e.name, cols, 2);
   let hint: string | undefined;
   if (e.quoted) hint = `Las comillas dobles ("…") se usan para nombres de columnas y tablas. Si «${e.name}» es un texto, escríbelo con comillas simples: '${e.name}'`;
-  else if (aliases?.some((a) => a.toLowerCase() === lname)) hint = `«${e.name}» es un alias del SELECT: aquí todavía no existe (el WHERE y el GROUP BY se evalúan antes). Repite la expresión, o usa una subconsulta`;
+  else if (aliases?.some((a) => a.toLowerCase() === lname)) hint = `«${e.name}» es un alias del SELECT: aquí todavía no existe (el WHERE se evalúa antes que el SELECT). Repite la expresión, o usa una subconsulta`;
   else if (near) hint = `¿Quisiste decir «${near}»?`;
   else if (cols.length) hint = `Columnas disponibles: ${cols.slice(0, 12).join(', ')}${cols.length > 12 ? '…' : ''}`;
   throw nameError(`No existe la columna «${e.name}»`, hint, e.pos);

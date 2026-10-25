@@ -1,5 +1,6 @@
 /** Constructores compactos para escribir lecciones. */
-import type { AnyChallenge, Challenge, CourseId, DemoLine, IllustrationId, Lesson, PyChallenge, Question, Step, WorldDef, LevelId } from './types';
+import type { AnyChallenge, Challenge, CourseId, DemoLine, IllustrationId, Lesson, PyChallenge, Question, SqlChallenge, Step, WorldDef, LevelId } from './types';
+import type { SqlSetup } from '@/sqlengine/judge';
 import type { WorldOptions } from '@/engine/world';
 
 export const learn = (title: string, body: string, emoji?: string): Step => ({ type: 'learn', title, body: body.trim(), emoji });
@@ -40,9 +41,9 @@ export function lesson(
       p++;
       return { ...s, challenge: { ...s.challenge, id: s.challenge.id || `${id}-p${p}` } };
     }
-    if (s.type === 'pypractice') {
+    if (s.type === 'pypractice' || s.type === 'sqlpractice') {
       p++;
-      return { ...s, challenge: { ...s.challenge, id: s.challenge.id || `${id}-p${p}` } };
+      return { ...s, challenge: { ...s.challenge, id: s.challenge.id || `${id}-p${p}` } } as Step;
     }
     return s;
   });
@@ -50,15 +51,19 @@ export function lesson(
 }
 
 export type PyPracticeInput = Omit<PyChallenge, 'id' | 'lang'> & { id?: string };
+export type SqlPracticeInput = Omit<SqlChallenge, 'id' | 'lang' | 'setup'> & { id?: string; setup: SqlSetup | string };
 
 export function world(
-  w: Omit<WorldDef, 'boss' | 'course'> & { course?: CourseId; boss?: PracticeInput | PyPracticeInput },
+  w: Omit<WorldDef, 'boss' | 'course'> & { course?: CourseId; boss?: PracticeInput | PyPracticeInput | SqlPracticeInput },
 ): WorldDef {
   const course: CourseId = w.course ?? 'linux';
+  const sqlSetup = (s: SqlSetup | string): SqlSetup => (typeof s === 'string' ? { db: s } : s);
   const boss: AnyChallenge | undefined = w.boss
     ? course === 'python'
       ? ({ ...(w.boss as PyPracticeInput), lang: 'py', id: w.boss.id ?? `${w.id}-boss` } as PyChallenge)
-      : ({ ...(w.boss as PracticeInput), id: w.boss.id ?? `${w.id}-boss` } as Challenge)
+      : course === 'sql'
+        ? ({ ...(w.boss as SqlPracticeInput), lang: 'sql', setup: sqlSetup((w.boss as SqlPracticeInput).setup), id: w.boss.id ?? `${w.id}-boss` } as SqlChallenge)
+        : ({ ...(w.boss as PracticeInput), id: w.boss.id ?? `${w.id}-boss` } as Challenge)
     : undefined;
   return { ...w, course, boss };
 }

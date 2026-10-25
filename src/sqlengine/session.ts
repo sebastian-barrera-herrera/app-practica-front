@@ -370,3 +370,10 @@ export function renderTable(r: ResultSet): string {
   const line = (vals: string[]) => vals.map((v, i) => v.padEnd(widths[i])).join(' | ').trimEnd();
   return [line(r.columns.map((c) => c.name)), widths.map((w) => '-'.repeat(w)).join('-+-'), ...cells.map(line)].join('\n');
 }
+
+/** El resultado como lo ven las opciones de «¿qué devuelve?»: una fila por línea, valores separados por « | » y sin cabecera. */
+export function renderRows(r: ResultSet): string {
+  if (!r.columns.length) return r.message;
+  if (!r.rows.length) return '(ninguna fila)';
+  return r.rows.map((row) => row.map((v, i) => formatValue(v, r.columns[i].type)).join(' | ')).join('\n');
+}

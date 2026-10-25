@@ -8,16 +8,19 @@ import { knownPyout } from '@/content/pyoutAnswers';
 import { cmdMatches, seededShuffle } from '@/lib/cmdnorm';
 import { error as hapticError, select, success as hapticSuccess } from '@/lib/haptics';
 import { pyEngine, pythonStdout } from '@/lib/pyrun';
+import { newSqlSession, schemaOf, sqlEngine, sqlJudge } from '@/lib/sqlrun';
 import { Button } from './Button';
 import { Chip } from './Chip';
 import { KeyboardSafe } from './KeyboardSafe';
 import { PyCode } from './PyCode';
 import { PyEditor } from './PyEditor';
 import { PyOutput } from './PyOutput';
+import { SqlResult } from './SqlResult';
+import { SqlSchemaPanel } from './SqlSchemaPanel';
 import { CodeBlock, Inline } from './RichText';
 import { usePyRunner } from './usePyRunner';
 import { OnDark, T } from './Text';
-import { colors, fonts, radius, makeStyles } from './theme';
+import { colors, darkColors, fonts, radius, makeStyles } from './theme';
 
 export interface Result {
   correct: boolean;
@@ -105,6 +108,8 @@ function QuestionBody({ q, seed, mode = 'lesson', onDone, continueLabel = 'Conti
       case 'output': return <Output q={q} seed={seed} locked={!!checked} setReady={setReady} getRef={getAnswerRef} />;
       case 'pycode': return <PyCodeQ q={q} locked={!!checked} setReady={setReady} getRef={getAnswerRef} showHint={showHint} />;
       case 'pyout': return <PyOut q={q} seed={seed} locked={!!checked} setReady={setReady} getRef={getAnswerRef} />;
+      case 'sqlcode': return <SqlCodeQ q={q} locked={!!checked} setReady={setReady} getRef={getAnswerRef} />;
+      case 'sqlout': return <SqlOut q={q} seed={seed} locked={!!checked} setReady={setReady} getRef={getAnswerRef} />;
     }
   })();
 
@@ -116,7 +121,7 @@ function QuestionBody({ q, seed, mode = 'lesson', onDone, continueLabel = 'Conti
         <Animated.View entering={FadeInDown.duration(260)} key={seed} style={{ gap: 18 }}>
           {prompt}
           {body}
-          {(q.t === 'cmd' || q.t === 'pycode') && q.hint && !checked ? (
+          {(q.t === 'cmd' || q.t === 'pycode' || q.t === 'sqlcode') && q.hint && !checked ? (
             <Pressable onPress={() => setShowHint(true)}>
               {showHint ? <T v="small" color={colors.amber}>💡 {q.hint}</T> : <T v="small" color={colors.dim}>¿Necesitas una pista? Toca aquí</T>}
             </Pressable>
@@ -143,7 +148,7 @@ function QuestionBody({ q, seed, mode = 'lesson', onDone, continueLabel = 'Conti
             <Animated.View entering={FadeIn.delay(120)} style={{ gap: 6 }}>
               {correctText ? (
                 <T v="small" color={colors.text}>
-                  Respuesta correcta: <T v="small" bold color={colors.text} style={{ fontFamily: q.t === 'cmd' || q.t === 'order' ? fonts.monoBold : fonts.bold }}>{correctText}</T>
+                  Respuesta correcta: <T v="small" bold color={colors.text} style={{ fontFamily: q.t === 'cmd' || q.t === 'order' || q.t === 'sqlcode' ? fonts.monoBold : fonts.bold }}>{correctText}</T>
                 </T>
               ) : null}
               <Inline text={q.why} size={15} color={colors.text} />
@@ -168,6 +173,8 @@ function describeCorrect(q: Question): string | null {
     case 'output': return null;
     case 'pycode': return q.solution;
     case 'pyout': return null;
+    case 'sqlcode': return q.solution;
+    case 'sqlout': return null;
   }
 }
 
@@ -515,6 +522,75 @@ function PyCodeQ({ q, locked, setReady, getRef }: SubProps & { q: Extract<Questi
       {q.setup?.stdin && q.setup.stdin.length > 0 ? <T v="tiny" color={colors.dim}>⌨ Entrada de prueba: {q.setup.stdin.map((l) => `«${l}»`).join(' · ')}</T> : null}
       {!locked && <Button label={runner.running ? 'Ejecutando…' : '▶  Probar'} small kind="secondary" disabled={runner.running || !code.trim()} onPress={() => void runner.run(code, { setup: q.setup })} />}
       {(runner.chunks.length > 0 || runner.running) && <PyOutput chunks={runner.chunks} running={runner.running} asking={!!runner.request} onSubmitInput={runner.submitInput} onStop={runner.stop} maxHeight={160} />}
+    </View>
+  );
+}
+
+// ───────────────────────── SQL: predecir el resultado ─────────────────────────
+
+function SqlOut({ q, seed, locked, setReady, getRef }: SubProps & { q: Extract<Question, { t: 'sqlout' }>; seed: string }) {
+  const [correct, setCorrect] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [sel, setSel] = useState<number | null>(null);
+  const session = useMemo(() => newSqlSession(q.setup), [q]);
+  useEffect(() => {
+    const t = setTimeout(() => {
+      try {
+        const out = session.exec(q.sql);
+        if (out.error) throw out.error.error;
+        setCorrect(sqlEngine().renderRows(out.results[out.results.length - 1]));
+      } catch {
+        setFailed(true);
+      }
+    }, 30);
+    return () => clearTimeout(t);
+  }, [q, session]);
+  const options = useMemo(() => (correct === null ? [] : seededShuffle([correct, ...q.wrong.map((w) => w.trimEnd())], seed)), [correct, q, seed]);
+  useEffect(() => setReady(sel !== null || failed), [sel, failed, setReady]);
+  getRef.current = () => ({ correct: sel !== null && options[sel] === correct, given: sel !== null ? options[sel] : '' });
+  return (
+    <View style={{ gap: 12 }}>
+      <PyCode code={q.sql} lang="sql" />
+      <SqlSchemaPanel db={session.db} />
+      {correct === null ? <T v="small" color={failed ? colors.amber : colors.dim}>{failed ? 'No se pudo preparar esta pregunta. Toca «Comprobar» para continuar.' : 'Preparando las opciones…'}</T> : null}
+      <View style={{ gap: 10 }}>
+        {options.map((o, i) => {
+          let st: 'idle' | 'selected' | 'right' | 'wrong' | 'dim' = sel === i ? 'selected' : 'idle';
+          if (locked) st = o === correct ? 'right' : sel === i ? 'wrong' : 'dim';
+          return <OptionButton key={i} mono label={o || '(sin salida)'} state={st} onPress={() => { if (!locked) { select(); setSel(i); } }} />;
+        })}
+      </View>
+    </View>
+  );
+}
+
+// ───────────────────────── SQL: escribir una consulta ─────────────────────────
+
+function SqlCodeQ({ q, locked, setReady, getRef }: SubProps & { q: Extract<Question, { t: 'sqlcode' }> }) {
+  const [sql, setSql] = useState(q.starter ?? '');
+  const base = useMemo(() => newSqlSession(q.setup), [q]);
+  const schema = useMemo(() => schemaOf(base.db), [base]);
+  const [shown, setShown] = useState<null | { result?: import('@/sqlengine/types').ResultSet; error?: import('@/sqlengine/types').SqlError }>(null);
+  useEffect(() => setReady(sql.trim().length > 0), [sql, setReady]);
+  getRef.current = () => {
+    const r = sqlJudge().judge(() => newSqlSession(q.setup), sql, q.solution, q.check);
+    return { correct: r.ok, given: sql };
+  };
+  const probar = () => {
+    const s = newSqlSession(q.setup);
+    const out = s.exec(sql);
+    setShown({ result: out.results[out.results.length - 1], error: out.error?.error });
+  };
+  return (
+    <View style={{ gap: 10 }}>
+      <SqlSchemaPanel db={base.db} />
+      <PyEditor lang="sql" schema={schema} value={sql} onChange={(v) => { setSql(v); setShown(null); }} readOnly={locked} minHeight={120} placeholder="-- Escribe tu consulta aquí" />
+      {!locked && <Button label="▶  Probar" small kind="secondary" disabled={!sql.trim()} onPress={probar} />}
+      {shown ? (
+        <View style={{ backgroundColor: darkColors.termBg, borderRadius: radius.md, padding: 10, borderWidth: 1, borderColor: darkColors.line }}>
+          <SqlResult result={shown.result} error={shown.error} script={sql} maxRows={20} />
+        </View>
+      ) : null}
     </View>
   );
 }

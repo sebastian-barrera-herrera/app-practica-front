@@ -2,7 +2,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
-import { courseDef, worldById, type CourseDef } from '@/content';
+import { COURSES, courseDef, worldById, type CourseDef } from '@/content';
 import { FAST_TYPES, questionById, type QItem } from '@/content/pool';
 import type { AnyChallenge, CourseId, Question } from '@/content/types';
 import { certExam, skipExam, skippedWorlds, skipWait, worldExam, type ExamPlan } from '@/game/exams';
@@ -38,7 +38,7 @@ export default function SessionScreen() {
   const active = useGame((s) => s.active);
   // los exámenes y misiones de una zona saben a qué curso pertenecen; el resto lo indica el parámetro `course`
   const worldCourse = mode?.startsWith('boss-') || mode?.startsWith('exam-') || mode?.startsWith('skip-') ? worldById(mode.slice(mode.indexOf('-') + 1))?.course : undefined;
-  const cid: CourseId = worldCourse ?? (courseParam === 'python' || courseParam === 'linux' ? courseParam : active);
+  const cid: CourseId = worldCourse ?? (courseParam && courseParam in COURSES ? (courseParam as CourseId) : active);
   useStudyContext(cid);
   return (
     <CodeLangProvider course={cid}>

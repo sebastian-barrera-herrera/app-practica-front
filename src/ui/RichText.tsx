@@ -35,7 +35,9 @@ const CALLOUT = {
 
 export function CodeBlock({ lines, lang }: { lines: string[]; lang?: CodeLang }) {
   const ctx = useCodeLang();
-  if ((lang ?? ctx) === 'py') return <PyCode code={lines.join('\n')} />;
+  const l = lang ?? ctx;
+  if (l === 'py') return <PyCode code={lines.join('\n')} />;
+  if (l === 'sql') return <PyCode code={lines.join('\n')} lang="sql" />;
   return (
     <View style={styles.code}>
       <OnDark>

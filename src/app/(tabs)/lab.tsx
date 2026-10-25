@@ -10,6 +10,7 @@ import { Card } from '@/ui/Card';
 import { ConfirmModal } from '@/ui/ConfirmModal';
 import { CourseHeader, CourseSwitcher } from '@/ui/CourseSwitcher';
 import { PyLab } from '@/ui/PyLab';
+import { SqlLab } from '@/ui/SqlLab';
 import { Screen } from '@/ui/Screen';
 import { TerminalView } from '@/ui/TerminalView';
 import { T } from '@/ui/Text';
@@ -39,6 +40,7 @@ function build(): Terminal {
 
 export default function LabTab() {
   const { course } = useCourse();
+  if (course.lab.kind === 'sql') return <SqlLab />;
   return course.lab.kind === 'terminal' ? <TerminalLab /> : <PyLab />;
 }
 

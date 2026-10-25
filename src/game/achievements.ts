@@ -61,7 +61,7 @@ export function courseAchievements(course: CourseDef): Achievement[] {
     { id: id('lessons-30'), course: c, title: 'Imparable', desc: `Completa 30 lecciones de ${course.name}`, emoji: '🚀', xp: 80, check: (s) => doneCount(s) >= 30, progress: (s) => frac(doneCount(s), 30) },
     { id: id('perfect'), course: c, title: 'Impecable', desc: 'Consigue 3 estrellas en una lección', emoji: '⭐', xp: 15, check: (s) => threeStars(s) >= 1 },
     { id: id('perfect-5'), course: c, title: 'Perfeccionista', desc: '3 estrellas en 5 lecciones', emoji: '🌟', xp: 40, check: (s) => threeStars(s) >= 5, progress: (s) => frac(threeStars(s), 5) },
-    { id: id('challenges-10'), course: c, title: 'Manos a la obra', desc: `Resuelve 10 ${N.challenges}`, emoji: c === 'python' ? '🖥️' : '⌨️', xp: 25, check: (s) => s.stats.challenges >= 10, progress: (s) => frac(s.stats.challenges, 10) },
+    { id: id('challenges-10'), course: c, title: 'Manos a la obra', desc: `Resuelve 10 ${N.challenges}`, emoji: c === 'python' ? '🖥️' : c === 'sql' ? '🗃️' : '⌨️', xp: 25, check: (s) => s.stats.challenges >= 10, progress: (s) => frac(s.stats.challenges, 10) },
     { id: id('challenges-50'), course: c, title: 'Hacker en prácticas', desc: `Resuelve 50 ${N.challenges}`, emoji: '🧑‍💻', xp: 80, check: (s) => s.stats.challenges >= 50, progress: (s) => frac(s.stats.challenges, 50) },
     { id: id('exam-pass'), course: c, title: 'Aprobado', desc: `Aprueba tu primer examen de ${course.name}`, emoji: '📝', xp: 30, check: (s) => s.stats.examsPassed >= 1 },
     { id: id('exams-5'), course: c, title: 'Estudiante modelo', desc: `Aprueba 5 exámenes de ${course.name}`, emoji: '🎓', xp: 80, check: (s) => s.stats.examsPassed >= 5, progress: (s) => frac(s.stats.examsPassed, 5) },
@@ -74,13 +74,19 @@ export function courseAchievements(course: CourseDef): Achievement[] {
     { id: id('surprise-3'), course: c, title: 'Siempre alerta', desc: 'Resuelve 3 exámenes sorpresa', emoji: '🎯', xp: 40, check: (s) => s.stats.surprises >= 3, progress: (s) => frac(s.stats.surprises, 3) },
     { id: id('library-10'), course: c, title: 'Ratón de biblioteca', desc: `Consulta 10 fichas en la ${N.library.toLowerCase()}`, emoji: '📚', xp: 20, check: (s) => s.stats.libraryViews >= 10, progress: (s) => frac(s.stats.libraryViews, 10) },
     { id: id('daily-7'), course: c, title: 'Reto diario ×7', desc: 'Resuelve 7 retos diarios', emoji: '🗓️', xp: 40, check: (s) => s.stats.dailySolved >= 7, progress: (s) => frac(s.stats.dailySolved, 7) },
-    { id: id('sandbox-100'), course: c, title: 'Aventurero', desc: `100 ${c === 'python' ? 'ejecuciones' : 'comandos'} en el laboratorio libre`, emoji: '🧭', xp: 40, check: (s) => s.stats.sandboxCommands >= 100, progress: (s) => frac(s.stats.sandboxCommands, 100) },
+    { id: id('sandbox-100'), course: c, title: 'Aventurero', desc: `100 ${c === 'linux' ? 'comandos' : c === 'sql' ? 'consultas' : 'ejecuciones'} en el laboratorio libre`, emoji: '🧭', xp: 40, check: (s) => s.stats.sandboxCommands >= 100, progress: (s) => frac(s.stats.sandboxCommands, 100) },
   ];
   if (c === 'linux') {
     list.push(
       { id: id('pipes-20'), course: c, title: 'Fontanero', desc: 'Usa 20 tuberías (|)', emoji: '🚰', xp: 30, check: (s) => s.stats.pipes >= 20, progress: (s) => frac(s.stats.pipes, 20) },
       { id: id('sudo-10'), course: c, title: 'Un gran poder…', desc: 'Usa sudo 10 veces', emoji: '🦸', xp: 30, check: (s) => s.stats.sudo >= 10, progress: (s) => frac(s.stats.sudo, 10) },
       { id: id('ctrl-c'), course: c, title: 'Ninja del Ctrl+C', desc: 'Cancela un comando con Ctrl+C', emoji: '🥷', xp: 15, check: (s) => s.stats.ctrlC >= 1 },
+    );
+  }
+  if (c === 'sql') {
+    list.push(
+      { id: id('queries-100'), course: c, title: 'Curioso de datos', desc: 'Ejecuta 100 consultas', emoji: '🔭', xp: 30, check: (s) => s.stats.commands >= 100, progress: (s) => frac(s.stats.commands, 100) },
+      { id: id('queries-500'), course: c, title: 'Analista', desc: 'Ejecuta 500 consultas', emoji: '🧮', xp: 90, check: (s) => s.stats.commands >= 500, progress: (s) => frac(s.stats.commands, 500) },
     );
   }
   for (const w of course.worlds) {

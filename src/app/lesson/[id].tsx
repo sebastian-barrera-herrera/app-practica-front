@@ -13,6 +13,7 @@ import { AnyChallengeView } from '@/ui/AnyChallenge';
 import { CodeLangProvider } from '@/ui/codeLang';
 import { courseColor } from '@/ui/courseColors';
 import { PyDemoView } from '@/ui/PyDemoView';
+import { SqlDemoView } from '@/ui/SqlDemoView';
 import { Illustration } from '@/illustrations';
 import { Button } from '@/ui/Button';
 import { ConfirmModal } from '@/ui/ConfirmModal';
@@ -214,7 +215,18 @@ function Player({ lessonId }: { lessonId: string }) {
             </View>
           </StepScroll>
         )}
-        {(step.type === 'practice' || step.type === 'pypractice') && (
+        {step.type === 'sqldemo' && (
+          <StepScroll footer={<Button label="Continuar" kind={demoDone ? 'primary' : 'secondary'} onPress={next} />}>
+            <View style={{ gap: 16 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <T style={{ fontSize: 30 }}>▶️</T>
+                <T v="h1" style={{ flex: 1 }}>{step.title ?? 'Mira cómo funciona'}</T>
+              </View>
+              <SqlDemoView cells={step.cells} setup={step.setup} intro={step.intro} onComplete={() => setDemoDone(true)} />
+            </View>
+          </StepScroll>
+        )}
+        {(step.type === 'practice' || step.type === 'pypractice' || step.type === 'sqlpractice') && (
           <AnyChallengeView
             course={course.id}
             challenge={step.challenge}

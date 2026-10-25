@@ -1,5 +1,6 @@
 import type { AnyChallenge, CourseId, LevelDef, Lesson, Step, WorldDef } from './types';
 import { PY_WORLDS } from './py';
+import { SQL_WORLDS } from './sql';
 import { w1 } from './worlds/w1';
 import { w2 } from './worlds/w2';
 import { w3 } from './worlds/w3';
@@ -66,7 +67,7 @@ export const COURSES: Record<CourseId, CourseDef> = {
     tagline: 'Consulta, une, agrupa y diseña bases de datos de cero a experto',
     lab: { title: 'Consultas', emoji: '🔎', kind: 'sql', blurb: 'Bases de datos de ejemplo donde puedes lanzar cualquier consulta y ver el resultado al instante.' },
     nouns: { challenge: 'reto de SQL', challenges: 'retos de SQL', library: 'Biblioteca de SQL', libraryBlurb: 'Cláusulas, funciones y patrones con ejemplos', item: 'cláusula' },
-    worlds: [],
+    worlds: SQL_WORLDS,
     levels: LEVELS,
   }),
 };
@@ -85,7 +86,7 @@ export const courseOfLesson = (lessonId: string): CourseId | undefined => worldO
 export function allChallenges(course: CourseId): { challenge: AnyChallenge; lessonId: string | null; worldId: string }[] {
   const out: { challenge: AnyChallenge; lessonId: string | null; worldId: string }[] = [];
   for (const w of COURSES[course].worlds) {
-    for (const l of w.lessons) for (const s of l.steps) if (s.type === 'practice' || s.type === 'pypractice') out.push({ challenge: s.challenge, lessonId: l.id, worldId: w.id });
+    for (const l of w.lessons) for (const s of l.steps) if (s.type === 'practice' || s.type === 'pypractice' || s.type === 'sqlpractice') out.push({ challenge: s.challenge, lessonId: l.id, worldId: w.id });
     if (w.boss) out.push({ challenge: w.boss, lessonId: null, worldId: w.id });
   }
   return out;

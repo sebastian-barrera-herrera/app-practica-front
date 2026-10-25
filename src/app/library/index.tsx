@@ -6,12 +6,14 @@ import { CATEGORY_LABEL, levelColor, LEVEL_LABEL, libraryEntries } from '@/lib/l
 import { Card } from '@/ui/Card';
 import { Chip } from '@/ui/Chip';
 import { PyLibrary } from '@/ui/PyLibrary';
+import { SqlLibrary } from '@/ui/SqlLibrary';
 import { Screen } from '@/ui/Screen';
 import { T } from '@/ui/Text';
 import { colors, fonts, radius } from '@/ui/theme';
 
 export default function LibraryRoute() {
   const { course } = useLocalSearchParams<{ course?: string }>();
+  if (course === 'sql') return <SqlLibrary />;
   return course === 'python' ? <PyLibrary /> : <Library />;
 }
 

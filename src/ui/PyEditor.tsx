@@ -1,36 +1,11 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type LayoutChangeEvent, type TextInputSelectionChangeEvent } from 'react-native';
 import { select } from '@/lib/haptics';
-import { highlightPython } from './pyhighlight';
-import { KEYWORD_CONTROL, PY_COLOR, tokColor } from './pycolors';
-import { SNIPPETS, suggest, type Completion } from './pycomplete';
+import { LANGS } from './editorLang';
+import type { Completion } from './pycomplete';
+import type { SqlSchema } from './sqlcomplete';
 import { T } from './Text';
 import { darkColors, fonts, radius } from './theme';
-
-const KEYS: { label: string; text?: string; pair?: string; act?: 'dedent' | 'tab' }[] = [
-  { label: '⇥', act: 'tab' },
-  { label: '⇤', act: 'dedent' },
-  { label: '( )', text: '()', pair: ')' },
-  { label: '[ ]', text: '[]', pair: ']' },
-  { label: '{ }', text: '{}', pair: '}' },
-  { label: ':', text: ':' },
-  { label: '" "', text: '""', pair: '"' },
-  { label: "' '", text: "''", pair: "'" },
-  { label: '=', text: ' = ' },
-  { label: '#', text: '# ' },
-  { label: ',', text: ', ' },
-  { label: '.', text: '.' },
-  { label: '_', text: '_' },
-  { label: '+', text: ' + ' },
-  { label: '-', text: ' - ' },
-  { label: '*', text: '*' },
-  { label: '/', text: ' / ' },
-  { label: '%', text: ' % ' },
-  { label: '<', text: ' < ' },
-  { label: '>', text: ' > ' },
-  { label: '!', text: '!' },
-  { label: '\\', text: '\\' },
-];
 
 // Medidas del texto. El código se dibuja dos veces con EXACTAMENTE la misma tipografía y relleno: el campo de texto
 // (con letra transparente, para escribir) y, debajo, el texto coloreado. Por eso no hay ajuste de línea: cada línea
@@ -56,13 +31,15 @@ interface Props {
   keys?: boolean;
   /** Números de línea (por defecto, sí). */
   lineNumbers?: boolean;
+  /** Lenguaje del editor (por defecto, Python). */
+  lang?: 'py' | 'sql';
+  /** Tablas y columnas para autocompletar (solo SQL). */
+  schema?: SqlSchema;
 }
 
-const candColor = (c: Completion) =>
-  c.kind === 'var' ? PY_COLOR.text : c.kind === 'kw' ? KEYWORD_CONTROL : c.kind === 'cls' ? PY_COLOR.cls : c.kind === 'snippet' ? darkColors.mint : PY_COLOR.fn;
-
 /** Editor de código del móvil: números de línea, colores como en VS Code, autocompletado, atajos, sangrado automático y pares. */
-export function PyEditor({ value, onChange, minHeight = 150, maxHeight, placeholder, readOnly, autoFocus, keys = true, lineNumbers = true }: Props) {
+export function PyEditor({ value, onChange, minHeight = 150, maxHeight, placeholder, readOnly, autoFocus, keys = true, lineNumbers = true, lang = 'py', schema }: Props) {
+  const L = LANGS[lang];
   const sel = useRef({ start: value.length, end: value.length });
   const [selection, setSelection] = useState({ start: value.length, end: value.length });
   const [forced, setForced] = useState<{ start: number; end: number } | undefined>(undefined);
@@ -86,7 +63,7 @@ export function PyEditor({ value, onChange, minHeight = 150, maxHeight, placehol
   };
 
   // ───── lo que se dibuja ─────
-  const lines = useMemo(() => highlightPython(value), [value]);
+  const lines = useMemo(() => L.highlight(value), [value, L]);
   const longest = useMemo(() => value.split('\n').reduce((m, l) => Math.max(m, l.length), 0), [value]);
   const contentW = Math.max(viewW, Math.ceil((longest + 3) * CHAR) + PAD * 2);
   const cursor = Math.min(selection.start, value.length);
@@ -94,7 +71,7 @@ export function PyEditor({ value, onChange, minHeight = 150, maxHeight, placehol
   const gutterW = Math.max(2, String(lines.length).length) * CHAR + 18;
 
   // ───── autocompletado ─────
-  const sugg = useMemo(() => (focused && !readOnly && selection.start === selection.end ? suggest(value, cursor) : null), [focused, readOnly, value, cursor, selection.start, selection.end]);
+  const sugg = useMemo(() => (focused && !readOnly && selection.start === selection.end ? L.suggest(value, cursor, schema) : null), [focused, readOnly, value, cursor, selection.start, selection.end, L, schema]);
   const items = sugg?.items ?? [];
 
   const replace = (start: number, end: number, text: string, caret: number) => {
@@ -153,7 +130,7 @@ export function PyEditor({ value, onChange, minHeight = 150, maxHeight, placehol
         const ls = value.lastIndexOf('\n', p - 1) + 1;
         const line = value.slice(ls, p);
         let indent = /^[ \t]*/.exec(line)![0];
-        if (/:\s*(#.*)?$/.test(line.trimEnd())) indent += '    ';
+        if (L.indentAfter(line)) indent += '    ';
         if (indent) {
           onChange(text.slice(0, p + 1) + indent + text.slice(p + 1));
           place(p + 1 + indent.length);
@@ -205,7 +182,7 @@ export function PyEditor({ value, onChange, minHeight = 150, maxHeight, placehol
             allowFontScaling={false}
             textAlignVertical="top"
             scrollEnabled={false}
-            placeholder={placeholder}
+            placeholder={placeholder ?? L.placeholder}
             placeholderTextColor={darkColors.faint}
             selectionColor={darkColors.mint}
             cursorColor={darkColors.mint}
@@ -215,7 +192,7 @@ export function PyEditor({ value, onChange, minHeight = 150, maxHeight, placehol
                 tab();
               }
             }}
-            accessibilityLabel="Editor de código"
+            accessibilityLabel={lang === 'sql' ? 'Editor de SQL' : 'Editor de código'}
             style={[
               TEXT,
               // «transparent» no vale en Android: lo toma como «sin color» y pinta la letra en negro; un alfa mínimo sí se respeta
@@ -225,11 +202,11 @@ export function PyEditor({ value, onChange, minHeight = 150, maxHeight, placehol
           />
           {/* el texto coloreado va ENCIMA del campo (que no recibe toques): si el sistema pintara la letra del campo, quedaría tapada */}
           <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-            <Text allowFontScaling={false} style={[TEXT, { position: 'absolute', left: PAD, top: PAD, width: contentW - PAD * 2, color: PY_COLOR.text }]}>
+            <Text allowFontScaling={false} style={[TEXT, { position: 'absolute', left: PAD, top: PAD, width: contentW - PAD * 2, color: L.base }]}>
               {lines.map((line, i) => (
                 <React.Fragment key={i}>
                   {line.map((t, j) => (
-                    <Text key={j} style={{ color: tokColor(t) }}>{t.s}</Text>
+                    <Text key={j} style={{ color: L.color(t) }}>{t.s}</Text>
                   ))}
                   {i < lines.length - 1 ? '\n' : ' '}
                 </React.Fragment>
@@ -254,21 +231,21 @@ export function PyEditor({ value, onChange, minHeight = 150, maxHeight, placehol
         <View style={{ borderTopWidth: 1, borderTopColor: darkColors.line, backgroundColor: darkColors.bg2 }}>
           {/* sugerencias de lo que estás escribiendo o, si no hay, atajos (print(), input(), for…) */}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="always" contentContainerStyle={{ paddingHorizontal: 8, paddingTop: 6, gap: 6, alignItems: 'center' }}>
-            {(items.length ? items : SNIPPETS).map((c) => (
+            {(items.length ? items : L.snippets).map((c) => (
               <Pressable
                 key={`${c.kind}-${c.label}`}
                 onPress={() => accept(c)}
                 accessibilityRole="button"
                 accessibilityLabel={items.length ? `Autocompletar ${c.label}` : `Insertar ${c.label}`}
-                style={{ height: 34, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 8, backgroundColor: c.kind === 'snippet' && c.label === 'print()' ? darkColors.mint + '22' : darkColors.card2, borderWidth: 1, borderColor: c.kind === 'snippet' && c.label === 'print()' ? darkColors.mint : items.length ? candColor(c) + '88' : darkColors.line }}
+                style={{ height: 34, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 8, backgroundColor: c.kind === 'snippet' && c.label === L.primary ? darkColors.mint + '22' : darkColors.card2, borderWidth: 1, borderColor: c.kind === 'snippet' && c.label === L.primary ? darkColors.mint : items.length ? L.candColor(c) + '88' : darkColors.line }}
               >
-                <T style={{ fontFamily: fonts.monoBold, fontSize: 13 }} color={candColor(c)}>{items.length && (c.kind === 'fn' || c.kind === 'bi' || c.kind === 'method') ? `${c.label}()` : c.label}</T>
+                <T style={{ fontFamily: fonts.monoBold, fontSize: 13 }} color={L.candColor(c)}>{items.length && (c.kind === 'fn' || c.kind === 'bi' || c.kind === 'method') ? `${c.label}()` : c.label}</T>
                 {!items.length && c.hint ? <T style={{ fontSize: 11 }} color={darkColors.faint}>{c.hint}</T> : null}
               </Pressable>
             ))}
           </ScrollView>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="always" contentContainerStyle={{ paddingHorizontal: 8, paddingVertical: 6, gap: 6 }}>
-            {KEYS.map((k) => (
+            {L.keys.map((k) => (
               <Pressable
                 key={k.label}
                 onPress={() => {
