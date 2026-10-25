@@ -5,6 +5,7 @@ import { computeWindows, compareKeys, runAgg } from './agg';
 import type { Row } from './catalog';
 import { AGG_NAMES, compileExpr, evalConst, resolveColumn } from './expr';
 import { closestWord } from './parser';
+import { addInterval, normalizeDate, normalizeTimestamp, parseInterval, toMs } from './dates';
 import { columnName, exprKey, printExpr } from './print';
 import type { AggRegistry, CE, CompiledQuery, CteDef, CteScope, Ctx, Env, Runtime, Scope, ScopeCol, WinRegistry } from './rt';
 import { LIMITS, nameError, runtimeError, syntaxError, type SqlType, type Value } from './types';
@@ -522,7 +523,10 @@ function compileTableFunction(item: Extract<FromItem, { k: 'func' }>, parentScop
   const ctx = makeCtx(rt, sc, ctes, 'other');
   const args = item.args.map((a) => compileExpr(a, ctx));
   const alias = item.alias ?? item.name;
-  const col: ScopeCol = { name: item.cols?.[0] ?? (item.alias ? item.alias : 'generate_series'), table: alias, type: args[0].type === 'real' ? 'real' : 'int' };
+  // con fechas (generate_series('2024-01-01'::date, '2024-01-31'::date, '1 day')) la serie avanza con un intervalo
+  const dateLike = args[0].type === 'date' || args[0].type === 'timestamp' || args[0].type === 'text';
+  const colType: SqlType = args[0].type === 'real' ? 'real' : args[0].type === 'timestamp' ? 'timestamp' : dateLike ? 'date' : 'int';
+  const col: ScopeCol = { name: item.cols?.[0] ?? (item.alias ? item.alias : 'generate_series'), table: alias, type: colType };
   note(rt, `Serie generada (${printExpr(item.args[0])} … ${printExpr(item.args[1])})`);
   return {
     cols: [col],
@@ -531,6 +535,24 @@ function compileTableFunction(item: Extract<FromItem, { k: 'func' }>, parentScop
       const e = env ?? { row: [] };
       const [a, b, c] = args.map((x) => x.ev(e));
       if (a === null || b === null) return [];
+      if (typeof a === 'string' && typeof b === 'string') {
+        const withTime = a.length > 10 || b.length > 10;
+        const from = withTime ? normalizeTimestamp(a) : normalizeDate(a);
+        const to = withTime ? normalizeTimestamp(b) : normalizeDate(b);
+        if (!from || !to) throw runtimeError('generate_series: las fechas no son válidas', "Usa el formato 'AAAA-MM-DD' y un paso como '1 day' o '1 month'");
+        const iv = parseInterval(typeof c === 'string' ? c : c === undefined || c === null ? '1 day' : `${Number(c)} day`);
+        if (iv.months <= 0 && iv.days <= 0 && iv.seconds <= 0) throw runtimeError('generate_series: el paso debe ser positivo', "Por ejemplo '1 day' o '1 month'");
+        const end = toMs(to) as number;
+        const out: Row[] = [];
+        // cada valor es inicio + k × paso (así 31 ene + 1 mes, + 2 meses… respeta el fin de mes: 29 feb, 31 mar, 30 abr)
+        for (let k = 0; ; k++) {
+          const cur = addInterval(from, { months: iv.months * k, days: iv.days * k, seconds: iv.seconds * k });
+          if ((toMs(cur) as number) > end) break;
+          out.push([cur]);
+          if (out.length > LIMITS.maxRows) throw runtimeError('generate_series genera demasiadas filas');
+        }
+        return out;
+      }
       const start = Number(a);
       const stop = Number(b);
       const step = c === undefined || c === null ? 1 : Number(c);

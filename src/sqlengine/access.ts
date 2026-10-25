@@ -174,7 +174,8 @@ export function planAccess(
       index: def.name,
       plan: `Búsqueda en el índice «${def.name}» de «${name}» (${text})`,
       rows: (env) => {
-        const e = env ?? { row: [] };
+        // las expresiones de búsqueda solo ven la fila exterior (subconsultas correlacionadas): un nivel por encima
+        const e: Env = { row: [], parent: env };
         const sets: Value[][] = [];
         if (inFirst) {
           for (const ce of inFirst.vs) {
@@ -221,7 +222,8 @@ export function planAccess(
       index: d.name,
       plan: `Búsqueda por rango en el índice «${d.name}» de «${name}» (${text})`,
       rows: (env) => {
-        const e = env ?? { row: [] };
+        // las expresiones de búsqueda solo ven la fila exterior (subconsultas correlacionadas): un nivel por encima
+        const e: Env = { row: [], parent: env };
         let lo: { v: Value; incl: boolean } | undefined;
         let hi: { v: Value; incl: boolean } | undefined;
         if (r.lo) {

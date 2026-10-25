@@ -2,8 +2,10 @@
 import { SQL_REF_CORE } from './ref/core';
 import { SQL_REF_FUNCS } from './ref/funcs';
 import { SQL_REF_ADV } from './ref/adv';
+import { SQL_REF_SUB } from './ref/sub';
+import { SQL_REF_SETS } from './ref/sets';
 
-export type SqlRefCategory = 'consultar' | 'filtrar' | 'resumir' | 'unir' | 'texto' | 'numeros' | 'fechas' | 'modificar' | 'disenar' | 'ventanas' | 'rendimiento' | 'transacciones' | 'valores';
+export type SqlRefCategory = 'consultar' | 'filtrar' | 'resumir' | 'unir' | 'texto' | 'numeros' | 'fechas' | 'modificar' | 'disenar' | 'ventanas' | 'rendimiento' | 'transacciones' | 'valores' | 'subconsultas';
 
 export const SQL_REF_CATEGORY: Record<SqlRefCategory, string> = {
   consultar: '🔎 Consultar',
@@ -19,6 +21,7 @@ export const SQL_REF_CATEGORY: Record<SqlRefCategory, string> = {
   rendimiento: '⚡ Rendimiento',
   transacciones: '🔒 Transacciones',
   valores: '🪄 Condiciones y tipos',
+  subconsultas: '🪆 Subconsultas y CTE',
 };
 
 export interface SqlRef {
@@ -40,6 +43,6 @@ export interface SqlRef {
   seeAlso?: string[];
 }
 
-export const SQL_REFERENCE: SqlRef[] = [...SQL_REF_CORE, ...SQL_REF_FUNCS, ...SQL_REF_ADV];
+export const SQL_REFERENCE: SqlRef[] = [...SQL_REF_CORE, ...SQL_REF_FUNCS, ...SQL_REF_SUB, ...SQL_REF_SETS, ...SQL_REF_ADV];
 
 export const sqlRefByName = (name: string): SqlRef | undefined => SQL_REFERENCE.find((r) => r.name === name);

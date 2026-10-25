@@ -170,3 +170,29 @@ describe('funciones de ventana', () => {
     expect(fails(s, 'SELECT id FROM products WHERE ROW_NUMBER() OVER (ORDER BY id) = 1').hint).toContain('subconsulta');
   });
 });
+
+describe('subconsultas correlacionadas con búsqueda por índice', () => {
+  test('la clave de búsqueda sale de la fila exterior (clave primaria compuesta y rango)', () => {
+    const t = new SqlSession();
+    t.exec('CREATE TABLE a (id INT PRIMARY KEY, n TEXT); CREATE TABLE m (a_id INT, k INT, v INT, PRIMARY KEY (a_id, k)); INSERT INTO a VALUES (1,\'x\'),(2,\'y\'),(3,\'z\'); INSERT INTO m VALUES (1,1,10),(1,2,20),(2,1,5)');
+    expect(rows(t, 'SELECT n, (SELECT COUNT(*) FROM m WHERE m.a_id = a.id) FROM a ORDER BY id')).toEqual([['x', 2], ['y', 1], ['z', 0]]);
+    expect(rows(t, 'SELECT n FROM a WHERE EXISTS (SELECT 1 FROM m WHERE m.a_id = a.id AND m.k = 2)')).toEqual([['x']]);
+    t.exec('CREATE INDEX m_v ON m (v)');
+    expect(rows(t, 'SELECT id, (SELECT COUNT(*) FROM m WHERE m.v >= a.id * 10) FROM a ORDER BY id')).toEqual([[1, 2], [2, 1], [3, 0]]);
+    expect(rows(t, 'SELECT id FROM a WHERE id IN (SELECT a_id FROM m WHERE a_id = a.id) ORDER BY id')).toEqual([[1], [2]]);
+  });
+});
+
+describe('generate_series con fechas', () => {
+  test('días, meses y semanas', () => {
+    const t = new SqlSession();
+    expect(rows(t, "SELECT * FROM generate_series('2024-01-30'::date, '2024-02-02'::date)")).toEqual([['2024-01-30'], ['2024-01-31'], ['2024-02-01'], ['2024-02-02']]);
+    expect(rows(t, "SELECT d FROM generate_series('2024-01-31', '2024-04-30', '1 month') AS d")).toEqual([['2024-01-31'], ['2024-02-29'], ['2024-03-31'], ['2024-04-30']]);
+    expect(rows(t, "SELECT COUNT(*) FROM generate_series('2024-01-01'::date, '2024-12-31'::date, '1 week')")).toEqual([[53]]);
+    expect(rows(t, "SELECT * FROM generate_series('2024-03-01', '2024-03-01')")).toEqual([['2024-03-01']]);
+  });
+  test('un paso no positivo da error', () => {
+    const t = new SqlSession();
+    expect(fails(t, "SELECT * FROM generate_series('2024-01-01', '2024-01-05', '0 days')").message).toContain('positivo');
+  });
+});
