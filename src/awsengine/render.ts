@@ -178,8 +178,43 @@ const center = (s: string, w: number) => {
   return ' '.repeat(l) + s + ' '.repeat(total - l);
 };
 
-/** Tabla ASCII como la de `--output table`. `title` es el nombre de la operación (p. ej. `DescribeInstances`). */
-export function renderTable(data: unknown, title: string): string {
+/** Parte un texto en trozos de `n` caracteres, cortando en espacios cuando se puede. */
+function wrapCell(s: string, n: number): string[] {
+  if (s.length <= n) return [s];
+  const out: string[] = [];
+  let cur = '';
+  for (const word of s.split(' ')) {
+    let w = word;
+    while (w.length > n) {
+      if (cur) { out.push(cur); cur = ''; }
+      out.push(w.slice(0, n));
+      w = w.slice(n);
+    }
+    if (!cur) cur = w;
+    else if (cur.length + 1 + w.length <= n) cur += ' ' + w;
+    else { out.push(cur); cur = w; }
+  }
+  if (cur) out.push(cur);
+  return out;
+}
+
+/** Reduce las columnas más anchas hasta que la tabla de la sección quepa en `max` caracteres. */
+function shrink(cols: number[], fixed: number, max: number): number[] {
+  const out = [...cols];
+  while (out.reduce((a, b) => a + b, 0) + fixed > max) {
+    let k = 0;
+    for (let i = 1; i < out.length; i++) if (out[i] > out[k]) k = i;
+    if (out[k] <= 10) break;
+    out[k]--;
+  }
+  return out;
+}
+
+/**
+ * Tabla ASCII como la de `--output table`. `title` es el nombre de la operación (p. ej. `DescribeInstances`).
+ * Con `maxWidth` (la anchura de la terminal) las columnas anchas se estrechan y el texto se parte en varias líneas.
+ */
+export function renderTable(data: unknown, title: string, maxWidth?: number): string {
   const secs: Section[] = [];
   buildSections(title, data, 0, secs);
   if (!secs.length) return '';
@@ -187,12 +222,12 @@ export function renderTable(data: unknown, title: string): string {
   const widths = secs.map((s) => {
     const n = Math.max(s.headers?.length ?? 0, ...s.rows.map((r) => r.length), 1);
     const cols = Array.from({ length: n }, (_, i) => Math.max((s.headers?.[i] ?? '').length, ...s.rows.map((r) => (r[i] ?? '').length)) + 4);
-    return cols;
+    return maxWidth ? shrink(cols, cols.length - 1 + 2 + 2 * s.indent, maxWidth) : cols;
   });
   let total = 0;
   secs.forEach((s, i) => {
     const w = widths[i].reduce((a, b) => a + b, 0) + (widths[i].length - 1) + 2 + 2 * s.indent;
-    total = Math.max(total, w, (s.title ?? '').length + 6 + 2 * s.indent);
+    total = Math.max(total, w, Math.min((s.title ?? '').length + 6 + 2 * s.indent, maxWidth ?? Infinity));
   });
   const lines: string[] = [];
   lines.push('-'.repeat(total));
@@ -203,7 +238,13 @@ export function renderTable(data: unknown, title: string): string {
     const sum = cols.reduce((a, b) => a + b, 0) + (cols.length - 1) + 2;
     cols[cols.length - 1] += inner - sum;
     const sep = m + '+' + cols.map((w) => '-'.repeat(w)).join('+') + '+' + m;
-    const row = (cells: string[], ctr: boolean) => m + '|' + cols.map((w, i) => (ctr ? center(cells[i] ?? '', w) : '  ' + (cells[i] ?? '') + ' '.repeat(Math.max(0, w - 2 - (cells[i] ?? '').length)))).join('|') + '|' + m;
+    const row = (cells: string[], ctr: boolean) => {
+      const parts = cols.map((w, i) => (maxWidth ? wrapCell(cells[i] ?? '', Math.max(1, w - 4)) : [cells[i] ?? '']));
+      const h = Math.max(...parts.map((p) => p.length));
+      for (let k = 0; k < h; k++) {
+        lines.push(m + '|' + cols.map((w, i) => { const c = parts[i][k] ?? ''; return ctr ? center(c, w) : '  ' + c + ' '.repeat(Math.max(0, w - 2 - c.length)); }).join('|') + '|' + m);
+      }
+    };
     if (s.title !== null && (si === 0 || s.title !== secs[si - 1].title || s.rows.length === 0 || !s.headers)) {
       lines.push(m + '|' + center(s.title, inner - 2) + '|' + m);
       if (!(s.headers || s.rows.length)) {
@@ -214,10 +255,10 @@ export function renderTable(data: unknown, title: string): string {
     if (s.headers || s.rows.length) {
       lines.push(sep);
       if (s.headers) {
-        lines.push(row(s.headers, true));
+        row(s.headers, true);
         lines.push(sep);
       }
-      for (const r of s.rows) lines.push(row(r, false));
+      for (const r of s.rows) row(r, false);
       lines.push(sep);
     }
   });
@@ -225,10 +266,10 @@ export function renderTable(data: unknown, title: string): string {
 }
 
 /** Genera el texto final de una respuesta de la CLI según el formato. */
-export function renderOutput(data: unknown, fmt: OutputFormat, opTitle: string): string {
+export function renderOutput(data: unknown, fmt: OutputFormat, opTitle: string, cols?: number): string {
   switch (fmt) {
     case 'text': return renderText(data);
-    case 'table': return renderTable(data, opTitle);
+    case 'table': return renderTable(data, opTitle, cols);
     case 'yaml': return renderYaml(data);
     case 'yaml-stream': return Array.isArray(data) ? data.map((x) => '- ' + renderYaml(x).replace(/\n(?=.)/g, '\n  ')).join('') : renderYaml(data);
     default: return renderJson(data) + '\n';

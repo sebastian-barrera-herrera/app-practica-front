@@ -437,13 +437,32 @@ function pem(name: string): string {
 
 const fingerprint = (name: string) => md5(name + ':fp').replace(/(..)(?=.)/g, '$1:');
 
+/** Crea un par de claves en la región (la clave privada es siempre la misma para ese nombre). */
+export function ec2CreateKey(a: Account, region: string, name: string): { KeyFingerprint: string; KeyMaterial: string; KeyName: string; KeyPairId: string } {
+  const r = regional(a, region).ec2;
+  const id = ec2Id(a, 'key');
+  r.keyPairs[name] = { KeyName: name, KeyPairId: id, KeyFingerprint: fingerprint(name), CreateTime: iso(a.clock), Tags: [] };
+  return { KeyFingerprint: fingerprint(name), KeyMaterial: pem(name), KeyName: name, KeyPairId: id };
+}
+
+/** Crea un volumen EBS ya disponible (o conectado a una instancia). */
+export function ec2CreateVolume(a: Account, region: string, o: { az: string; size: number; type?: string; tags?: Tag[]; attachTo?: { instanceId: string; device: string } }): Ec2Volume {
+  const r = regional(a, region).ec2;
+  const id = ec2Id(a, 'vol');
+  const v: Ec2Volume = { VolumeId: id, Size: o.size, VolumeType: o.type ?? 'gp3', AvailabilityZone: o.az, CreateTime: iso(a.clock), state: o.attachTo ? 'in-use' : 'available', Encrypted: false, Tags: o.tags ?? [] };
+  if (o.attachTo) v.attachment = { InstanceId: o.attachTo.instanceId, Device: o.attachTo.device, AttachTime: iso(a.clock), DeleteOnTermination: false };
+  r.volumes[id] = v;
+  return v;
+}
+
 op('ec2', 'create-key-pair', 'key-name:s! key-type:s key-format:s tag-specifications:f dry-run:b', 'Crea un par de claves: te devuelve la clave privada UNA sola vez.', { dryRun: true }, (c) => {
   const r = refreshEc2(c.acct, c.region);
   const n = c.p.KeyName as string;
   if (r.keyPairs[n]) throw new AwsError('InvalidKeyPair.Duplicate', `The keypair '${n}' already exists.`);
-  const id = ec2Id(c.acct, 'key');
-  r.keyPairs[n] = { KeyName: n, KeyPairId: id, KeyFingerprint: fingerprint(n), CreateTime: iso(c.acct.clock), Tags: tagsFor(c.p.TagSpecifications, 'key-pair') };
-  return { KeyFingerprint: fingerprint(n), KeyMaterial: pem(n), KeyName: n, KeyPairId: id };
+  const k = ec2CreateKey(c.acct, c.region, n);
+  const created = refreshEc2(c.acct, c.region).keyPairs[n];
+  created.Tags = tagsFor(c.p.TagSpecifications, 'key-pair');
+  return k;
 });
 op('ec2', 'describe-key-pairs', 'key-names:l key-pair-ids:l filters:f include-public-key:b dry-run:b', 'Lista los pares de claves (solo la huella, nunca la privada).', { dryRun: true }, (c) => {
   const r = refreshEc2(c.acct, c.region);

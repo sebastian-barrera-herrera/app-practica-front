@@ -2,15 +2,16 @@
 import type { AnyChallenge, Challenge, CourseId, DemoLine, IllustrationId, Lesson, PyChallenge, Question, SqlChallenge, Step, WorldDef, LevelId } from './types';
 import type { SqlSetup } from '@/sqlengine/judge';
 import type { WorldOptions } from '@/engine/world';
+import type { Check } from '@/engine/check';
 
 export const learn = (title: string, body: string, emoji?: string): Step => ({ type: 'learn', title, body: body.trim(), emoji });
 
-export const demo = (title: string, lines: (string | [string] | [string, string])[], setup?: WorldOptions, intro?: string): Step => ({
+export const demo = (title: string, lines: (string | [string] | [string, string] | [string, string, 'error'])[], setup?: WorldOptions, intro?: string): Step => ({
   type: 'demo',
   title,
   intro,
   setup,
-  lines: lines.map((l): DemoLine => (typeof l === 'string' ? { cmd: l } : { cmd: l[0], note: l[1] })),
+  lines: lines.map((l): DemoLine => (typeof l === 'string' ? { cmd: l } : { cmd: l[0], note: l[1], ...(l[2] === 'error' ? { error: true } : {}) })),
 });
 
 export const illus = (id: IllustrationId, title?: string, caption?: string): Step => ({ type: 'illustration', id, title, caption });
@@ -20,7 +21,7 @@ export const quiz = (q: Question): Step => ({ type: 'quiz', q });
 export const mc = (q: string, options: string[], answer: number, why: string, code?: string): Step => quiz({ t: 'mc', q, options, answer, why, code });
 export const multi = (q: string, options: string[], answers: number[], why: string): Step => quiz({ t: 'multi', q, options, answers, why });
 export const tf = (q: string, answer: boolean, why: string): Step => quiz({ t: 'tf', q, answer, why });
-export const typeCmd = (q: string, answers: string[], why: string, o: { hint?: string; regex?: string; setup?: WorldOptions } = {}): Step =>
+export const typeCmd = (q: string, answers: string[], why: string, o: { hint?: string; regex?: string; setup?: WorldOptions; check?: Check } = {}): Step =>
   quiz({ t: 'cmd', q, answers, why, ...o });
 export const order = (q: string, pieces: string[], answer: string, why: string, alt?: string[]): Step => quiz({ t: 'order', q, pieces, answer, why, alt });
 export const match = (q: string, pairs: [string, string][], why: string): Step => quiz({ t: 'match', q, pairs, why });

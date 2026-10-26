@@ -4,6 +4,7 @@ import { Pressable, ScrollView, View } from 'react-native';
 import { REGISTRY } from '@/engine';
 import { useGame } from '@/game/store';
 import { useStudyContext } from '@/lib/studyClock';
+import { AwsRefSheet } from '@/ui/AwsRefSheet';
 import { PyRefSheet } from '@/ui/PyRefSheet';
 import { SqlRefSheet } from '@/ui/SqlRefSheet';
 import { Button } from '@/ui/Button';
@@ -18,6 +19,7 @@ import { CATEGORY_LABEL, levelColor, LEVEL_LABEL } from '@/lib/library';
 export default function CommandRoute() {
   const { cmd, course } = useLocalSearchParams<{ cmd: string; course?: string }>();
   if (course === 'sql') return <SqlRefSheet name={cmd} />;
+  if (course === 'aws') return <AwsRefSheet name={cmd} />;
   return course === 'python' ? <PyRefSheet name={cmd} /> : <CommandSheet />;
 }
 

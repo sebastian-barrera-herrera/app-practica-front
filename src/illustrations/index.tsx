@@ -1,5 +1,9 @@
 import React from 'react';
 import type { IllustrationId } from '@/content/types';
+import { GlobalInfra, ServiceModels, SharedResponsibility } from './AwsFoundations';
+import { Ec2Lifecycle, EbsVsStore, PurchaseModels } from './AwsCompute';
+import { PolicyEval, StsAssume } from './AwsIam';
+import { S3Classes, S3Security } from './AwsStorage';
 import { AptFlow, BootSequence, DnsLookup, NetRoute, SshHandshake, SudoFlow } from './Flows';
 import { FsTree } from './FsTree';
 import { Missing } from './Missing';
@@ -76,6 +80,17 @@ const MAP: Partial<Record<IllustrationId, React.ComponentType>> = {
   'sql-window-frame': WindowFrame,
   'sql-index-tree': IndexTree,
   'sql-transaction': Transaction,
+  // AWS
+  'aws-service-models': ServiceModels,
+  'aws-global-infra': GlobalInfra,
+  'aws-shared-responsibility': SharedResponsibility,
+  'aws-policy-eval': PolicyEval,
+  'aws-sts-assume': StsAssume,
+  'aws-ec2-lifecycle': Ec2Lifecycle,
+  'aws-ebs-vs-store': EbsVsStore,
+  'aws-purchase-models': PurchaseModels,
+  'aws-s3-classes': S3Classes,
+  'aws-s3-security': S3Security,
 };
 
 export function Illustration({ id }: { id: IllustrationId }) {

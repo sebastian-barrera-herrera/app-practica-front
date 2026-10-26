@@ -1,12 +1,13 @@
 # 🥋 Dev Dojo
 
-App móvil en español para **aprender y practicar programación desde cero hasta nivel avanzado**, con lecciones cortas, ilustraciones animadas, quizzes, repasos espaciados y un **laboratorio donde ejecutas código de verdad** sin instalar nada. Hoy incluye tres cursos independientes, y **tú eliges cuáles hacer** (en la bienvenida, en Ajustes o en el catálogo de cursos):
+App móvil en español para **aprender y practicar programación desde cero hasta nivel avanzado**, con lecciones cortas, ilustraciones animadas, quizzes, repasos espaciados y un **laboratorio donde ejecutas código de verdad** sin instalar nada. Hoy incluye cuatro cursos independientes, y **tú eliges cuáles hacer** (en la bienvenida, en Ajustes o en el catálogo de cursos):
 
 | Curso | Contenido |
 | --- | --- |
 | 🐧 **Linux** | 12 zonas · 60 lecciones · ~590 pasos · 233 retos. Una **terminal Linux simulada** completa (bash, ~200 comandos, permisos, procesos, red, cron…). |
 | 🐍 **Python** | 12 zonas · 60 lecciones · ~840 pasos · 196 retos. De «Hola mundo» a `asyncio`, con un **intérprete de Python escrito en TypeScript** que corre en el móvil (sin servidor). |
 | 🗃️ **SQL** | 14 zonas · 70 lecciones · ~810 pasos · 217 retos. De tu primer `SELECT` a `JOIN`, subconsultas, ventanas, CTE recursivas, índices (con `EXPLAIN` y «filas leídas»), transacciones, triggers, seguridad e incluso una **entrevista técnica**. Corre sobre un **motor de SQL escrito en TypeScript** (sin servidor) y los retos se corrigen **ejecutando tu consulta** y comparando el resultado o el estado de la base de datos. |
+| ☁️ **AWS** | _En construcción por fases_ (plan de 20 zonas hasta la certificación y la arquitectura avanzada en `src/content/aws/CURRICULUM.md`). **Fase A lista: 4 zonas · 20 lecciones · ~190 pasos · 40 retos** — fundamentos de la nube, IAM, cómputo (EC2) y almacenamiento (S3). Se practica sobre una **cuenta de AWS simulada**: la CLI `aws` real (con `--query`, `--output table/text/yaml`, perfiles, credenciales temporales, `assume-role`, `curl` a buckets e instancias…) se ejecuta sobre un motor escrito en TypeScript, sin cuenta ni coste. |
 
 Cada curso tiene su propio progreso, sus colores, su laboratorio y su biblioteca de referencia. La **meta diaria es de 60 minutos por curso** (configurable) y la racha cuenta los días en que cumples la meta.
 
@@ -15,8 +16,8 @@ Cada curso tiene su propio progreso, sus colores, su laboratorio y su biblioteca
 - **Roadmap** por zonas y niveles (básico, intermedio, avanzado) con una **misión final** y un **examen** por zona. Para abrir una zona hay que **superar la anterior** (lecciones + misión final + examen), salvo que la saltes con el examen de salto.
 - **Lecciones**: explicación → demo animada → ilustración interactiva → quizzes → retos de código con pistas. Tipos de pregunta: opción múltiple, verdadero/falso, rellenar huecos, unir pares, *predecir la salida* (se calcula ejecutando el código en el motor) y escribir código.
 - **Práctica**: reto diario, *Blitz* cronometrado, repaso espaciado (Leitner) y examen sorpresa.
-- **Laboratorio**: terminal Linux simulada · editor y REPL de Python con salida en vivo, `input()` interactivo y sistema de archivos virtual · **laboratorio de SQL** con 10 bases de datos de ejemplo (tienda, cine, escuela, empresa, biblioteca, red social, banco, vuelos, 6.000 ventas y una base vacía), explorador de tablas, historial y 19 ejemplos.
-- **Biblioteca**: Linux — todos los comandos del simulador; Python — 261 fichas (funciones, métodos, sentencias y módulos) con 481 ejemplos ejecutables desde la propia ficha; SQL — 98 fichas (cláusulas, funciones, patrones y conceptos) con 145 ejemplos que se ejecutan sobre una base de datos de muestra.
+- **Laboratorio**: terminal Linux simulada · **consola de AWS** (la terminal con una cuenta de prueba: crea usuarios, buckets y servidores, cámbialos de región, rómpelos y mira los errores reales) · editor y REPL de Python con salida en vivo, `input()` interactivo y sistema de archivos virtual · **laboratorio de SQL** con 10 bases de datos de ejemplo (tienda, cine, escuela, empresa, biblioteca, red social, banco, vuelos, 6.000 ventas y una base vacía), explorador de tablas, historial y 19 ejemplos.
+- **Biblioteca**: Linux — todos los comandos del simulador; Python — 261 fichas (funciones, métodos, sentencias y módulos) con 481 ejemplos ejecutables desde la propia ficha; SQL — 98 fichas (cláusulas, funciones, patrones y conceptos) con 145 ejemplos que se ejecutan sobre una base de datos de muestra; AWS — 85 fichas de servicios, conceptos, comandos y buenas prácticas, con «cuándo usarlo y cuándo no», cómo se cobra, límites y 103 ejemplos que se ejecutan en la cuenta simulada.
 - **Gamificación**: XP y niveles, estrellas por lección, racha, logros generales y por curso, metas diarias por curso.
 - **Pantalla de Niveles**: qué es cada nivel, cuánto XP falta, qué zonas se desbloquean y qué recompensas hay.
 - **Examen de salto**: si ya sabes una zona, puedes desbloquear la siguiente (o todo un nivel) aprobando un examen difícil, sin pasar por las lecciones.
@@ -25,7 +26,7 @@ Cada curso tiene su propio progreso, sus colores, su laboratorio y su biblioteca
 - **Alertas de práctica** (notificaciones locales): recordatorios a tus horas, aviso de racha en peligro, exámenes sorpresa y «te echamos de menos», con **botones de acción**, sonidos elegibles y respeto a la ventana horaria que fijes.
 - **Tema claro, oscuro o del sistema.**
 - **Cuentas en la nube** (correo y contraseña) para sincronizar el progreso entre dispositivos; la app funciona **sin conexión** y sincroniza cuando hay red.
-- 58 ilustraciones animadas e interactivas (26 de Linux, 22 de Python y 10 de SQL: orden de ejecución, `GROUP BY`, tipos de `JOIN`, conjuntos, modelo entidad-relación, normalización, ventanas, índices y transacciones).
+- 68 ilustraciones animadas e interactivas (26 de Linux, 22 de Python, 10 de AWS —modelos de servicio, infraestructura global, evaluación de políticas, STS, ciclo de vida de EC2, EBS, compra, clases de S3 y seguridad de S3— y 10 de SQL: orden de ejecución, `GROUP BY`, tipos de `JOIN`, conjuntos, modelo entidad-relación, normalización, ventanas, índices y transacciones).
 
 ## Estructura
 
@@ -36,9 +37,11 @@ src/
     worlds/       Curso de Linux (w1…w12)
     py/           Curso de Python (w1…w12), comprobaciones (pycheck), biblioteca (reference.ts + ref/*)
     sql/          Curso de SQL (s1…s14), datasets de ejemplo, biblioteca (reference.ts + ref/*), plan en CURRICULUM.md
+    aws/          Curso de AWS (a1…a4 de 20), escenarios de práctica, biblioteca (reference.ts + ref/*), plan en CURRICULUM.md
   engine/         Linux simulado: parser, shell, vfs, comandos, comprobaciones de retos
   pyengine/       Intérprete de Python 3.13 en TypeScript (ver su README)
   sqlengine/      Motor de SQL en TypeScript: lexer, parser, ejecutor, índices, transacciones, triggers y corrector de retos
+  awsengine/     AWS simulado: cuenta, IAM/STS, S3 y EC2, CLI `aws` con JMESPath, escenarios y corrector
   game/           XP, racha, SRS, logros, metas, store (Zustand + AsyncStorage)
   cloud/          Cuentas (Neon Auth) y sincronización (Neon Data API)
   illustrations/  Ilustraciones animadas (SVG + Reanimated)
@@ -57,7 +60,7 @@ npm start            # servidor de desarrollo (Expo Go o development build)
 npm run web          # versión web para probar rápido en el navegador
 npm run typecheck    # tsc --noEmit
 npm run lint         # expo lint
-npm test             # jest: motor de Linux, motor de Python (+ golden contra CPython), juego, nube y TODO el contenido
+npm test             # jest: motores de Linux, Python, SQL y AWS (+ golden contra CPython), juego, nube y TODO el contenido
 ```
 
 Las pruebas **ejecutan las soluciones de referencia de cada reto a través de los motores**, comprueban que el código inicial *no* resuelve el reto, ejecutan cada demo tal cual se muestra, validan la coherencia de todas las preguntas y **ejecutan los ejemplos de la biblioteca**. Añadir contenido roto falla en CI antes de llegar al móvil.
@@ -67,6 +70,7 @@ Las pruebas **ejecutan las soluciones de referencia de cada reto a través de lo
 - **Linux**: `src/content/worlds/wN.ts` (DSL: `learn`, `demo`, `illus`, `mc`/`tf`/`fill`/`match`, `practice`, `lesson`, `world`).
 - **SQL**: `src/content/sql/sN.ts` con `sqlWorld`, `lesson`, `sqlDemo`/`sqlPerf`, `sqlOut` (predecir el resultado), `sqlCode`, `sqlPractice` y comprobaciones (`same`, `ordered`, `state`, `both`, `fails`, con `uses`, `forbids`, `maxRead`, `indexes`, `closed`). Los retos se ejecutan contra bases de datos de `datasets.ts`; cada ficha citada en `commands` debe existir en `src/content/sql/ref/`. Plan completo en `src/content/sql/CURRICULUM.md`.
 - **Python**: `src/content/py/wN.ts` con `pyWorld`, `lesson`, `pyDemo`, `pyOut`, `pyPractice`, `pyCode`… y comprobaciones declarativas de `pycheck.ts` (`variable`, `calls`, `stdout`, `uses`, `cls`, `func`, `file`…). Cada ficha que cite `commands` debe existir en `src/content/py/ref/`. El plan completo está en `src/content/py/CURRICULUM.md`.
+- **AWS**: `src/content/aws/aN.ts` con `awsWorld`, `lesson`, `demo`, `A('escenario')` (la cuenta de práctica de cada paso), `practice` y comprobaciones sobre el **estado de la cuenta** (`awsIs`, `awsHas`, `awsEmpty`, `awsFails`…, combinables con `all`/`any`). Cada ficha citada en `commands` debe existir en `src/content/aws/ref/` y sus ejemplos se ejecutan en el escenario que declare. Plan completo (20 zonas, fases A–D) en `src/content/aws/CURRICULUM.md`.
 
 Ejecuta `npm test`: el validador te dice qué solución no supera su propia comprobación.
 
@@ -76,6 +80,18 @@ Ejecuta `npm test`: el validador te dice qué solución no supera su propia comp
 
 
 **Editor de Python** (`src/ui/PyEditor.tsx`): números de línea, colores de la paleta *Dark+* de VS Code (`pycolors.ts`, la misma en las cajas de código de las lecciones), sangrado automático, pares `()` `[]` `{}` `""`, atajos (`print()`, `input()`, `for`, `if`, `while`, `def`, `f""`…) y **autocompletado** (`pycomplete.ts`, función pura con tests): propone las variables y funciones que ya escribiste, las funciones de Python, las palabras clave y, tras un punto, los métodos más usados; no sugiere dentro de textos ni comentarios. El texto se dibuja dos veces con la misma tipografía (el campo, con letra transparente, y debajo el texto coloreado), por eso no hay ajuste de línea: las líneas largas se desplazan en horizontal y los números cuadran siempre.
+## Simulador de AWS
+
+`src/awsengine` es una **cuenta de AWS simulada** escrita en TypeScript (sin red, sin credenciales reales, sin coste). El comando `aws` está integrado en la terminal de Linux: `|`, `>`, `$(…)`, variables, `file://`, `base64 -d`, `awk`… funcionan con él, y `curl` llega a los buckets y a las instancias del simulador (URLs públicas y prefirmadas, sitios web estáticos, páginas servidas por EC2 respetando los *security groups*).
+
+- **Servicios**: STS, IAM (usuarios, grupos, roles, políticas, claves, MFA, informe de credenciales, `simulate-principal-policy`, `get-account-authorization-details`…), S3 (`s3` y `s3api`: buckets, objetos, versionado, ciclo de vida, políticas, Block Public Access, cifrado, web estática, URLs prefirmadas, replicación…), EC2 (instancias con su ciclo de vida, AMI, claves, *security groups*, volúmenes, *snapshots*, IP elásticas, etiquetas, `wait`, VPC en lectura), Budgets, CloudWatch (alarmas), SNS y SSM (parámetros públicos de AMI).
+- **Fidelidad**: la CLI valida parámetros como la real (códigos de salida 252/253/254/255), soporta paginación, `--query` con **JMESPath** completo, `--output json|text|table|yaml`, perfiles, `role_arn`/`source_profile`, credenciales temporales con `ASIA…` y la precedencia real (opción > entorno > perfil). La evaluación de permisos sigue el algoritmo de AWS (Deny explícito > Allow, políticas de identidad y de recurso, condiciones, límites de permisos) y los errores tienen el formato de verdad, incluido `UnauthorizedOperation` con su mensaje codificado y `sts decode-authorization-message`.
+- **Tiempo virtual**: un reloj determinista compartido con la terminal; las instancias pasan de `pending` a `running` en segundos y los `wait` lo hacen avanzar. Los IDs y las claves se derivan de una semilla, así que todo es reproducible.
+- **Escenarios** (`scenarios.ts`): 14 cuentas de práctica listas (equipo con usuarios y un bucket, varias regiones, root inseguro, políticas de acceso, exceso de permisos, auditoría, servidores EC2, web, buckets de demostración, versionado, fugas públicas, discos huérfanos…).
+- **Corrector** (`check.ts`): los retos no comparan texto, ejecutan consultas sobre el **estado final de la cuenta** (en modo «dios», sin permisos) y comparan el JSON resultante.
+
+Pruebas: ~240 tests (JMESPath, evaluación de políticas, IAM/STS, S3, EC2, web, integración con la terminal y render de tablas) más el test de contenido, que ejecuta todos los retos, demos y ejemplos del curso.
+
 ## Motor de SQL
 
 `src/sqlengine` es un motor de SQL completo escrito en TypeScript (sin servidor ni SQLite nativo), con dialecto cercano a PostgreSQL y comodidades de SQLite: tipos estáticos, lógica de tres valores, `JOIN` (hash join), subconsultas correlacionadas, funciones de ventana con marcos, CTE (incluidas **recursivas**), `ROLLUP`/`CUBE`/`GROUPING SETS`, `FILTER`, `generate_series`, `INSERT … ON CONFLICT`, `RETURNING`, restricciones (`PRIMARY KEY`, `UNIQUE`, `CHECK`, claves foráneas con `ON DELETE`), vistas, **índices** con `EXPLAIN [ANALYZE]` y contador de «filas leídas», **transacciones** (`BEGIN`/`COMMIT`/`ROLLBACK`, `SAVEPOINT`, niveles de aislamiento, `READ ONLY`, `FOR UPDATE`) y **triggers** (`NEW`/`OLD`/`RAISE`). Los errores explican qué pasó y sugieren cómo arreglarlo. «Hoy» está fijado a 2025-06-15 12:00 para que los resultados sean reproducibles.

@@ -287,7 +287,7 @@ function execAws(argv: string[], io: AwsIO): AwsResult | Promise<AwsResult> {
         throw e;
       }
     }
-    return done(prefix + renderOutput(data, lastOpts!.output as OutputFormat, o!.api));
+    return done(prefix + renderOutput(data, lastOpts!.output as OutputFormat, o!.api, io.cols));
   }
 }
 

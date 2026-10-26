@@ -66,7 +66,17 @@ export type IllustrationId =
   | 'sql-transaction'
   | 'sql-er-model'
   | 'sql-normalization'
-  | 'sql-set-ops';
+  | 'sql-set-ops'
+  | 'aws-service-models'
+  | 'aws-global-infra'
+  | 'aws-shared-responsibility'
+  | 'aws-policy-eval'
+  | 'aws-sts-assume'
+  | 'aws-ec2-lifecycle'
+  | 'aws-ebs-vs-store'
+  | 'aws-purchase-models'
+  | 'aws-s3-classes'
+  | 'aws-s3-security';
 
 // ───────────────────────── preguntas ─────────────────────────
 
@@ -167,6 +177,8 @@ export interface DemoLine {
   cmd: string;
   /** Explicación bajo la salida. */
   note?: string;
+  /** true ⇒ el comando falla A PROPÓSITO (para enseñar a leer errores); el test de contenido lo exige. */
+  error?: boolean;
 }
 
 export type Step =

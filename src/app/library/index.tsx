@@ -5,6 +5,7 @@ import type { Category } from '@/engine';
 import { CATEGORY_LABEL, levelColor, LEVEL_LABEL, libraryEntries } from '@/lib/library';
 import { Card } from '@/ui/Card';
 import { Chip } from '@/ui/Chip';
+import { AwsLibrary } from '@/ui/AwsLibrary';
 import { PyLibrary } from '@/ui/PyLibrary';
 import { SqlLibrary } from '@/ui/SqlLibrary';
 import { Screen } from '@/ui/Screen';
@@ -14,6 +15,7 @@ import { colors, fonts, radius } from '@/ui/theme';
 export default function LibraryRoute() {
   const { course } = useLocalSearchParams<{ course?: string }>();
   if (course === 'sql') return <SqlLibrary />;
+  if (course === 'aws') return <AwsLibrary />;
   return course === 'python' ? <PyLibrary /> : <Library />;
 }
 
