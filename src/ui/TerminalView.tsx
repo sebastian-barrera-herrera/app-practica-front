@@ -181,9 +181,11 @@ export interface TerminalViewProps {
   banner?: string[];
   disabled?: boolean;
   onCols?: (cols: number) => void;
+  /** Deja este texto escrito en la línea de entrada (cada objeto nuevo lo vuelve a poner), listo para pulsar Intro. */
+  prefill?: { text: string };
 }
 
-export function TerminalView({ term, onRun, onSignal, autoFocus, hideKeys, placeholder, banner, disabled, onCols }: TerminalViewProps) {
+export function TerminalView({ term, onRun, onSignal, autoFocus, hideKeys, placeholder, banner, disabled, onCols, prefill }: TerminalViewProps) {
   const tr = getTranscript(term);
   const [, force] = useState(0);
   const [input, setInput] = useState('');
@@ -221,6 +223,15 @@ export function TerminalView({ term, onRun, onSignal, autoFocus, hideKeys, place
   useEffect(() => {
     if (autoFocus) setTimeout(() => inputRef.current?.focus(), 250);
   }, [autoFocus]);
+
+  useEffect(() => {
+    if (!prefill) return;
+    setInput(prefill.text);
+    sel.current = { start: prefill.text.length, end: prefill.text.length };
+    setOptions([]);
+    const t = setTimeout(() => inputRef.current?.focus(), 60);
+    return () => clearTimeout(t);
+  }, [prefill]);
 
   const lastText = tr.partial ? stripAnsi(tr.partial) : tr.lines.length ? stripAnsi(tr.lines[tr.lines.length - 1].raw) : '';
   const secret = busy && /(password|passphrase|contraseña)[^\n]*:\s*$/i.test(lastText);

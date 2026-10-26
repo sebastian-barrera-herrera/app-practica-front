@@ -13,6 +13,7 @@ import { Confetti } from './Confetti';
 import { PyCode } from './PyCode';
 import { PyEditor } from './PyEditor';
 import { Inline, RichText } from './RichText';
+import { SolutionCard } from './SolutionCard';
 import { SqlResult } from './SqlResult';
 import { SqlSchemaPanel } from './SqlSchemaPanel';
 import { T } from './Text';
@@ -136,10 +137,9 @@ export function SqlChallengeView({ challenge, onSolved, onRun, continueLabel = '
               </View>
             )}
             {solution && (
-              <View style={{ gap: 6 }}>
-                <T v="label" color={colors.violet}>Solución</T>
-                <PyCode code={challenge.solution} lang="sql" />
-              </View>
+              <SolutionCard text={challenge.solution} onUse={() => setSql(challenge.solution)}>
+                <PyCode code={challenge.solution} lang="sql" selectable />
+              </SolutionCard>
             )}
           </Animated.View>
         )}

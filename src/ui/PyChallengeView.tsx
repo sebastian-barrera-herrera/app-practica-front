@@ -13,6 +13,7 @@ import { PyCode } from './PyCode';
 import { PyEditor } from './PyEditor';
 import { PyOutput } from './PyOutput';
 import { Inline, RichText } from './RichText';
+import { SolutionCard } from './SolutionCard';
 import { T } from './Text';
 import { colors, radius, makeStyles } from './theme';
 import { usePyRunner } from './usePyRunner';
@@ -133,10 +134,9 @@ export function PyChallengeView({ challenge, onSolved, onRun, continueLabel = 'C
               </View>
             )}
             {solution && (
-              <View style={{ gap: 6 }}>
-                <T v="label" color={colors.violet}>Solución</T>
-                <PyCode code={challenge.solution} />
-              </View>
+              <SolutionCard text={challenge.solution} onUse={() => { setCode(challenge.solution); setMsg(null); }}>
+                <PyCode code={challenge.solution} selectable />
+              </SolutionCard>
             )}
           </Animated.View>
         )}

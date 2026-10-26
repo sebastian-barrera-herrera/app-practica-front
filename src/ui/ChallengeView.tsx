@@ -10,6 +10,7 @@ import { success as hapticSuccess } from '@/lib/haptics';
 import { Button } from './Button';
 import { Confetti } from './Confetti';
 import { CodeBlock, Inline, RichText } from './RichText';
+import { SolutionCard } from './SolutionCard';
 import { echoToTranscript, TerminalView } from './TerminalView';
 import { T } from './Text';
 import { colors, radius, makeStyles } from './theme';
@@ -48,6 +49,8 @@ export function ChallengeView({ challenge, onSolved, onRun, continueLabel = 'Con
   }, [challenge, nonce]);
   const [hints, setHints] = useState(0);
   const [solution, setSolution] = useState(false);
+  const [fill, setFill] = useState<undefined | { text: string }>(undefined);
+  const [fillStep, setFillStep] = useState(0);
   const [solved, setSolved] = useState<null | SolvedInfo>(null);
   const [kbd, setKbd] = useState(false);
   const [open, setOpen] = useState(true);
@@ -58,6 +61,8 @@ export function ChallengeView({ challenge, onSolved, onRun, continueLabel = 'Con
   useEffect(() => {
     setHints(0);
     setSolution(false);
+    setFill(undefined);
+    setFillStep(0);
     setSolved(null);
     ctrlC.current = false;
     counted.current = 0;
@@ -114,6 +119,8 @@ export function ChallengeView({ challenge, onSolved, onRun, continueLabel = 'Con
 
   const hintsLeft = challenge.hints.length - hints;
   const compact = kbd;
+  // comandos de la solución que se pueden escribir (las teclas como Ctrl+C no se copian)
+  const solutionCmds = useMemo(() => challenge.solution.filter((s) => !s.startsWith('^')), [challenge]);
 
   return (
     <View style={{ flex: 1 }}>
@@ -136,10 +143,14 @@ export function ChallengeView({ challenge, onSolved, onRun, continueLabel = 'Con
               </View>
             )}
             {solution && (
-              <View style={{ gap: 6 }}>
-                <T v="label" color={colors.violet}>Solución</T>
+              <SolutionCard
+                text={solutionCmds.join('\n')}
+                onUse={solutionCmds.length ? () => { setFill({ text: solutionCmds[fillStep % solutionCmds.length] }); setFillStep((n) => n + 1); } : undefined}
+                useLabel={solutionCmds.length > 1 ? `⌨ Escribir comando ${(fillStep % solutionCmds.length) + 1}/${solutionCmds.length}` : '⌨ Escribir en la terminal'}
+                usedLabel="✓ Escrito: pulsa Intro"
+              >
                 <CodeBlock lines={challenge.solution.map((s) => (s.startsWith('^') ? `# pulsa Ctrl+${s.slice(1)}` : `$ ${s}`))} />
-              </View>
+              </SolutionCard>
             )}
           </Animated.View>
         )}
@@ -172,6 +183,7 @@ export function ChallengeView({ challenge, onSolved, onRun, continueLabel = 'Con
             if (s === 'INT') ctrlC.current = true;
           }}
           disabled={!!solved || replaying}
+          prefill={fill}
           banner={['\x1b[2mEscribe comandos abajo. Usa las teclas especiales (Tab, ⌃C…) bajo el teclado.\x1b[0m']}
         />
         {msg && !solved && !compact ? (
