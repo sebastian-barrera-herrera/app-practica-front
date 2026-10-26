@@ -137,9 +137,9 @@ export const defaultSettings = (): Settings => ({
   hapticsTouch: true,
   sfx: true,
   theme: 'system',
-  goalMinutes: { linux: 60, python: 60, sql: 60 },
+  goalMinutes: { linux: 60, python: 60, sql: 60, aws: 60 },
   // los cursos que sigue el alumno los elige él (onboarding / Cursos); los nuevos no se activan solos
-  courseOn: { linux: true, python: true, sql: false },
+  courseOn: { linux: true, python: true, sql: false, aws: false },
   reminders: defaultReminders(),
   surpriseEnabled: true,
   surprisePerWeek: 4,

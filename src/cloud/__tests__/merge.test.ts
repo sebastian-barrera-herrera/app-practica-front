@@ -14,7 +14,7 @@ describe('sincronización: partes y fusión', () => {
     let root = withLesson('w1-1');
     root = { ...root, updatedAt: 123, owner: 'u1' };
     const parts = splitRoot(root);
-    expect(Object.keys(parts).sort()).toEqual(['global', 'linux', 'python', 'sql']);
+    expect(Object.keys(parts).sort()).toEqual(['aws', 'global', 'linux', 'python', 'sql']);
     expect(parts.linux.sandbox).toBeUndefined();
     const back = joinRoot(parts, 'u1', 123);
     expect(sameProgress(root, back)).toBe(true);
@@ -51,7 +51,7 @@ describe('sincronización: partes y fusión', () => {
 
   test('una copia recién borrada no quita el onboarding ni los ajustes de la nube', () => {
     const base = initialRoot();
-    const remote = { ...base, settings: { ...base.settings, onboarded: true, name: 'Seb', goalMinutes: { linux: 30, python: 45, sql: 60 } }, updatedAt: 100 };
+    const remote = { ...base, settings: { ...base.settings, onboarded: true, name: 'Seb', goalMinutes: { linux: 30, python: 45, sql: 60, aws: 60 } }, updatedAt: 100 };
     // cerrar sesión deja el móvil con ajustes por defecto y updatedAt 0: manda la nube entera
     const wiped = { ...base, updatedAt: 0 };
     const m = mergeRoots(wiped, remote);

@@ -165,7 +165,7 @@ describe('estado raíz y multi-curso', () => {
 
   test('tiempo de estudio, meta diaria y racha de metas', () => {
     let root = initialRoot();
-    root = { ...root, settings: { ...root.settings, goalMinutes: { linux: 1, python: 1, sql: 1 } } };
+    root = { ...root, settings: { ...root.settings, goalMinutes: { linux: 1, python: 1, sql: 1, aws: 1 } } };
     const a = addStudySeconds(root, 'linux', 30, T0);
     expect(a.reached).toBe(false);
     const b = addStudySeconds(a.root, 'linux', 40, T0);
@@ -214,7 +214,7 @@ describe('estado raíz y multi-curso', () => {
     expect(root.achievements['linux:world-w1']).toBe(2);
     expect(root.achievements['streak-3']).toBe(3);
     expect(root.settings.name).toBe('Seb');
-    expect(root.settings.goalMinutes).toEqual({ linux: 60, python: 60, sql: 60 });
+    expect(root.settings.goalMinutes).toEqual({ linux: 60, python: 60, sql: 60, aws: 60 });
     expect(root.settings.reminders.times.length).toBeGreaterThan(0);
     // idempotente
     expect(migrateRoot(root).courses.linux.lessons['w1-1'].done).toBe(true);

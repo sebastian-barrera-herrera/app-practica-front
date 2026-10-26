@@ -26,7 +26,7 @@ export interface PlannedNotification {
   category: 'study' | 'surprise';
 }
 
-export const COURSE_LABEL: Record<CourseId, string> = { linux: '🐧 Linux', python: '🐍 Python', sql: '🗃️ SQL' };
+export const COURSE_LABEL: Record<CourseId, string> = { linux: '🐧 Linux', python: '🐍 Python', sql: '🗃️ SQL', aws: '☁️ AWS' };
 
 const HORIZON_DAYS = 10;
 const MAX_PLANNED = 56; // iOS admite 64 notificaciones pendientes

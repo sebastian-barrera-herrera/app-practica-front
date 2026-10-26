@@ -2,6 +2,7 @@
  * Comprobaciones declarativas para los retos de terminal: estado del sistema
  * de archivos, salida del último comando, comandos usados, etc.
  */
+import { awsCheck, type AwsCheckSpec } from '../awsengine/check';
 import type { Terminal } from './terminal';
 
 export type Check =
@@ -28,6 +29,7 @@ export type Check =
   | { t: 'crontab'; includes: string; user?: string }
   | { t: 'status'; code: number }
   | { t: 'file-count'; dir: string; count: number; cmp?: 'eq' | 'gte' | 'lte' }
+  | AwsCheckSpec
   | { t: 'all'; checks: Check[] }
   | { t: 'any'; checks: Check[] }
   | { t: 'not'; check: Check };
@@ -213,6 +215,7 @@ export function evaluate(check: Check, term: Terminal): CheckResult {
       const cmp = check.cmp ?? 'eq';
       return (cmp === 'eq' ? n === check.count : cmp === 'gte' ? n >= check.count : n <= check.count) ? ok : fail(`${check.dir} debería tener ${check.count} elementos`);
     }
+    case 'aws': return awsCheck(check, term);
     case 'all': {
       for (const c of check.checks) {
         const r = evaluate(c, term);

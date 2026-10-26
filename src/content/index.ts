@@ -1,5 +1,6 @@
 import type { AnyChallenge, CourseId, LevelDef, Lesson, Step, WorldDef } from './types';
 import { PY_WORLDS } from './py';
+import { AWS_WORLDS } from './aws';
 import { SQL_WORLDS } from './sql';
 import { w1 } from './worlds/w1';
 import { w2 } from './worlds/w2';
@@ -29,7 +30,7 @@ export interface CourseDef {
   emoji: string;
   tagline: string;
   /** Laboratorio de práctica libre. */
-  lab: { title: string; emoji: string; kind: 'terminal' | 'python' | 'sql'; blurb: string };
+  lab: { title: string; emoji: string; kind: 'terminal' | 'python' | 'sql' | 'aws'; blurb: string };
   /** Sustantivos del curso para textos de la interfaz. */
   nouns: { challenge: string; challenges: string; library: string; libraryBlurb: string; item: string };
   worlds: WorldDef[];
@@ -70,9 +71,19 @@ export const COURSES: Record<CourseId, CourseDef> = {
     worlds: SQL_WORLDS,
     levels: LEVELS,
   }),
+  aws: mk({
+    id: 'aws',
+    name: 'AWS',
+    emoji: '☁️',
+    tagline: 'De la nube básica a arquitecturas expertas, practicando en un AWS simulado',
+    lab: { title: 'Consola AWS', emoji: '🖥️', kind: 'aws', blurb: 'Una cuenta de AWS simulada con la CLI real: crea buckets, usuarios y servidores sin pagar nada ni arriesgar nada.' },
+    nouns: { challenge: 'reto de AWS', challenges: 'retos de AWS', library: 'Biblioteca de AWS', libraryBlurb: 'Servicios y conceptos: cuándo usarlos y cuándo no', item: 'servicio' },
+    worlds: AWS_WORLDS,
+    levels: LEVELS,
+  }),
 };
 
-export const COURSE_IDS: CourseId[] = ['linux', 'python', 'sql'];
+export const COURSE_IDS: CourseId[] = ['linux', 'python', 'sql', 'aws'];
 export const COURSE_LIST: CourseDef[] = COURSE_IDS.map((id) => COURSES[id]);
 export const courseDef = (id: CourseId): CourseDef => COURSES[id];
 

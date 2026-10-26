@@ -171,7 +171,7 @@ export default function Profile() {
                 <T v="small" color={colors.dim}>📘 {done}/{c.lessons.length || '—'} lecciones</T>
                 <T v="small" color={colors.dim}>⭐ {stars}</T>
                 <T v="small" color={colors.dim}>🎯 {acc} %</T>
-                <T v="small" color={colors.dim}>{c.id === 'linux' ? '⌨️' : c.id === 'sql' ? '🗃️' : '🖥️'} {s.stats.challenges}</T>
+                <T v="small" color={colors.dim}>{c.id === 'linux' ? '⌨️' : c.id === 'sql' ? '🗃️' : c.id === 'aws' ? '☁️' : '🖥️'} {s.stats.challenges}</T>
               </View>
               <View style={{ flexDirection: 'row', gap: 14, marginTop: 10 }}>
                 {c.levels.map((lv) => (

@@ -37,8 +37,8 @@ export default function Onboarding() {
   const name = useGame((s) => s.settings.name).split(' ')[0];
   const [step, setStep] = useState(0);
   // nada preseleccionado: el alumno decide qué aprender
-  const [on, setOn] = useState<Record<CourseId, boolean>>({ linux: false, python: false, sql: false });
-  const [minutes, setMinutes] = useState<Record<CourseId, number>>({ linux: 60, python: 60, sql: 60 });
+  const [on, setOn] = useState<Record<CourseId, boolean>>({ linux: false, python: false, sql: false, aws: false });
+  const [minutes, setMinutes] = useState<Record<CourseId, number>>({ linux: 60, python: 60, sql: 60, aws: 60 });
   const [times, setTimes] = useState<string[]>(['07:30', '20:30']);
   const [sound, setSound] = useState<SoundId>('campana');
   const [start, setStart] = useState<'zero' | 'open'>('zero');

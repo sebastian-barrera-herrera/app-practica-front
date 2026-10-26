@@ -85,6 +85,12 @@ export const SITES: Site[] = [
 
 export const BY_HOST = new Map(SITES.map((s) => [s.host, s]));
 
+/** Resolutores de nombres extra: los registran las extensiones (p. ej. el motor de AWS para *.amazonaws.com). */
+export const hostResolvers: ((sys: System, name: string) => { ip: string } | null)[] = [];
+
+/** Servidores web extra que atienden una petición antes que los sitios fijos. Devuelven null si no la reconocen. */
+export const httpHandlers: ((req: { sys: System; host: string; port: number; scheme: string; path: string; query: string; method: string }) => Fetched | null)[] = [];
+
 export function isIp(s: string) {
   return /^\d{1,3}(\.\d{1,3}){3}$/.test(s);
 }
@@ -111,6 +117,10 @@ export function resolveHost(sys: System, fs: VFS, name: string): { ip: string; s
   }
   const site = BY_HOST.get(name);
   if (site) return { ip: site.ip, site };
+  for (const h of hostResolvers) {
+    const r = h(sys, name);
+    if (r) return { ip: r.ip };
+  }
   return null;
 }
 
@@ -169,6 +179,10 @@ export function httpFetch(sys: System, fs: VFS, rt: { random(): number }, url: s
   const host = m[2];
   const port = m[3] ? parseInt(m[3], 10) : scheme === 'https' ? 443 : 80;
   const path = m[4] ?? '/';
+  for (const h of httpHandlers) {
+    const got = h({ sys, host, port, scheme, path, query: (m[5] ?? '').replace(/^\?/, ''), method });
+    if (got) return got;
+  }
   const r = resolveHost(sys, fs, host);
   if (!r) return { ok: false, curlCode: 6, error: `Could not resolve host: ${host}` };
   if (isLocal(sys, r.ip)) {

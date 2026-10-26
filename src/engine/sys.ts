@@ -92,6 +92,8 @@ export class System {
   remotes = new Map<string, any>();
   ufwRules: string[] = [];
   ufwEnabled = false;
+  /** Estado de extensiones externas al sistema (p. ej. la cuenta de AWS simulada). */
+  ext: Record<string, unknown> = {};
 
   constructor(clock: Clock) {
     this.clock = clock;

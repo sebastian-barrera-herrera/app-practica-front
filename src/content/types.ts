@@ -4,7 +4,7 @@ import type { PyCheck, PyOptions } from '@/pyengine/types';
 import type { SqlCheck, SqlSetup } from '@/sqlengine/judge';
 
 /** Cursos disponibles. Cada curso tiene su ruta, su laboratorio, su progreso y su meta diaria. */
-export type CourseId = 'linux' | 'python' | 'sql';
+export type CourseId = 'linux' | 'python' | 'sql' | 'aws';
 
 export type LevelId = 'basico' | 'intermedio' | 'avanzado';
 

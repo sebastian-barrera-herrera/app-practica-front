@@ -536,6 +536,7 @@ export class Terminal {
       services: [...sys.services.values()],
       crontabs: [...sys.crontabs],
       hostname: sys.hostname,
+      ext: sys.ext,
     };
   }
 }
@@ -558,6 +559,7 @@ export function restoreTerminal(snap: any, opts: TerminalOptions = {}): Terminal
     for (const s of snap.services) w.sys.services.set(s.name, s);
     w.sys.crontabs = new Map(snap.crontabs);
     w.sys.hostname = snap.hostname ?? w.sys.hostname;
+    if (snap.ext && typeof snap.ext === 'object') w.sys.ext = snap.ext;
     w.shell.setUser(snap.user);
     w.shell.cwd = fs.isDir(snap.cwd) ? snap.cwd : w.shell.home();
     w.shell.setVar('PWD', w.shell.cwd, true);

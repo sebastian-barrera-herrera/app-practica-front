@@ -9,7 +9,7 @@ import { defaultSettings, defaultStats, addXp, initialState, type ProgressState,
 import { addCoins, COINS, mergeExtras } from './economy';
 import { dayKey, emptyStreak } from './streak';
 
-export const COURSE_KEYS: CourseId[] = ['linux', 'python', 'sql'];
+export const COURSE_KEYS: CourseId[] = ['linux', 'python', 'sql', 'aws'];
 
 /** Construye un registro con un valor por curso. */
 export const byCourse = <T,>(f: (c: CourseId) => T): Record<CourseId, T> => Object.fromEntries(COURSE_KEYS.map((c) => [c, f(c)])) as Record<CourseId, T>;

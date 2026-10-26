@@ -12,5 +12,6 @@ import './pkg';
 import './net';
 import './archive';
 import './fun';
+import '../../awsengine/command';
 
 export { REGISTRY } from '../registry';

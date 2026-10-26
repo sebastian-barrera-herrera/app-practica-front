@@ -41,6 +41,8 @@ export interface WorldOptions {
   /** Incluir el laboratorio completo (sandbox). */
   lab?: boolean;
   hostname?: string;
+  /** Cuenta de AWS simulada: nombre de un escenario o un `AwsSetup` completo (ver awsengine/scenarios). */
+  aws?: string | true | import('../awsengine/scenarios').AwsSetup;
 }
 
 export interface World {
@@ -427,6 +429,9 @@ export const LAB_FILES: Files = {
   '/home/alumno/.ssh/': { dir: true, mode: 0o700 },
 };
 
+/** Extensiones que se aplican al terminar de crear un mundo (las registra el motor de AWS). */
+export const worldHooks: ((w: World, o: WorldOptions) => void)[] = [];
+
 export function createWorld(opts: WorldOptions = {}): World {
   const clock: Clock = { now: START_TIME };
   const sys = new System(clock);
@@ -505,7 +510,9 @@ export function createWorld(opts: WorldOptions = {}): World {
   sys.spawn(shell.user, '-bash', { pid: shell.pid, ppid: 1640, tty: 'pts/0', mem: 0.2, rss: 5400, vsz: 11000 });
   // historial inicial
   shell.history = ['ls', 'cd Documents', 'pwd', 'clear'];
-  return { sys, fs, rt, shell };
+  const world: World = { sys, fs, rt, shell };
+  for (const h of worldHooks) h(world, opts);
+  return world;
 }
 
 /** Instala un paquete: estado + binarios + efectos. */
