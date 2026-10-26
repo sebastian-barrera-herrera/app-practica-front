@@ -3,7 +3,7 @@ import { md5 } from '../../engine/commands/hash';
 import { azName, regional } from '../account';
 import { IMAGES, INSTANCE_TYPES, REGIONS, findImage, imageId, instanceType, isRegion, regionInfo } from '../catalog';
 import { AwsError, op, type AuthzTarget, type OpCtx } from '../registry';
-import type { Account, Ec2Address, Ec2Instance, Ec2Region, Ec2Snapshot, Ec2Volume, IpPermission, SecurityGroup, Tag } from '../types';
+import type { Account, Ec2Address, Ec2Instance, Ec2Region, Ec2Snapshot, Ec2Volume, IpPermission, SecurityGroup, Subnet, Tag } from '../types';
 import { cidrContainsIp, ec2Id, intToIp, iso, mergeTags, parseCidr, stableId, wildcard } from '../util';
 
 // ───────────────────────── estados y relojes ─────────────────────────
@@ -26,6 +26,16 @@ export function refreshEc2(a: Account, region: string): Ec2Region {
       i.stateAt = a.clock;
     }
   }
+  for (const n of Object.values(r.natGateways)) {
+    const age = a.clock - n.stateAt;
+    if (n.state === 'pending' && age >= PENDING_MS) {
+      n.state = 'available';
+      n.stateAt = a.clock;
+    } else if (n.state === 'deleting' && age >= STOPPING_MS) {
+      n.state = 'deleted';
+      n.stateAt = a.clock;
+    }
+  }
   for (const v of Object.values(r.volumes)) if (v.state === 'creating' && a.clock - Date.parse(v.CreateTime) >= 2000) v.state = 'available';
   return r;
 }
@@ -43,7 +53,7 @@ export function settleEc2(a: Account): void {
 const DNS_SUFFIX = (region: string) => (region === 'us-east-1' ? 'ec2.internal' : `${region}.compute.internal`);
 const PUB_SUFFIX = (region: string) => (region === 'us-east-1' ? 'compute-1.amazonaws.com' : `${region}.compute.amazonaws.com`);
 
-function publicIpFor(key: string): string {
+export function publicIpFor(key: string): string {
   const h = md5(key);
   const o = (n: number) => (parseInt(h.slice(n * 2, n * 2 + 2), 16) % 200) + 20;
   return `${[3, 13, 18, 34, 35, 44, 52, 54][parseInt(h.slice(8, 10), 16) % 8]}.${o(1)}.${o(2)}.${o(3)}`;
@@ -51,7 +61,7 @@ function publicIpFor(key: string): string {
 
 const dashed = (ip: string) => ip.replace(/\./g, '-');
 
-function privateIpIn(r: Ec2Region, subnetId: string, seed: string): string {
+export function privateIpIn(r: Ec2Region, subnetId: string, seed: string): string {
   const sn = r.subnets[subnetId];
   const c = parseCidr(sn.CidrBlock)!;
   const used = new Set(Object.values(r.instances).map((i) => i.PrivateIpAddress));
@@ -67,18 +77,13 @@ function privateIpIn(r: Ec2Region, subnetId: string, seed: string): string {
 
 // ───────────────────────── etiquetas y filtros ─────────────────────────
 
-type TagSpec = { ResourceType: string; Tags: Tag[] };
+export type TagSpec = { ResourceType: string; Tags: Tag[] };
 
-function tagsFor(specs: TagSpec[] | undefined, type: string): Tag[] {
+export function tagsFor(specs: TagSpec[] | undefined, type: string): Tag[] {
   return (specs ?? []).filter((s) => s.ResourceType === type).flatMap((s) => (Array.isArray(s.Tags) ? s.Tags : []));
 }
 
-interface Filter {
-  Name: string;
-  Values: string[];
-}
-
-function filterOk(filters: Filter[] | undefined, get: (name: string) => string[] | undefined): boolean {
+export function filterOk(filters: { Name: string; Values: string[] }[] | undefined, get: (name: string) => string[] | undefined): boolean {
   for (const f of filters ?? []) {
     const vals = (Array.isArray(f.Values) ? f.Values : [f.Values]).map(String);
     let have: string[];
@@ -90,7 +95,7 @@ function filterOk(filters: Filter[] | undefined, get: (name: string) => string[]
   return true;
 }
 
-const tagGetter = (tags: Tag[]) => (name: string): string[] | undefined => {
+export const tagGetter = (tags: Tag[]) => (name: string): string[] | undefined => {
   if (name.startsWith('tag:')) {
     const t = tags.find((x) => x.Key === name.slice(4));
     return t ? [t.Value] : [];
@@ -295,9 +300,9 @@ export function ec2Launch(a: Account, region: string, o: LaunchOpts = {}): Ec2In
   return inst;
 }
 
-export function ec2CreateSg(a: Account, region: string, name: string, description: string, ingress: { proto: string; from?: number; to?: number; cidr: string }[] = []): SecurityGroup {
+export function ec2CreateSg(a: Account, region: string, name: string, description: string, ingress: { proto: string; from?: number; to?: number; cidr: string }[] = [], vpcId?: string): SecurityGroup {
   const r = regional(a, region).ec2;
-  const vpc = Object.values(r.vpcs).find((v) => v.IsDefault)!;
+  const vpc = vpcId ? r.vpcs[vpcId] : Object.values(r.vpcs).find((v) => v.IsDefault)!;
   const id = ec2Id(a, 'sg');
   const sg: SecurityGroup = {
     GroupId: id,
@@ -645,6 +650,12 @@ op('ec2', 'describe-vpcs', 'vpc-ids:l filters:f dry-run:b', 'Lista las VPC (rede
       .map((v) => ({ OwnerId: c.acct.id, InstanceTenancy: 'default', CidrBlockAssociationSet: [{ AssociationId: stableId(`vpcassoc:${v.VpcId}`, 'vpc-cidr-assoc-', 8), CidrBlock: v.CidrBlock, CidrBlockState: { State: 'associated' } }], IsDefault: v.IsDefault, Tags: v.Tags, VpcId: v.VpcId, State: 'available', CidrBlock: v.CidrBlock, DhcpOptionsId: 'dopt-' + stableId(`dopt:${c.region}`, '', 8) })),
   };
 });
+
+export function subnetView(a: Account, region: string, s: Subnet) {
+  const cidr = parseCidr(s.CidrBlock)!;
+  return { AvailabilityZoneId: `${REGION_CODE[region] ?? 'xx1'}-az${(regionInfo(region)?.azs.indexOf(s.AvailabilityZone.slice(-1)) ?? 0) + 1}`, MapCustomerOwnedIpOnLaunch: false, OwnerId: a.id, AssignIpv6AddressOnCreation: false, Ipv6CidrBlockAssociationSet: [], Tags: s.Tags, SubnetArn: `arn:aws:ec2:${region}:${a.id}:subnet/${s.SubnetId}`, EnableDns64: false, Ipv6Native: false, PrivateDnsNameOptionsOnLaunch: { HostnameType: 'ip-name', EnableResourceNameDnsARecord: false, EnableResourceNameDnsAAAARecord: false }, SubnetId: s.SubnetId, State: 'available', VpcId: s.VpcId, CidrBlock: s.CidrBlock, AvailableIpAddressCount: 2 ** (32 - cidr.bits) - 5, AvailabilityZone: s.AvailabilityZone, DefaultForAz: s.DefaultForAz, MapPublicIpOnLaunch: s.MapPublicIpOnLaunch };
+}
+
 op('ec2', 'describe-subnets', 'subnet-ids:l filters:f dry-run:b', 'Lista las subredes.', { dryRun: true, paginate: 'Subnets' }, (c) => {
   const r = refreshEc2(c.acct, c.region);
   for (const id of c.p.SubnetIds ?? []) if (!r.subnets[id]) throw NOT_FOUND.subnet(id);
@@ -660,10 +671,7 @@ op('ec2', 'describe-subnets', 'subnet-ids:l filters:f dry-run:b', 'Lista las sub
           default: return tagGetter(s.Tags)(n);
         }
       }))
-      .map((s) => {
-        const cidr = parseCidr(s.CidrBlock)!;
-        return { AvailabilityZoneId: `${REGION_CODE[c.region] ?? 'xx1'}-az${(regionInfo(c.region)?.azs.indexOf(s.AvailabilityZone.slice(-1)) ?? 0) + 1}`, MapCustomerOwnedIpOnLaunch: false, OwnerId: c.acct.id, AssignIpv6AddressOnCreation: false, Ipv6CidrBlockAssociationSet: [], Tags: s.Tags, SubnetArn: `arn:aws:ec2:${c.region}:${c.acct.id}:subnet/${s.SubnetId}`, EnableDns64: false, Ipv6Native: false, PrivateDnsNameOptionsOnLaunch: { HostnameType: 'ip-name', EnableResourceNameDnsARecord: false, EnableResourceNameDnsAAAARecord: false }, SubnetId: s.SubnetId, State: 'available', VpcId: s.VpcId, CidrBlock: s.CidrBlock, AvailableIpAddressCount: 2 ** (32 - cidr.bits) - 5, AvailabilityZone: s.AvailabilityZone, DefaultForAz: s.DefaultForAz, MapPublicIpOnLaunch: s.MapPublicIpOnLaunch };
-      }),
+      .map((s) => subnetView(c.acct, c.region, s)),
   };
 });
 
@@ -748,12 +756,14 @@ op('ec2', 'run-instances', 'image-id:s! instance-type:s key-name:s security-grou
   const bd = (c.p.BlockDeviceMappings ?? [])[0];
   const out: Ec2Instance[] = [];
   const noPublic = c.p.AssociatePublicIpAddress === false;
+  const forcePublic = c.p.AssociatePublicIpAddress === true;
   for (let k = 0; k < n; k++) {
     const inst = ec2Launch(a, c.region, { imageId: c.p.ImageId, type, key: c.p.KeyName, sgIds, subnetId: subnet.SubnetId, tags, userData: c.p.UserData, profile, size: bd?.Ebs?.VolumeSize ? Number(bd.Ebs.VolumeSize) : 8, volumeType: bd?.Ebs?.VolumeType, encrypted: bd?.Ebs?.Encrypted === true || bd?.Ebs?.Encrypted === 'true' });
     inst.state = 'pending';
     inst.stateAt = a.clock;
     inst.ReservationId = reservation;
     if (noPublic) inst.PublicIpAddress = undefined;
+    else if (forcePublic && !inst.PublicIpAddress) inst.PublicIpAddress = publicIpFor(inst.InstanceId + a.clock);
     inst.Monitoring = c.p.Monitoring?.Enabled === true || c.p.Monitoring?.Enabled === 'true' ? 'enabled' : 'disabled';
     inst.DisableApiTermination = !!c.p.DisableApiTermination;
     inst.EbsOptimized = !!c.p.EbsOptimized;
@@ -929,18 +939,21 @@ const btoaSafe = (s: string) => {
 
 // ───────────────────────── etiquetas ─────────────────────────
 
+const taggedResource = (r: Ec2Region, id: string): { Tags: Tag[] } | undefined =>
+  (r.instances[id] ?? r.volumes[id] ?? r.snapshots[id] ?? r.securityGroups[id] ?? r.vpcs[id] ?? r.subnets[id] ?? r.internetGateways[id] ?? r.routeTables[id] ?? r.natGateways[id] ?? r.networkAcls[id] ?? Object.values(r.addresses).find((x) => x.AllocationId === id) ?? Object.values(r.keyPairs).find((x) => x.KeyPairId === id)) as { Tags: Tag[] } | undefined;
+const TAG_TYPES: [string, string][] = [['i-', 'instance'], ['vol-', 'volume'], ['snap-', 'snapshot'], ['sg-', 'security-group'], ['vpc-', 'vpc'], ['subnet-', 'subnet'], ['igw-', 'internet-gateway'], ['rtb-', 'route-table'], ['nat-', 'natgateway'], ['acl-', 'network-acl'], ['eipalloc-', 'elastic-ip']];
+const tagType = (id: string) => TAG_TYPES.find(([p]) => id.startsWith(p))?.[1] ?? 'key-pair';
+
 function taggable(r: Ec2Region, id: string): { Tags: Tag[]; type: string } | null {
-  const hit = r.instances[id] ?? r.volumes[id] ?? r.snapshots[id] ?? r.securityGroups[id] ?? r.vpcs[id] ?? r.subnets[id] ?? Object.values(r.addresses).find((x) => x.AllocationId === id) ?? Object.values(r.keyPairs).find((x) => x.KeyPairId === id);
-  if (!hit) return null;
-  const type = id.startsWith('i-') ? 'instance' : id.startsWith('vol-') ? 'volume' : id.startsWith('snap-') ? 'snapshot' : id.startsWith('sg-') ? 'security-group' : id.startsWith('vpc-') ? 'vpc' : id.startsWith('subnet-') ? 'subnet' : id.startsWith('eipalloc-') ? 'elastic-ip' : 'key-pair';
-  return { Tags: (hit as { Tags: Tag[] }).Tags, type };
+  const hit = taggedResource(r, id);
+  return hit ? { Tags: hit.Tags, type: tagType(id) } : null;
 }
 const setTags = (r: Ec2Region, id: string, fn: (t: Tag[]) => Tag[]) => {
-  const hit = (r.instances[id] ?? r.volumes[id] ?? r.snapshots[id] ?? r.securityGroups[id] ?? r.vpcs[id] ?? r.subnets[id] ?? Object.values(r.addresses).find((x) => x.AllocationId === id) ?? Object.values(r.keyPairs).find((x) => x.KeyPairId === id)) as { Tags: Tag[] };
+  const hit = taggedResource(r, id)!;
   hit.Tags = fn(hit.Tags);
 };
 
-op('ec2', 'create-tags', 'resources:l! tags:t! dry-run:b', 'Pone etiquetas a recursos de EC2 (instancias, volúmenes, grupos…).', { dryRun: true, res: (c) => (c.p.Resources as string[]).map((id) => `arn:aws:ec2:${c.region}:${c.acct.id}:${id.startsWith('i-') ? 'instance' : id.startsWith('vol-') ? 'volume' : id.startsWith('sg-') ? 'security-group' : id.startsWith('snap-') ? 'snapshot' : 'resource'}/${id}`) }, (c) => {
+op('ec2', 'create-tags', 'resources:l! tags:t! dry-run:b', 'Pone etiquetas a recursos de EC2 (instancias, volúmenes, grupos…).', { dryRun: true, res: (c) => (c.p.Resources as string[]).map((id) => `arn:aws:ec2:${c.region}:${c.acct.id}:${tagType(id)}/${id}`) }, (c) => {
   const r = refreshEc2(c.acct, c.region);
   for (const id of c.p.Resources as string[]) {
     if (!taggable(r, id)) throw new AwsError(id.startsWith('i-') ? 'InvalidInstanceID.NotFound' : 'InvalidID', `The ${id.startsWith('i-') ? 'instance ID' : 'ID'} '${id}' does not exist`);
@@ -958,7 +971,7 @@ op('ec2', 'delete-tags', 'resources:l! tags:t dry-run:b', 'Quita etiquetas de re
 });
 op('ec2', 'describe-tags', 'filters:f dry-run:b', 'Lista las etiquetas de todos los recursos.', { dryRun: true, paginate: 'Tags' }, (c) => {
   const r = refreshEc2(c.acct, c.region);
-  const ids = [...Object.keys(r.instances), ...Object.keys(r.volumes), ...Object.keys(r.snapshots), ...Object.keys(r.securityGroups)];
+  const ids = [...Object.keys(r.instances), ...Object.keys(r.volumes), ...Object.keys(r.snapshots), ...Object.keys(r.securityGroups), ...Object.keys(r.vpcs), ...Object.keys(r.subnets), ...Object.keys(r.internetGateways), ...Object.keys(r.routeTables), ...Object.keys(r.natGateways), ...Object.keys(r.networkAcls)];
   const out: Record<string, unknown>[] = [];
   for (const id of ids) {
     const t = taggable(r, id);
@@ -1145,9 +1158,10 @@ const WAITERS: Record<string, (c: OpCtx) => boolean> = {
   'volume-available': (c) => (c.p.VolumeIds as string[]).every((id) => regional(c.acct, c.region).ec2.volumes[id]?.state === 'available'),
   'volume-in-use': (c) => (c.p.VolumeIds as string[]).every((id) => regional(c.acct, c.region).ec2.volumes[id]?.state === 'in-use'),
   'snapshot-completed': () => true,
+  'nat-gateway-available': (c) => ((c.p.NatGatewayIds as string[]) ?? []).every((id) => regional(c.acct, c.region).ec2.natGateways[id]?.state === 'available'),
 };
 
-op('ec2', 'wait', 'waiter:s! instance-ids:l volume-ids:l snapshot-ids:l filters:f dry-run:b', 'Espera a que se cumpla una condición (instance-running, instance-stopped, volume-available…).', { positional: ['waiter'], res: () => '*', authz: false }, (c) => {
+op('ec2', 'wait', 'waiter:s! instance-ids:l volume-ids:l snapshot-ids:l nat-gateway-ids:l filters:f dry-run:b', 'Espera a que se cumpla una condición (instance-running, instance-stopped, volume-available, nat-gateway-available…).', { positional: ['waiter'], res: () => '*', authz: false }, (c) => {
   const w = WAITERS[c.p.Waiter];
   if (!w) throw new AwsError('InvalidWaiter', `Invalid choice: '${c.p.Waiter}', valid choices are: ${Object.keys(WAITERS).join(', ')}`);
   if (c.p.Waiter.startsWith('instance') && !c.p.InstanceIds) throw new AwsError('MissingParameter', 'The request must contain the parameter InstanceIds');

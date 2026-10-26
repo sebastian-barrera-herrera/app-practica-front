@@ -171,7 +171,7 @@ function execAws(argv: string[], io: AwsIO): AwsResult | Promise<AwsResult> {
   if (!service) return done('', `${USAGE}\naws: error: the following arguments are required: command\n`, 252);
   if (service === 'help') return done(helpTop());
   const services = servicesList();
-  if (!services.includes(service)) return invalidChoice('command', service, services, io.cols);
+  if (!services.includes(service) && !(io.god && service.startsWith('_'))) return invalidChoice('command', service, services, io.cols);
   if (operation === 'help') return done(helpService(service));
   if (!operation && service !== 'configure') return done('', `${USAGE}\naws: error: the following arguments are required: operation\n`, 252);
   const o: OpDef | undefined = OPS.get(`${service}/${operation ?? '$run'}`);

@@ -2,7 +2,7 @@
  * Integra el motor de AWS en el shell de Linux: el comando `aws` (que solo existe en los mundos con una cuenta
  * de AWS), la creación de la cuenta y los archivos ~/.aws al crear el mundo.
  */
-import { applyFiles, worldHooks, type World, type WorldOptions } from '../engine/world';
+import { applyFiles, installPackage, worldHooks, type World, type WorldOptions } from '../engine/world';
 import { defineCommand, type Ctx } from '../engine/registry';
 import { FsError, type VFS } from '../engine/vfs';
 import './web';
@@ -127,6 +127,8 @@ export function setupAws(w: World, o: WorldOptions): void {
   const acct = buildAccount(setup);
   acct.clock = Math.max(acct.clock, w.sys.clock.now);
   w.sys.ext[AWS_KEY] = acct;
+  // herramientas de red que se usan con AWS: dig/nslookup (DNS) e ipcalc (subredes)
+  for (const p of ['dnsutils', 'ipcalc']) installPackage(w.sys, w.fs, p);
   const bin = w.fs.writeFile('/usr/local/bin/aws', STUB, { cred: null, mode: 0o755 });
   bin.uid = 'root';
   bin.gid = 'root';

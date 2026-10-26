@@ -293,6 +293,65 @@ export interface Vpc {
   CidrBlock: string;
   IsDefault: boolean;
   Tags: Tag[];
+  EnableDnsSupport?: boolean;
+  EnableDnsHostnames?: boolean;
+}
+
+export interface InternetGateway {
+  InternetGatewayId: string;
+  /** VPC a la que está conectada (una IGW solo puede estar en una). */
+  VpcId?: string;
+  Tags: Tag[];
+}
+
+/** Destino de una ruta: `local`, `igw-…`, `nat-…`, `pcx-…`, `vgw-…`, `tgw-…`… */
+export interface Route {
+  DestinationCidrBlock: string;
+  target: string;
+  Origin: 'CreateRouteTable' | 'CreateRoute';
+}
+
+export interface RouteTable {
+  RouteTableId: string;
+  VpcId: string;
+  routes: Route[];
+  associations: { RouteTableAssociationId: string; SubnetId?: string; Main: boolean }[];
+  Tags: Tag[];
+}
+
+export interface NatGateway {
+  NatGatewayId: string;
+  SubnetId: string;
+  VpcId: string;
+  ConnectivityType: 'public' | 'private';
+  AllocationId?: string;
+  PublicIp?: string;
+  PrivateIp: string;
+  state: 'pending' | 'available' | 'deleting' | 'deleted';
+  CreateTime: string;
+  /** Reloj virtual (ms) del último cambio de estado. */
+  stateAt: number;
+  Tags: Tag[];
+}
+
+export interface NaclEntry {
+  RuleNumber: number;
+  /** `-1` (todos), `6` (tcp), `17` (udp), `1` (icmp). */
+  Protocol: string;
+  RuleAction: 'allow' | 'deny';
+  Egress: boolean;
+  CidrBlock: string;
+  PortRange?: { From: number; To: number };
+}
+
+export interface NetworkAcl {
+  NetworkAclId: string;
+  VpcId: string;
+  IsDefault: boolean;
+  Entries: NaclEntry[];
+  /** Subredes asociadas. */
+  subnets: string[];
+  Tags: Tag[];
 }
 
 export interface Ec2Region {
@@ -304,6 +363,10 @@ export interface Ec2Region {
   snapshots: Record<string, Ec2Snapshot>;
   addresses: Record<string, Ec2Address>;
   keyPairs: Record<string, KeyPair>;
+  internetGateways: Record<string, InternetGateway>;
+  routeTables: Record<string, RouteTable>;
+  natGateways: Record<string, NatGateway>;
+  networkAcls: Record<string, NetworkAcl>;
 }
 
 // ───────────── otros servicios sencillos ─────────────
@@ -338,10 +401,217 @@ export interface SnsTopic {
   messages: string[];
 }
 
+// ───────────── DynamoDB ─────────────
+
+export interface DdbKey {
+  AttributeName: string;
+  KeyType: 'HASH' | 'RANGE';
+}
+
+export interface DdbIndex {
+  IndexName: string;
+  KeySchema: DdbKey[];
+  Projection: { ProjectionType: 'ALL' | 'KEYS_ONLY' | 'INCLUDE'; NonKeyAttributes?: string[] };
+  ProvisionedThroughput?: { ReadCapacityUnits: number; WriteCapacityUnits: number };
+}
+
+export interface DdbTable {
+  TableName: string;
+  KeySchema: DdbKey[];
+  AttributeDefinitions: { AttributeName: string; AttributeType: 'S' | 'N' | 'B' }[];
+  BillingMode: 'PAY_PER_REQUEST' | 'PROVISIONED';
+  ProvisionedThroughput?: { ReadCapacityUnits: number; WriteCapacityUnits: number };
+  GlobalSecondaryIndexes: DdbIndex[];
+  LocalSecondaryIndexes: DdbIndex[];
+  ttl?: { AttributeName: string; Enabled: boolean };
+  stream?: { StreamEnabled: boolean; StreamViewType?: string };
+  /** Clave canónica → elemento (tipado: `{"id": {"S": "1"}}`). */
+  items: Record<string, Record<string, unknown>>;
+  /** Reloj virtual (ms) de creación y de la orden de borrado. */
+  created: number;
+  deleting?: number;
+  DeletionProtectionEnabled: boolean;
+  Tags: Tag[];
+}
+
+// ───────────── RDS ─────────────
+
+export interface DbInstance {
+  DBInstanceIdentifier: string;
+  DBInstanceClass: string;
+  Engine: string;
+  EngineVersion: string;
+  AllocatedStorage: number;
+  StorageType: string;
+  MasterUsername: string;
+  DBName?: string;
+  MultiAZ: boolean;
+  AvailabilityZone: string;
+  SecondaryAvailabilityZone?: string;
+  PubliclyAccessible: boolean;
+  VpcSecurityGroupIds: string[];
+  DBSubnetGroupName: string;
+  BackupRetentionPeriod: number;
+  StorageEncrypted: boolean;
+  DeletionProtection: boolean;
+  Port: number;
+  InstanceCreateTime: string;
+  /** `creating`, `available`, `modifying`, `rebooting`, `backing-up`, `stopping`, `stopped`, `starting`, `deleting`. */
+  status: string;
+  /** Reloj virtual (ms) del último cambio de estado. */
+  stateAt: number;
+  ReadReplicaSourceDBInstanceIdentifier?: string;
+  DBClusterIdentifier?: string;
+  /** Cambios pendientes de aplicar en la ventana de mantenimiento. */
+  pending?: Record<string, unknown>;
+  Tags: Tag[];
+}
+
+export interface DbSnapshot {
+  DBSnapshotIdentifier: string;
+  DBInstanceIdentifier: string;
+  SnapshotCreateTime: string;
+  Engine: string;
+  EngineVersion: string;
+  AllocatedStorage: number;
+  MasterUsername: string;
+  DBInstanceClass: string;
+  StorageType: string;
+  Encrypted: boolean;
+  SnapshotType: 'manual' | 'automated';
+  Port: number;
+  status: string;
+  stateAt: number;
+  Tags: Tag[];
+}
+
+export interface DbSubnetGroup {
+  DBSubnetGroupName: string;
+  DBSubnetGroupDescription: string;
+  VpcId: string;
+  SubnetIds: string[];
+}
+
+export interface DbCluster {
+  DBClusterIdentifier: string;
+  Engine: string;
+  EngineVersion: string;
+  MasterUsername: string;
+  DatabaseName?: string;
+  Port: number;
+  status: string;
+  stateAt: number;
+  members: { id: string; writer: boolean }[];
+  DBSubnetGroup: string;
+  VpcSecurityGroupIds: string[];
+  StorageEncrypted: boolean;
+  BackupRetentionPeriod: number;
+  DeletionProtection: boolean;
+  ClusterCreateTime: string;
+  Tags: Tag[];
+}
+
+export interface RdsState {
+  instances: Record<string, DbInstance>;
+  snapshots: Record<string, DbSnapshot>;
+  subnetGroups: Record<string, DbSubnetGroup>;
+  clusters: Record<string, DbCluster>;
+}
+
 export interface RegionalState {
   ec2: Ec2Region;
   alarms: Record<string, Alarm>;
   sns: Record<string, SnsTopic>;
+  ddb?: Record<string, DdbTable>;
+  rds?: RdsState;
+}
+
+// ───────────── Route 53 ─────────────
+
+export interface RecordSet {
+  Name: string;
+  Type: string;
+  TTL?: number;
+  ResourceRecords?: { Value: string }[];
+  AliasTarget?: { HostedZoneId: string; DNSName: string; EvaluateTargetHealth: boolean };
+  SetIdentifier?: string;
+  Weight?: number;
+  Region?: string;
+  Failover?: 'PRIMARY' | 'SECONDARY';
+  HealthCheckId?: string;
+}
+
+export interface HostedZone {
+  /** `Z0123456789ABC` (sin el prefijo `/hostedzone/`). */
+  Id: string;
+  /** Con el punto final: `example.com.` */
+  Name: string;
+  CallerReference: string;
+  Comment?: string;
+  Private: boolean;
+  records: RecordSet[];
+}
+
+export interface Route53State {
+  zones: Record<string, HostedZone>;
+}
+
+// ───────────── facturación, organizaciones y soporte ─────────────
+
+export interface BillLine {
+  /** Día (`2026-02-14`). */
+  date: string;
+  /** Nombre del servicio tal como lo muestra Cost Explorer. */
+  service: string;
+  usageType: string;
+  region: string;
+  usd: number;
+  /** Etiquetas del recurso que generó el gasto. */
+  tags: Record<string, string>;
+  account: string;
+}
+
+export interface BillingState {
+  lines: BillLine[];
+  /** Claves de etiqueta activadas para la asignación de costes (si no, Cost Explorer no puede agrupar por ellas). */
+  activeTags: string[];
+}
+
+export interface OrgAccount {
+  Id: string;
+  Name: string;
+  Email: string;
+  Status: 'ACTIVE' | 'SUSPENDED' | 'PENDING_CLOSURE';
+  JoinedMethod: 'INVITED' | 'CREATED';
+  JoinedTimestamp: string;
+  ParentId: string;
+}
+
+export interface OrgUnit {
+  Id: string;
+  Name: string;
+  ParentId: string;
+}
+
+export interface OrgPolicy {
+  Id: string;
+  Name: string;
+  Description: string;
+  Type: 'SERVICE_CONTROL_POLICY' | 'TAG_POLICY' | 'BACKUP_POLICY';
+  Content: string;
+  AwsManaged: boolean;
+  targets: string[];
+}
+
+export interface Organization {
+  Id: string;
+  FeatureSet: 'ALL' | 'CONSOLIDATED_BILLING';
+  rootId: string;
+  units: Record<string, OrgUnit>;
+  accounts: Record<string, OrgAccount>;
+  policies: Record<string, OrgPolicy>;
+  /** Tipos de política activados en la raíz. */
+  policyTypes: string[];
 }
 
 // ───────────── cuenta ─────────────
@@ -378,4 +648,12 @@ export interface Account {
   regions: Record<string, RegionalState>;
   /** Sesiones temporales vigentes (clave de acceso ASIA… → sesión). */
   sessions: Record<string, AssumedSession>;
+  /** Zonas de Route 53 (servicio global). */
+  route53?: Route53State;
+  /** Historial de gasto (Cost Explorer). */
+  billing?: BillingState;
+  /** La organización de AWS Organizations (si existe). */
+  org?: Organization;
+  /** Plan de soporte (por defecto `basic`). */
+  supportPlan?: 'basic' | 'developer' | 'business' | 'enterprise';
 }

@@ -158,6 +158,13 @@ export const SERVICE_SUMMARY: Record<string, string> = {
   s3: 'Comandos de alto nivel de Amazon S3 (mb, ls, cp, sync…)',
   s3api: 'Amazon S3 (API completa)',
   ec2: 'Amazon Elastic Compute Cloud',
+  route53: 'Amazon Route 53 (DNS)',
+  dynamodb: 'Amazon DynamoDB',
+  ce: 'AWS Cost Explorer',
+  organizations: 'AWS Organizations',
+  resourcegroupstaggingapi: 'AWS Resource Groups Tagging API',
+  support: 'AWS Support (y Trusted Advisor)',
+  rds: 'Amazon Relational Database Service',
   budgets: 'AWS Budgets',
   cloudwatch: 'Amazon CloudWatch',
   sns: 'Amazon Simple Notification Service',
@@ -180,7 +187,7 @@ export type OpOptions = Partial<Pick<OpDef, 'authz' | 'global' | 'paginate' | 'd
 
 /** Define una operación. `params` usa el mini-lenguaje `nombre:tipo[!]` separado por espacios. */
 /** Servicios que no exigen una región configurada. */
-const GLOBAL_SERVICES = new Set(['iam', 'sts', 's3', 's3api', 'budgets', 'configure']);
+const GLOBAL_SERVICES = new Set(['iam', 'sts', 's3', 's3api', 'budgets', 'configure', 'route53', 'ce', 'organizations', 'support']);
 
 export function op(service: string, name: string, params: string, summary: string, options: OpOptions, handler: OpDef['handler']): void {
   const def: OpDef = { service, name, api: options.api ?? pascal(name), params: parseParams(params), summary, handler, global: GLOBAL_SERVICES.has(service), ...options };
@@ -188,7 +195,8 @@ export function op(service: string, name: string, params: string, summary: strin
 }
 
 export const opsOf = (service: string): OpDef[] => [...OPS.values()].filter((o) => o.service === service && !o.name.startsWith('$')).sort((a, b) => (a.name < b.name ? -1 : 1));
-export const servicesList = (): string[] => [...new Set([...OPS.values()].map((o) => o.service))].sort();
+/** Servicios visibles en la CLI (los que empiezan por `_` son herramientas internas del corrector). */
+export const servicesList = (): string[] => [...new Set([...OPS.values()].map((o) => o.service))].filter((s) => !s.startsWith('_')).sort();
 
 /** Autorización típica: `servicio:Api` sobre el recurso dado. */
 export const iamAction = (service: string, api: string) => `${SERVICE_PREFIX[service] ?? service}:${api}`;

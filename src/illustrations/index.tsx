@@ -3,6 +3,9 @@ import type { IllustrationId } from '@/content/types';
 import { GlobalInfra, ServiceModels, SharedResponsibility } from './AwsFoundations';
 import { Ec2Lifecycle, EbsVsStore, PurchaseModels } from './AwsCompute';
 import { PolicyEval, StsAssume } from './AwsIam';
+import { DbChooser, DdbPartition, MultiAz } from './AwsData';
+import { OrgTree, PriceCalc, SupportPlans } from './AwsCosts';
+import { CidrCalc, DnsFlow, PacketTrace, SgVsNacl, VpcLayout } from './AwsNetwork';
 import { S3Classes, S3Security } from './AwsStorage';
 import { AptFlow, BootSequence, DnsLookup, NetRoute, SshHandshake, SudoFlow } from './Flows';
 import { FsTree } from './FsTree';
@@ -91,6 +94,17 @@ const MAP: Partial<Record<IllustrationId, React.ComponentType>> = {
   'aws-purchase-models': PurchaseModels,
   'aws-s3-classes': S3Classes,
   'aws-s3-security': S3Security,
+  'aws-cidr-calc': CidrCalc,
+  'aws-vpc-layout': VpcLayout,
+  'aws-packet-trace': PacketTrace,
+  'aws-sg-vs-nacl': SgVsNacl,
+  'aws-dns-flow': DnsFlow,
+  'aws-db-chooser': DbChooser,
+  'aws-multi-az': MultiAz,
+  'aws-ddb-partition': DdbPartition,
+  'aws-price-calc': PriceCalc,
+  'aws-support-plans': SupportPlans,
+  'aws-org-tree': OrgTree,
 };
 
 export function Illustration({ id }: { id: IllustrationId }) {

@@ -155,6 +155,7 @@ export const PACKAGES: PkgDef[] = [
   { name: 'figlet', version: '2.2.5-3build1', description: 'Make large character ASCII banners out of ordinary text', sizeKb: 1100 },
   { name: 'net-tools', version: '2.10-0.1ubuntu4', description: 'NET-3 networking toolkit (ifconfig, netstat)', sizeKb: 800 },
   { name: 'dnsutils', version: '1:9.18.28-0ubuntu0.24.04.1', description: 'Clients provided with BIND (dig, nslookup)', sizeKb: 300 },
+  { name: 'ipcalc', version: '0.51-1', description: 'parameter calculator for IPv4 addresses', sizeKb: 40 },
   { name: 'traceroute', version: '1:2.1.5-1', description: 'Traces the route taken by packets over an IPv4/IPv6 network', sizeKb: 150 },
   { name: 'nmap', version: '7.94+git20230807.3be01efb1+dfsg-3build2', description: 'The Network Mapper', sizeKb: 5800 },
   { name: 'lsof', version: '4.95.0-1build3', description: 'utility to list open files', sizeKb: 450 },

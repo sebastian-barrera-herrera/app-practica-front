@@ -104,8 +104,8 @@ Un motor en `src/awsengine/` con una **cuenta simulada** (regiones, zonas, recur
 
 ## Entregas por fases (cada una se publica sin APK nuevo)
 
-1. **Fase A — Cimientos**: simulador (cuenta, IAM, S3, EC2, CLI) + Z1–Z4.
-2. **Fase B — Básico completo**: VPC/trazador de paquetes, bases de datos, calculadora de costes + Z5–Z7 y simulacro Cloud Practitioner.
+1. **Fase A — Cimientos** ✅: simulador (cuenta, IAM, S3, EC2, CLI) + Z1–Z4.
+2. **Fase B — Básico completo** ✅: VPC/trazador de paquetes, bases de datos, calculadora de costes + Z5–Z7 y simulacro Cloud Practitioner.
 3. **Fase C — Intermedio**: Z8–Z11 (HA, VPC avanzada, serverless, datos) y Z12–Z15 (IaC, contenedores, operaciones, seguridad).
 4. **Fase D — Avanzado**: Z16–Z20, proyectos y simulacro Solutions Architect.
 

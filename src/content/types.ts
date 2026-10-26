@@ -76,7 +76,18 @@ export type IllustrationId =
   | 'aws-ebs-vs-store'
   | 'aws-purchase-models'
   | 'aws-s3-classes'
-  | 'aws-s3-security';
+  | 'aws-s3-security'
+  | 'aws-cidr-calc'
+  | 'aws-vpc-layout'
+  | 'aws-packet-trace'
+  | 'aws-sg-vs-nacl'
+  | 'aws-dns-flow'
+  | 'aws-db-chooser'
+  | 'aws-multi-az'
+  | 'aws-ddb-partition'
+  | 'aws-price-calc'
+  | 'aws-support-plans'
+  | 'aws-org-tree';
 
 // ───────────────────────── preguntas ─────────────────────────
 

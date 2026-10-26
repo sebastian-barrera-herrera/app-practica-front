@@ -5,7 +5,7 @@ import { defineCommand, parseOpts, type Ctx } from '../registry';
 import { SignalEx } from '../shell';
 import { FsError } from '../vfs';
 import { createWorld, type World } from '../world';
-import { fakeRand, httpFetch, isIp, isLocal, latencyFor, resolveHost, SITES, statusText } from './internet';
+import { dnsLookup, fakeRand, httpFetch, isIp, isLocal, latencyFor, resolveHost, SITES, statusText } from './internet';
 import { strftime } from './system';
 import { formatPrintf, splitLines } from './util';
 
@@ -373,6 +373,18 @@ defineCommand('dig', {
   const name = args.find((a) => !/^(A|AAAA|MX|TXT|NS|CNAME|SOA|ANY)$/i.test(a));
   const type = (args.find((a) => /^(A|AAAA|MX|TXT|NS|CNAME|SOA|ANY)$/i.test(a)) ?? 'A').toUpperCase();
   if (!name) return 0;
+  const zone = dnsLookup(c.sh.sys, name, type);
+  if (zone) {
+    const recs = zone.records;
+    if (short) {
+      for (const x of recs) c.out(x.data + '\n');
+      return 0;
+    }
+    c.out(`\n; <<>> DiG 9.18.28-0ubuntu0.24.04.1-Ubuntu <<>> ${name}\n;; global options: +cmd\n;; Got answer:\n;; ->>HEADER<<- opcode: QUERY, status: ${zone.nxdomain ? 'NXDOMAIN' : 'NOERROR'}, id: 38211\n;; flags: qr rd ra; QUERY: 1, ANSWER: ${recs.length}, AUTHORITY: 0, ADDITIONAL: 1\n\n;; QUESTION SECTION:\n;${name}.\t\t\tIN\t${type}\n\n`);
+    if (recs.length) c.out(`;; ANSWER SECTION:\n${recs.map((x) => `${x.name}\t\t${x.ttl}\tIN\t${x.type}\t${x.data}`).join('\n')}\n\n`);
+    c.out(`;; Query time: 23 msec\n;; SERVER: 127.0.0.53#53(127.0.0.53) (UDP)\n;; WHEN: ${strftime('%a %b %e %H:%M:%S UTC %Y', c.sh.sys.clock.now)}\n;; MSG SIZE  rcvd: 56\n\n`);
+    return 0;
+  }
   const r = resolveHost(c.sh.sys, c.fs, name);
   if (short) {
     if (type === 'MX') c.out('10 aspmx.l.google.com.\n20 alt1.aspmx.l.google.com.\n');
@@ -389,6 +401,18 @@ defineCommand('dig', {
 defineCommand('nslookup', { summary: 'Consulta DNS interactiva (modo simple)', usage: 'nslookup NOMBRE', category: 'redes', package: 'dnsutils', level: 3, examples: [['nslookup google.com', 'IP de Google']] }, (c) => {
   const name = c.args[0];
   if (!name) return 0;
+  const zone = dnsLookup(c.sh.sys, name, 'A');
+  if (zone) {
+    c.out('Server:\t\t127.0.0.53\nAddress:\t127.0.0.53#53\n\n');
+    if (zone.nxdomain || !zone.records.length) {
+      c.out(`** server can't find ${name}: NXDOMAIN\n\n`);
+      return 1;
+    }
+    c.out('Non-authoritative answer:\n');
+    for (const x of zone.records) c.out(x.type === 'CNAME' ? `${x.name.replace(/\.$/, '')}\tcanonical name = ${x.data}\n` : `Name:\t${x.name.replace(/\.$/, '')}\nAddress: ${x.data}\n`);
+    c.out('\n');
+    return 0;
+  }
   const r = resolveHost(c.sh.sys, c.fs, name);
   c.out('Server:\t\t127.0.0.53\nAddress:\t127.0.0.53#53\n\n');
   if (!r) {
@@ -401,12 +425,74 @@ defineCommand('nslookup', { summary: 'Consulta DNS interactiva (modo simple)', u
 defineCommand('host', { summary: 'Resuelve nombres DNS de forma sencilla', usage: 'host NOMBRE', category: 'redes', package: 'dnsutils', level: 3, examples: [['host google.com', 'google.com has address …']] }, (c) => {
   const name = c.args[0];
   if (!name) return 1;
+  const zone = isIp(name) ? null : dnsLookup(c.sh.sys, name, 'A');
+  if (zone) {
+    if (zone.nxdomain || !zone.records.length) {
+      c.out(`Host ${name} not found: 3(NXDOMAIN)\n`);
+      return 1;
+    }
+    for (const x of zone.records) c.out(x.type === 'CNAME' ? `${x.name.replace(/\.$/, '')} is an alias for ${x.data}\n` : `${x.name.replace(/\.$/, '')} has address ${x.data}\n`);
+    return 0;
+  }
   const r = resolveHost(c.sh.sys, c.fs, name);
   if (!r) {
     c.out(`Host ${name} not found: 3(NXDOMAIN)\n`);
     return 1;
   }
   c.out(isIp(name) ? `${name.split('.').reverse().join('.')}.in-addr.arpa domain name pointer ${r.site?.host ?? 'unknown'}.\n` : `${name} has address ${r.ip}\n`);
+});
+
+// ───────────────────────── ipcalc ─────────────────────────
+
+const toBin = (n: number) => (n >>> 0).toString(2).padStart(32, '0');
+const dotted = (n: number) => [n >>> 24, (n >>> 16) & 255, (n >>> 8) & 255, n & 255].join('.');
+/** 32 bits en cuatro octetos, con un espacio donde termina la máscara (como ipcalc). */
+const binView = (n: number, bits: number) => {
+  const b = toBin(n);
+  let s = '';
+  for (let i = 0; i < 32; i++) {
+    s += b[i];
+    if ((i + 1) % 8 === 0 && i < 31) s += '.';
+    if (i + 1 === bits && bits < 32) s += ' ';
+  }
+  return s;
+};
+
+defineCommand('ipcalc', { summary: 'Calcula red, máscara y direcciones de un CIDR', usage: 'ipcalc DIRECCION/BITS', category: 'redes', package: 'ipcalc', level: 2, examples: [['ipcalc 10.0.1.0/24', 'Red, primer y último host, difusión y nº de hosts'], ['ipcalc 192.168.0.0/20', 'Una red más grande']] }, (c) => {
+  const arg = c.args.find((a) => !a.startsWith('-'));
+  if (!arg) {
+    c.err('Usage: ipcalc [options] <ADDRESS>[[/]<NETMASK>] [NETMASK]\n');
+    return 1;
+  }
+  const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})(?:\/(\d{1,2}))?$/.exec(arg);
+  const octets = m ? m.slice(1, 5).map(Number) : [];
+  const bits = m ? (m[5] === undefined ? 24 : Number(m[5])) : -1;
+  if (!m || octets.some((o) => o > 255) || bits > 32) {
+    c.err(`INVALID ADDRESS: ${arg}\n`);
+    return 1;
+  }
+  const ip = ((octets[0] << 24) | (octets[1] << 16) | (octets[2] << 8) | octets[3]) >>> 0;
+  const mask = bits === 0 ? 0 : (0xffffffff << (32 - bits)) >>> 0;
+  const wild = ~mask >>> 0;
+  const net = (ip & mask) >>> 0;
+  const bcast = (net | wild) >>> 0;
+  const hostMin = bits >= 31 ? net : net + 1;
+  const hostMax = bits >= 31 ? bcast : bcast - 1;
+  const hosts = bits === 32 ? 1 : bits === 31 ? 2 : 2 ** (32 - bits) - 2;
+  const priv = octets[0] === 10 || (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31) || (octets[0] === 192 && octets[1] === 168);
+  const cls = octets[0] < 128 ? 'A' : octets[0] < 192 ? 'B' : octets[0] < 224 ? 'C' : octets[0] < 240 ? 'D' : 'E';
+  const row = (label: string, v: string, n: number, b: number) => `${label.padEnd(11)}${v.padEnd(21)}${binView(n, b)}\n`;
+  c.out(row('Address:', dotted(ip), ip, bits));
+  c.out(row('Netmask:', `${dotted(mask)} = ${bits}`, mask, bits));
+  c.out(row('Wildcard:', dotted(wild), wild, bits));
+  c.out('=>\n');
+  c.out(row('Network:', `${dotted(net)}/${bits}`, net, bits));
+  if (bits < 32) {
+    c.out(row('HostMin:', dotted(hostMin), hostMin, bits));
+    c.out(row('HostMax:', dotted(hostMax), hostMax, bits));
+  }
+  if (bits < 31) c.out(row('Broadcast:', dotted(bcast), bcast, bits));
+  c.out(`${'Hosts/Net:'.padEnd(11)}${String(hosts).padEnd(21)}Class ${cls}${priv ? ', Private Internet' : ''}\n`);
 });
 
 defineCommand('traceroute', { summary: 'Muestra la ruta que siguen los paquetes hasta un destino', usage: 'traceroute DESTINO', category: 'redes', package: 'traceroute', level: 3, examples: [['traceroute google.com', 'Saltos hasta Google']] }, (c) => {

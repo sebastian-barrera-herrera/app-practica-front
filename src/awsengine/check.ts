@@ -4,6 +4,7 @@ import type { Terminal } from '../engine/terminal';
 import { awsAccountOf } from './state';
 import { runAwsSync } from './cli';
 import { settleEc2 } from './services/ec2';
+import { settleRds } from './services/rds';
 import type { AwsIO } from './registry';
 import { clone, shellSplit } from './util';
 
@@ -41,6 +42,7 @@ export function awsCheck(check: AwsCheckSpec, term: Terminal): CheckResult {
   // se consulta una copia: la comprobación nunca cambia la cuenta del alumno
   const acct = clone(live);
   settleEc2(acct);
+  settleRds(acct);
   const io: AwsIO = {
     acct,
     env: {},

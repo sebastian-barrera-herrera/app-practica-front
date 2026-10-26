@@ -2,14 +2,16 @@
  * El «internet» de AWS visto desde la terminal: lo que responden `curl` y `wget` cuando apuntas a un bucket de S3
  * (público, privado, URL prefirmada, sitio web estático) o a una instancia EC2 (según su grupo de seguridad).
  */
-import { hostResolvers, httpHandlers, type Fetched } from '../engine/commands/internet';
+import { dnsResolvers, hostResolvers, httpHandlers, type Fetched } from '../engine/commands/internet';
 import type { System } from '../engine/sys';
 import { evaluate, principalPolicies, type PolicySource } from './policy';
 import { awsAccountOf } from './state';
 import { anonymousAllowed, anonymousCanRead } from './services/s3';
 import { signUrl } from './services/s3cmd';
 import type { Account, S3Bucket } from './types';
-import { cidrContainsIp, secretFor, stableId } from './util';
+import { traceFromInternet } from './net';
+import { r53Address, r53Lookup } from './services/route53';
+import { secretFor, stableId } from './util';
 import { md5 } from '../engine/commands/hash';
 
 const S3_WEBSITE = /^([a-z0-9][a-z0-9.-]*)\.s3-website[.-]([a-z0-9-]+)\.amazonaws\.com$/;
@@ -128,8 +130,8 @@ function ec2Request(a: Account, host: string, port: number, scheme: string, path
       if (i.PublicIpAddress !== ip) continue;
       const timeout: Fetched = { ok: false, curlCode: 28, error: `Failed to connect to ${host} port ${port} after 130312 ms: Couldn't connect to server` };
       if (i.state !== 'running') return timeout;
-      const open = i.SecurityGroupIds.some((id) => reg.ec2.securityGroups[id]?.IpPermissions.some((p) => (p.IpProtocol === '-1' || (p.IpProtocol === 'tcp' && (p.FromPort ?? 0) <= port && (p.ToPort ?? 65535) >= port)) && p.IpRanges.some((r) => cidrContainsIp(r.CidrIp, a.sourceIp))));
-      if (!open) return timeout;
+      // el paquete tiene que atravesar IGW, tabla de rutas, NACL y grupo de seguridad (si algo lo corta, curl se queda esperando)
+      if (!traceFromInternet(a, reg.ec2, i, 'tcp', port).reachable) return timeout;
       const ud = i.UserData ?? '';
       const web = /(httpd|nginx|apache2)/.test(ud) && /(install|systemctl|service)/.test(ud);
       if (!web || (scheme === 'https' && port === 443)) return { ok: false, curlCode: 7, error: `Failed to connect to ${host} port ${port} after 38 ms: Couldn't connect to server` };
@@ -149,7 +151,21 @@ const fakeIp = (host: string) => {
   return `52.${parseInt(h.slice(0, 2), 16) % 100 + 150}.${parseInt(h.slice(2, 4), 16)}.${parseInt(h.slice(4, 6), 16) % 250 + 2}`;
 };
 
+dnsResolvers.push((sys: System, name: string, type: string) => {
+  const a = awsAccountOf(sys);
+  const r = a ? r53Lookup(a, name, type) : null;
+  if (!r) return null;
+  return {
+    nxdomain: r.nxdomain,
+    records: r.answers.map((x) => ({ ...x, data: x.data.startsWith('s3-website:') ? fakeIp(x.data.slice(11)) : x.data })),
+  };
+});
+
 hostResolvers.push((sys: System, name: string) => {
+  const own = awsAccountOf(sys);
+  const hit = own ? r53Address(own, name) : null;
+  if (hit?.ip) return { ip: hit.ip };
+  if (hit?.s3Website) return { ip: fakeIp(hit.s3Website) };
   const e = EC2_DNS.exec(name);
   if (e) return { ip: `${e[1]}.${e[2]}.${e[3]}.${e[4]}` };
   if (S3_WEBSITE.test(name) || S3_VIRTUAL.test(name) || S3_PATH.test(name)) return { ip: fakeIp(name) };
@@ -174,5 +190,12 @@ httpHandlers.push((req) => {
   }
   const v = S3_VIRTUAL.exec(req.host);
   if (v) return s3Request(a, v[1], decodeURIComponent(req.path.replace(/^\//, '')), req.query, req.method);
+  // un nombre de una zona de Route 53: apunta a un sitio web de S3 (el bucket se llama igual que el dominio) o a una IP
+  const dns = r53Address(a, req.host);
+  if (dns?.s3Website) {
+    if (req.scheme === 'https') return { ok: false, curlCode: 35, error: `OpenSSL SSL_connect: SSL_ERROR_SYSCALL in connection to ${req.host}:443` };
+    return websiteRequest(a, req.host, req.path);
+  }
+  if (dns?.ip) return ec2Request(a, dns.ip, req.port, req.scheme, req.path);
   return ec2Request(a, req.host, req.port, req.scheme, req.path);
 });

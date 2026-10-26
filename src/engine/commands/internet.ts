@@ -88,6 +88,25 @@ export const BY_HOST = new Map(SITES.map((s) => [s.host, s]));
 /** Resolutores de nombres extra: los registran las extensiones (p. ej. el motor de AWS para *.amazonaws.com). */
 export const hostResolvers: ((sys: System, name: string) => { ip: string } | null)[] = [];
 
+export interface DnsRecord {
+  name: string;
+  type: string;
+  ttl: number;
+  data: string;
+}
+
+/** Zonas DNS extra (p. ej. las de Route 53): devuelven los registros de un nombre o null si no son de su zona. */
+export const dnsResolvers: ((sys: System, name: string, type: string) => { records: DnsRecord[]; nxdomain: boolean } | null)[] = [];
+
+/** Consulta DNS «autoritativa» de las extensiones. */
+export function dnsLookup(sys: System, name: string, type: string): { records: DnsRecord[]; nxdomain: boolean } | null {
+  for (const h of dnsResolvers) {
+    const r = h(sys, name, type);
+    if (r) return r;
+  }
+  return null;
+}
+
 /** Servidores web extra que atienden una petición antes que los sitios fijos. Devuelven null si no la reconocen. */
 export const httpHandlers: ((req: { sys: System; host: string; port: number; scheme: string; path: string; query: string; method: string }) => Fetched | null)[] = [];
 
