@@ -442,4 +442,18 @@ export function createSql(tbl: Table): string {
   return `CREATE TABLE ${tbl.name} (\n${lines.join(',\n')}\n);`;
 }
 
+/**
+ * Firma de la estructura de una tabla, independiente de cómo la escribió el alumno (INT = INTEGER, mayúsculas, orden de las
+ * restricciones…): sirve para comprobar que dos tablas «son la misma».
+ */
+export function schemaSig(tbl: Table): string {
+  const names = (idx: number[]) => idx.map((i) => tbl.cols[i].name.toLowerCase()).join(',');
+  const cols = tbl.cols.map((c) => `${c.name.toLowerCase()} ${c.type.base}${c.type.len ? `(${c.type.len})` : ''}${c.notNull ? ' nn' : ''}${c.default ? ` d=${printExpr(c.default)}` : ''}${c.generated ? ` g=${printExpr(c.generated)}` : ''}${c.autoinc ? ' ai' : ''}`);
+  const pk = tbl.primary ? [`pk(${names(tbl.primary.cols)})`] : [];
+  const uq = tbl.uniques.filter((u) => !u.primary).map((u) => `uq(${names(u.cols)})`).sort();
+  const ck = tbl.checks.map((k) => `ck(${printExpr(k.e)})`).sort();
+  const fk = tbl.fks.map((f) => `fk(${names(f.cols)}->${f.refTable.toLowerCase()}(${f.refCols.join(',').toLowerCase()}) del=${f.onDelete} upd=${f.onUpdate})`).sort();
+  return [cols.join(';'), ...pk, ...uq, ...ck, ...fk].join('|');
+}
+
 export type { Row, ScopeCol };

@@ -347,7 +347,7 @@ SET valor = ajustes.valor + 1;
 - \`DO UPDATE SET …\` actualiza la fila **existente**. Allí, \`ajustes.valor\` es el valor **antiguo** y \`EXCLUDED.valor\` es el valor que **intentabas insertar**.
 - \`DO NOTHING\` ignora la fila nueva si ya existía.
 
-Se llama **upsert** (*update* + *insert*) y es la herramienta de los contadores, las cachés y las cargas de datos repetibles.
+Se llama **upsert** (_update_ + _insert_) y es la herramienta de los contadores, las cachés y las cargas de datos repetibles.
 `,
         '🔁',
       ),

@@ -1,11 +1,12 @@
 # 🥋 Dev Dojo
 
-App móvil en español para **aprender y practicar programación desde cero hasta nivel avanzado**, con lecciones cortas, ilustraciones animadas, quizzes, repasos espaciados y un **laboratorio donde ejecutas código de verdad** sin instalar nada. Hoy incluye dos cursos independientes:
+App móvil en español para **aprender y practicar programación desde cero hasta nivel avanzado**, con lecciones cortas, ilustraciones animadas, quizzes, repasos espaciados y un **laboratorio donde ejecutas código de verdad** sin instalar nada. Hoy incluye tres cursos independientes, y **tú eliges cuáles hacer** (en la bienvenida, en Ajustes o en el catálogo de cursos):
 
 | Curso | Contenido |
 | --- | --- |
 | 🐧 **Linux** | 12 zonas · 60 lecciones · ~590 pasos · 233 retos. Una **terminal Linux simulada** completa (bash, ~200 comandos, permisos, procesos, red, cron…). |
 | 🐍 **Python** | 12 zonas · 60 lecciones · ~840 pasos · 196 retos. De «Hola mundo» a `asyncio`, con un **intérprete de Python escrito en TypeScript** que corre en el móvil (sin servidor). |
+| 🗃️ **SQL** | 14 zonas · 70 lecciones · ~810 pasos · 217 retos. De tu primer `SELECT` a `JOIN`, subconsultas, ventanas, CTE recursivas, índices (con `EXPLAIN` y «filas leídas»), transacciones, triggers, seguridad e incluso una **entrevista técnica**. Corre sobre un **motor de SQL escrito en TypeScript** (sin servidor) y los retos se corrigen **ejecutando tu consulta** y comparando el resultado o el estado de la base de datos. |
 
 Cada curso tiene su propio progreso, sus colores, su laboratorio y su biblioteca de referencia. La **meta diaria es de 60 minutos por curso** (configurable) y la racha cuenta los días en que cumples la meta.
 
@@ -14,13 +15,16 @@ Cada curso tiene su propio progreso, sus colores, su laboratorio y su biblioteca
 - **Roadmap** por zonas y niveles (básico, intermedio, avanzado) con una **misión final** por zona.
 - **Lecciones**: explicación → demo animada → ilustración interactiva → quizzes → retos de código con pistas. Tipos de pregunta: opción múltiple, verdadero/falso, rellenar huecos, unir pares, *predecir la salida* (se calcula ejecutando el código en el motor) y escribir código.
 - **Práctica**: reto diario, *Blitz* cronometrado, repaso espaciado (Leitner) y examen sorpresa.
-- **Laboratorio**: terminal Linux simulada · editor y REPL de Python con salida en vivo, `input()` interactivo y sistema de archivos virtual.
-- **Biblioteca**: Linux — todos los comandos del simulador; Python — 261 fichas (funciones, métodos, sentencias y módulos) con 481 ejemplos ejecutables desde la propia ficha.
+- **Laboratorio**: terminal Linux simulada · editor y REPL de Python con salida en vivo, `input()` interactivo y sistema de archivos virtual · **laboratorio de SQL** con 10 bases de datos de ejemplo (tienda, cine, escuela, empresa, biblioteca, red social, banco, vuelos, 6.000 ventas y una base vacía), explorador de tablas, historial y 19 ejemplos.
+- **Biblioteca**: Linux — todos los comandos del simulador; Python — 261 fichas (funciones, métodos, sentencias y módulos) con 481 ejemplos ejecutables desde la propia ficha; SQL — 98 fichas (cláusulas, funciones, patrones y conceptos) con 145 ejemplos que se ejecutan sobre una base de datos de muestra.
 - **Gamificación**: XP y niveles, estrellas por lección, racha, logros generales y por curso, metas diarias por curso.
+- **Pantalla de Niveles**: qué es cada nivel, cuánto XP falta, qué zonas se desbloquean y qué recompensas hay.
+- **Examen de salto**: si ya sabes una zona, puedes desbloquear la siguiente (o todo un nivel) aprobando un examen difícil, sin pasar por las lecciones.
+- **Monedas, misiones diarias, combo y tienda**: las monedas se ganan jugando; las misiones del día y el combo de aciertos seguidos dan extras que se gastan en la tienda (escudos de racha, XP doble y pases sin espera para los exámenes de salto).
 - **Alertas de práctica** (notificaciones locales): recordatorios a tus horas, aviso de racha en peligro, exámenes sorpresa y «te echamos de menos», con **botones de acción**, sonidos elegibles y respeto a la ventana horaria que fijes.
 - **Tema claro, oscuro o del sistema.**
 - **Cuentas en la nube** (correo y contraseña) para sincronizar el progreso entre dispositivos; la app funciona **sin conexión** y sincroniza cuando hay red.
-- 48 ilustraciones animadas e interactivas (26 de Linux y 22 de Python).
+- 58 ilustraciones animadas e interactivas (26 de Linux, 22 de Python y 10 de SQL: orden de ejecución, `GROUP BY`, tipos de `JOIN`, conjuntos, modelo entidad-relación, normalización, ventanas, índices y transacciones).
 
 ## Estructura
 
@@ -30,8 +34,10 @@ src/
   content/        Contenido y su DSL
     worlds/       Curso de Linux (w1…w12)
     py/           Curso de Python (w1…w12), comprobaciones (pycheck), biblioteca (reference.ts + ref/*)
+    sql/          Curso de SQL (s1…s14), datasets de ejemplo, biblioteca (reference.ts + ref/*), plan en CURRICULUM.md
   engine/         Linux simulado: parser, shell, vfs, comandos, comprobaciones de retos
   pyengine/       Intérprete de Python 3.13 en TypeScript (ver su README)
+  sqlengine/      Motor de SQL en TypeScript: lexer, parser, ejecutor, índices, transacciones, triggers y corrector de retos
   game/           XP, racha, SRS, logros, metas, store (Zustand + AsyncStorage)
   cloud/          Cuentas (Neon Auth) y sincronización (Neon Data API)
   illustrations/  Ilustraciones animadas (SVG + Reanimated)
@@ -58,6 +64,7 @@ Las pruebas **ejecutan las soluciones de referencia de cada reto a través de lo
 ### Añadir contenido
 
 - **Linux**: `src/content/worlds/wN.ts` (DSL: `learn`, `demo`, `illus`, `mc`/`tf`/`fill`/`match`, `practice`, `lesson`, `world`).
+- **SQL**: `src/content/sql/sN.ts` con `sqlWorld`, `lesson`, `sqlDemo`/`sqlPerf`, `sqlOut` (predecir el resultado), `sqlCode`, `sqlPractice` y comprobaciones (`same`, `ordered`, `state`, `both`, `fails`, con `uses`, `forbids`, `maxRead`, `indexes`, `closed`). Los retos se ejecutan contra bases de datos de `datasets.ts`; cada ficha citada en `commands` debe existir en `src/content/sql/ref/`. Plan completo en `src/content/sql/CURRICULUM.md`.
 - **Python**: `src/content/py/wN.ts` con `pyWorld`, `lesson`, `pyDemo`, `pyOut`, `pyPractice`, `pyCode`… y comprobaciones declarativas de `pycheck.ts` (`variable`, `calls`, `stdout`, `uses`, `cls`, `func`, `file`…). Cada ficha que cite `commands` debe existir en `src/content/py/ref/`. El plan completo está en `src/content/py/CURRICULUM.md`.
 
 Ejecuta `npm test`: el validador te dice qué solución no supera su propia comprobación.
@@ -68,6 +75,12 @@ Ejecuta `npm test`: el validador te dice qué solución no supera su propia comp
 
 
 **Editor de Python** (`src/ui/PyEditor.tsx`): números de línea, colores de la paleta *Dark+* de VS Code (`pycolors.ts`, la misma en las cajas de código de las lecciones), sangrado automático, pares `()` `[]` `{}` `""`, atajos (`print()`, `input()`, `for`, `if`, `while`, `def`, `f""`…) y **autocompletado** (`pycomplete.ts`, función pura con tests): propone las variables y funciones que ya escribiste, las funciones de Python, las palabras clave y, tras un punto, los métodos más usados; no sugiere dentro de textos ni comentarios. El texto se dibuja dos veces con la misma tipografía (el campo, con letra transparente, y debajo el texto coloreado), por eso no hay ajuste de línea: las líneas largas se desplazan en horizontal y los números cuadran siempre.
+## Motor de SQL
+
+`src/sqlengine` es un motor de SQL completo escrito en TypeScript (sin servidor ni SQLite nativo), con dialecto cercano a PostgreSQL y comodidades de SQLite: tipos estáticos, lógica de tres valores, `JOIN` (hash join), subconsultas correlacionadas, funciones de ventana con marcos, CTE (incluidas **recursivas**), `ROLLUP`/`CUBE`/`GROUPING SETS`, `FILTER`, `generate_series`, `INSERT … ON CONFLICT`, `RETURNING`, restricciones (`PRIMARY KEY`, `UNIQUE`, `CHECK`, claves foráneas con `ON DELETE`), vistas, **índices** con `EXPLAIN [ANALYZE]` y contador de «filas leídas», **transacciones** (`BEGIN`/`COMMIT`/`ROLLBACK`, `SAVEPOINT`, niveles de aislamiento, `READ ONLY`, `FOR UPDATE`) y **triggers** (`NEW`/`OLD`/`RAISE`). Los errores explican qué pasó y sugieren cómo arreglarlo. «Hoy» está fijado a 2025-06-15 12:00 para que los resultados sean reproducibles.
+
+El **corrector** (`judge.ts`) no compara texto: ejecuta tu SQL y la solución de referencia sobre dos copias idénticas de la base de datos y compara el resultado (con o sin orden y nombres de columna) y/o el **estado de las tablas** (estructura normalizada, filas e índices), con mensajes concretos («falta la columna…», «te sobra un índice…»). Puede exigir o prohibir construcciones, un tope de filas leídas (para retos de rendimiento) o que no quede una transacción abierta.
+
 ## Cuentas en la nube (Neon)
 
 Se usa **Neon Auth** (registro, inicio de sesión, recuperación de contraseña con código por correo) y la **Neon Data API** para guardar el progreso en una tabla con seguridad por filas:

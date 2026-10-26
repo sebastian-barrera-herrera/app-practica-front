@@ -179,7 +179,7 @@ export type Step =
   | { type: 'pydemo'; title?: string; intro?: string; setup?: PyOptions; cells: PyCell[] }
   | { type: 'pypractice'; challenge: PyChallenge }
   /** SQL: sentencias que se ejecutan una a una sobre una base de datos de ejemplo, mostrando cada resultado. */
-  | { type: 'sqldemo'; title?: string; intro?: string; setup: SqlSetup; cells: SqlCell[] }
+  | { type: 'sqldemo'; title?: string; intro?: string; setup: SqlSetup; cells: SqlCell[]; /** Enseña también «N filas leídas de las tablas» bajo cada resultado (zona de rendimiento). */ stats?: boolean }
   | { type: 'sqlpractice'; challenge: SqlChallenge };
 
 export interface SqlCell {

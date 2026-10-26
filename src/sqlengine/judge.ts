@@ -4,7 +4,9 @@
  */
 import { tokenize } from './lexer';
 import { renderTable, type SqlSession } from './session';
-import { createSql } from './ddl';
+import { schemaSig } from './ddl';
+import type { Table } from './catalog';
+import { printExpr } from './print';
 import { SqlError, type ResultSet, type Value } from './types';
 import { formatValue } from './values';
 
@@ -35,6 +37,12 @@ export interface SqlCheck {
   forbids?: string[];
   /** Texto que debe contener el mensaje de error (modo `error`). */
   error?: string;
+  /** En `state`: los índices (CREATE INDEX) también deben coincidir con los de la solución (tabla, columnas y UNIQUE; el nombre da igual). */
+  indexes?: boolean;
+  /** El SQL del alumno no puede dejar una transacción abierta (tiene que terminar con COMMIT o ROLLBACK). */
+  closed?: boolean;
+  /** La última consulta no puede leer más de estas filas de las tablas (se consigue con un buen índice o una consulta mejor escrita). */
+  maxRead?: number;
 }
 
 export interface JudgeResult {
@@ -131,9 +139,62 @@ function stateOf(s: SqlSession, tables?: string[]): Map<string, { schema: string
   const out = new Map<string, { schema: string; rows: string[] }>();
   for (const t of s.db.tables.values()) {
     if (tables && !tables.some((n) => n.toLowerCase() === t.name.toLowerCase())) continue;
-    out.set(t.name.toLowerCase(), { schema: createSql(t), rows: t.rows.map((r) => r.map(norm).join('\u0001')).sort() });
+    out.set(t.name.toLowerCase(), { schema: schemaSig(t), rows: t.rows.map((r) => r.map(norm).join('\u0001')).sort() });
   }
   return out;
+}
+
+/** Explica en qué se diferencia la estructura de una tabla de la esperada (sin dar la solución completa). */
+function describeSchemaDiff(got: Table, want: Table): string {
+  const T = want.name;
+  const gotNames = got.cols.map((c) => c.name.toLowerCase());
+  const wantNames = want.cols.map((c) => c.name.toLowerCase());
+  const missing = want.cols.filter((c) => !gotNames.includes(c.name.toLowerCase()));
+  if (missing.length) return `A «${T}» le ${missing.length === 1 ? 'falta la columna' : 'faltan las columnas'} ${missing.map((c) => `«${c.name}»`).join(', ')}.`;
+  const extra = got.cols.filter((c) => !wantNames.includes(c.name.toLowerCase()));
+  if (extra.length) return `«${T}» tiene ${extra.length === 1 ? 'una columna' : 'columnas'} de más: ${extra.map((c) => `«${c.name}»`).join(', ')}.`;
+  for (const w of want.cols) {
+    const g = got.cols[got.colIndex(w.name)];
+    if (g.type.base !== w.type.base) return `La columna «${w.name}» debería ser de tipo ${w.type.raw.toUpperCase() || w.type.base.toUpperCase()} (tiene ${g.type.raw.toUpperCase() || g.type.base.toUpperCase()}).`;
+    if ((g.type.len ?? 0) !== (w.type.len ?? 0)) return `La columna «${w.name}» debería tener longitud ${w.type.len ?? 'sin límite'}.`;
+    if (g.notNull !== w.notNull) return w.notNull ? `La columna «${w.name}» debería ser NOT NULL.` : `La columna «${w.name}» no debería ser NOT NULL.`;
+    const gd = g.default ? printExpr(g.default) : '';
+    const wd = w.default ? printExpr(w.default) : '';
+    if (gd !== wd) return wd ? `La columna «${w.name}» debería tener DEFAULT ${wd}.` : `La columna «${w.name}» no debería tener DEFAULT.`;
+  }
+  if (gotNames.join() !== wantNames.join()) return `Las columnas de «${T}» deberían estar en este orden: ${want.cols.map((c) => c.name).join(', ')}.`;
+  const ids = (t: Table) => (t.primary ? t.primary.cols.map((i) => t.cols[i].name.toLowerCase()).join(',') : '');
+  if (ids(got) !== ids(want)) return want.primary ? `La clave primaria de «${T}» debería ser (${ids(want)}).` : `«${T}» no debería tener clave primaria.`;
+  const uq = (t: Table) => t.uniques.filter((u) => !u.primary).length;
+  if (uq(got) !== uq(want)) return uq(got) < uq(want) ? `Falta una restricción UNIQUE en «${T}».` : `Sobra una restricción UNIQUE en «${T}».`;
+  if (got.checks.length !== want.checks.length) return got.checks.length < want.checks.length ? `Falta una restricción CHECK en «${T}».` : `Sobra una restricción CHECK en «${T}».`;
+  if (got.fks.length !== want.fks.length) return got.fks.length < want.fks.length ? `Falta una clave foránea (REFERENCES) en «${T}».` : `Sobra una clave foránea en «${T}».`;
+  const fkText = (t: Table) => t.fks.map((f) => `${f.refTable}:${f.onDelete}`).sort().join();
+  if (fkText(got) !== fkText(want)) return `La clave foránea de «${T}» no es la esperada: revisa la tabla a la que apunta y su ON DELETE.`;
+  return `Alguna restricción CHECK de «${T}» no es la esperada: revisa su condición.`;
+}
+
+/** Índices de una sesión como texto comparable: «tabla(col, col)» y «UNIQUE» si procede. */
+function indexSigs(s: SqlSession, tables?: string[]): string[] {
+  const out: string[] = [];
+  for (const t of s.db.tables.values()) {
+    if (tables && !tables.some((n) => n.toLowerCase() === t.name.toLowerCase())) continue;
+    for (const ix of t.indexes) {
+      const cols = ix.cols.map((i, k) => (i >= 0 ? t.cols[i].name.toLowerCase() : `expr${k}`)).map((c, k) => c + (ix.desc[k] ? ' desc' : ''));
+      out.push(`${ix.unique ? 'UNIQUE ' : ''}${t.name.toLowerCase()}(${cols.join(', ')})${ix.where ? ' parcial' : ''}`);
+    }
+  }
+  return out.sort();
+}
+
+function diffIndexes(user: SqlSession, want: SqlSession, tables?: string[]): string | null {
+  const a = indexSigs(user, tables);
+  const b = indexSigs(want, tables);
+  const missing = b.find((x) => !a.includes(x));
+  if (missing) return `Falta un índice sobre ${missing.replace(/^UNIQUE /, '')}${missing.startsWith('UNIQUE') ? ' (UNIQUE)' : ''}. Recuerda: el orden de las columnas importa.`;
+  const extra = a.find((x) => !b.includes(x));
+  if (extra) return `Sobra el índice sobre ${extra.replace(/^UNIQUE /, '')}: cada índice ralentiza las escrituras, crea solo los necesarios.`;
+  return null;
 }
 
 function diffState(user: SqlSession, want: SqlSession, tables?: string[]): string | null {
@@ -143,7 +204,7 @@ function diffState(user: SqlSession, want: SqlSession, tables?: string[]): strin
     const g = a.get(name);
     const display = want.db.table(name)!.name;
     if (!g) return `Falta la tabla «${display}».`;
-    if (g.schema !== w.schema) return `La estructura de «${display}» no es la esperada. Debería ser:\n${w.schema}`;
+    if (g.schema !== w.schema) return describeSchemaDiff(user.db.table(name)!, want.db.table(name)!);
     if (g.rows.length !== w.rows.length) return `La tabla «${display}» debería tener ${w.rows.length} fila${w.rows.length === 1 ? '' : 's'} y tiene ${g.rows.length}.`;
     for (let i = 0; i < w.rows.length; i++) {
       if (g.rows[i] !== w.rows[i]) {
@@ -179,6 +240,8 @@ export function judge(fresh: () => SqlSession, userSql: string, solutionSql: str
   }
   if (out.error) return { ok: false, error: out.error.error, result: last, why: out.error.error.message, session: user };
 
+  if (check.closed && user.inTransaction) return { ok: false, result: last, why: 'La transacción sigue abierta: termínala con COMMIT (para confirmar los cambios) o con ROLLBACK (para deshacerlos).', session: user };
+
   // construcciones obligatorias o prohibidas
   for (const w of check.uses ?? []) if (!sqlUses(userSql, w)) return { ok: false, result: last, why: `Para este reto tienes que usar ${friendly(w)}.`, session: user };
   for (const w of check.forbids ?? []) if (sqlUses(userSql, w)) return { ok: false, result: last, why: `En este reto no se puede usar ${friendly(w)}.`, session: user };
@@ -196,6 +259,13 @@ export function judge(fresh: () => SqlSession, userSql: string, solutionSql: str
   if (check.mode === 'state' || check.mode === 'both') {
     const d = diffState(user, want, check.tables);
     if (d) return { ok: false, why: d, result: last, session: user };
+  }
+  if (check.indexes) {
+    const d = diffIndexes(user, want, check.tables);
+    if (d) return { ok: false, why: d, result: last, session: user };
+  }
+  if (check.maxRead !== undefined && last && last.stats.rowsRead > check.maxRead) {
+    return { ok: false, why: `La consulta es correcta pero lee demasiadas filas: ${last.stats.rowsRead} (el límite es ${check.maxRead}). Mira el plan con EXPLAIN y ayuda al motor con un índice o escribiendo el filtro de otra forma.`, result: last, session: user };
   }
   return { ok: true, result: last, session: user };
 }

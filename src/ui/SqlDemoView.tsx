@@ -24,7 +24,7 @@ interface Done {
 }
 
 /** Sentencias de SQL que se ejecutan una a una sobre una base de datos de ejemplo; cada una enseña su resultado real. */
-export function SqlDemoView({ cells, setup, intro, onComplete }: { cells: SqlCell[]; setup: SqlSetup; intro?: string; onComplete?: () => void }) {
+export function SqlDemoView({ cells, setup, intro, stats, onComplete }: { cells: SqlCell[]; setup: SqlSetup; intro?: string; stats?: boolean; onComplete?: () => void }) {
   const [done, setDone] = useState<Done[]>([]);
   const [running, setRunning] = useState(false);
   // la base de datos de la demo: las sentencias se van acumulando sobre ella
@@ -79,7 +79,7 @@ export function SqlDemoView({ cells, setup, intro, onComplete }: { cells: SqlCel
             <Animated.View key={i} entering={FadeInDown.duration(220)} style={{ gap: 8 }} onLayout={(e) => { ys.current[i] = e.nativeEvent.layout.y; }}>
               <PyCode code={d.cell.sql} lang="sql" flush />
               {d.results.map((r, k) => (
-                <SqlResult key={k} result={r} showStats={false} />
+                <SqlResult key={k} result={r} showStats={!!stats} />
               ))}
               {d.error ? (
                 <SqlResult error={d.error} script={d.failedSql} />

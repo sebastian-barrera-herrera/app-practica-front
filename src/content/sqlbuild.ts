@@ -1,8 +1,7 @@
 /** Constructores para el curso de SQL (se combinan con los de `build.ts`: learn, mc, tf, order, match, fill, illus…). */
-import type { SqlSetup } from '@/sqlengine/judge';
+import type { SqlCheck, SqlSetup } from '@/sqlengine/judge';
 import type { SqlCell, SqlChallenge, Step, WorldDef, CourseId } from './types';
 import { world as baseWorld, type SqlPracticeInput } from './build';
-import type { SqlCheck } from '@/sqlengine/judge';
 
 /** Sentencia que falla a propósito (se muestra el error real). */
 export const sqlErr = (sql: string, note?: string): SqlCell => ({ sql, note, error: true });
@@ -18,6 +17,9 @@ export const sqlDemo = (title: string, setup: SqlSetup | string, cells: (string 
   setup: typeof setup === 'string' ? { db: setup } : setup,
   cells: cells.map((c): SqlCell => (typeof c === 'string' ? { sql: c } : Array.isArray(c) ? { sql: c[0], note: c[1] } : c)),
 });
+
+/** Como `sqlDemo`, pero enseñando cuántas filas lee cada consulta (para ver el efecto de un índice). */
+export const sqlPerf = (title: string, setup: SqlSetup | string, cells: Parameters<typeof sqlDemo>[2], intro?: string): Step => ({ ...sqlDemo(title, setup, cells, intro), stats: true }) as Step;
 
 export const sqlPractice = (c: SqlPracticeInput): Step => ({ type: 'sqlpractice', challenge: { ...c, lang: 'sql', id: c.id ?? '', setup: norm(c.setup) } as SqlChallenge });
 
@@ -39,7 +41,7 @@ export const sqlWorld = (w: Omit<WorldDef, 'boss' | 'course'> & { boss?: SqlPrac
 
 // ───────── comprobaciones ─────────
 
-type Extra = Pick<SqlCheck, 'names' | 'uses' | 'forbids'>;
+type Extra = Pick<SqlCheck, 'names' | 'uses' | 'forbids' | 'indexes' | 'maxRead' | 'closed'>;
 
 /** La consulta debe devolver lo mismo que la solución (en cualquier orden). */
 export const same = (o: Extra = {}): SqlCheck => ({ mode: 'result', ...o });

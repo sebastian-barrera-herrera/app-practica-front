@@ -8,6 +8,9 @@ import { BigO, ClassInstance, DecoratorWrap, EventLoop, GeneratorPause, Iterator
 import { PathWalk } from './PathWalk';
 import { ShellVsKernel } from './ShellVsKernel';
 import { TableAnatomy } from './SqlBasics';
+import { EvalOrder, GroupFlow, JoinTypes, SetOps } from './SqlQuery';
+import { ErModel, Normalization } from './SqlDesign';
+import { IndexTree, Transaction, WindowFrame } from './SqlAdvanced';
 import { CronFields, ProcessStates, Signals, TarBox, UsersGroups } from './SystemViz';
 import { TerminalAnatomy } from './TerminalAnatomy';
 import { AwkFields, EnvInherit, ExitStatus, GlobExpansion, GrepScan, LsLong, PermBits, PipeFlow, RegexCheat, ScriptAnatomy, Streams } from './TextTools';
@@ -64,6 +67,15 @@ const MAP: Partial<Record<IllustrationId, React.ComponentType>> = {
   'py-big-o': BigO,
   // SQL
   'sql-table-anatomy': TableAnatomy,
+  'sql-eval-order': EvalOrder,
+  'sql-group-flow': GroupFlow,
+  'sql-join-types': JoinTypes,
+  'sql-set-ops': SetOps,
+  'sql-er-model': ErModel,
+  'sql-normalization': Normalization,
+  'sql-window-frame': WindowFrame,
+  'sql-index-tree': IndexTree,
+  'sql-transaction': Transaction,
 };
 
 export function Illustration({ id }: { id: IllustrationId }) {

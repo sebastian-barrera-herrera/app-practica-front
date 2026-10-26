@@ -40,6 +40,8 @@ interface TxState {
   snap: Database;
   saves: { name: string; snap: Database }[];
   aborted: boolean;
+  level?: string;
+  readOnly?: boolean;
 }
 
 export class SqlSession {
@@ -121,6 +123,9 @@ export class SqlSession {
     if (this.tx?.aborted) {
       throw new SqlError('tx', 'La transacción está abortada por un error anterior: se ignoran las órdenes hasta que la termines', 'Escribe ROLLBACK para deshacerla (o ROLLBACK TO nombre si usaste un SAVEPOINT)');
     }
+    if (this.tx?.readOnly && MUTATING.has(stmt.k)) {
+      throw new SqlError('tx', 'No se puede modificar nada en una transacción de solo lectura', 'Termínala con COMMIT o ROLLBACK y empieza otra sin READ ONLY');
+    }
     const mutating = MUTATING.has(stmt.k) || (stmt.k === 'explain' && false);
     const before = mutating ? this.db.clone() : null;
     try {
@@ -137,8 +142,13 @@ export class SqlSession {
     switch (st.op) {
       case 'begin':
         if (this.tx) return emptyResult('BEGIN', 'Ya hay una transacción en curso: se ignora este BEGIN', rt);
-        this.tx = { snap: this.db.clone(), saves: [], aborted: false };
-        return emptyResult('BEGIN', 'Transacción iniciada: los cambios no son definitivos hasta COMMIT', rt);
+        this.tx = { snap: this.db.clone(), saves: [], aborted: false, level: st.level, readOnly: st.readOnly };
+        return emptyResult('BEGIN', `Transacción iniciada${st.level ? ` (${st.level})` : ''}${st.readOnly ? ' de solo lectura' : ''}: los cambios no son definitivos hasta COMMIT`, rt);
+      case 'isolation':
+        if (!this.tx) throw new SqlError('tx', 'SET TRANSACTION solo se puede usar dentro de una transacción', 'Empieza una con BEGIN (o con BEGIN ISOLATION LEVEL …)');
+        if (st.level) this.tx.level = st.level;
+        if (st.readOnly) this.tx.readOnly = true;
+        return emptyResult('SET', `Nivel de aislamiento ${this.tx.level ?? 'por defecto'} anotado. Con una sola conexión no hay otras transacciones con las que chocar, así que no se nota la diferencia`, rt);
       case 'commit': {
         if (!this.tx) return emptyResult('COMMIT', 'No hay ninguna transacción abierta: no se hace nada', rt);
         if (this.tx.aborted) {

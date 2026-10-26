@@ -414,7 +414,7 @@ Casi todos los «¿por qué esto no funciona?» de SQL se explican con esta list
       learn(
         'Lo que explica este orden',
         `
-- **Un alias del \`SELECT\` no se puede usar en el \`WHERE\`**, porque el \`WHERE\` se ejecuta *antes* de calcularlo. (Sí se puede en el \`ORDER BY\`, que va después.)
+- **Un alias del \`SELECT\` no se puede usar en el \`WHERE\`**, porque el \`WHERE\` se ejecuta _antes_ de calcularlo. (Sí se puede en el \`ORDER BY\`, que va después.)
 - **No hay agregaciones en el \`WHERE\`**: los grupos aún no existen. Para eso hay \`HAVING\`.
 - **\`ORDER BY\` ve el resultado final**, así que puede ordenar por alias o por una agregación.
 - **\`LIMIT\` va al final**: primero se ordena todo y luego se recorta. Por eso «los 3 más caros» funciona.

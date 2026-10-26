@@ -1,4 +1,4 @@
-import { fill, illus, learn, lesson, match, mc, order, tf } from '../build';
+import { fill, illus, learn, lesson, match, mc, tf } from '../build';
 import { ordered, same, sqlCode, sqlDemo, sqlErr, sqlOut, sqlPractice, sqlWorld } from '../sqlbuild';
 
 export const s5 = sqlWorld({
@@ -436,7 +436,7 @@ La regla de oro: **antes de sumar, pregúntate cuántas filas hay por cada eleme
         check: ordered({ names: true }),
         solution: 'SELECT e.nombre AS empleado, j.nombre AS jefe, j.cargo AS cargo_jefe FROM empleados e LEFT JOIN empleados j ON j.id = e.jefe_id ORDER BY e.nombre;',
         hints: ['Dos alias distintos para la misma tabla: `e` y `j`.', '`LEFT JOIN` para incluir a la directora general.'],
-        explain: 'Un auto-JOIN con alias claros se lee como «empleado y *su* jefe». Cada alias es un papel distinto de la misma tabla.',
+        explain: 'Un auto-JOIN con alias claros se lee como «empleado y _su_ jefe». Cada alias es un papel distinto de la misma tabla.',
         commands: ['Auto-JOIN'],
       }),
       sqlPractice({

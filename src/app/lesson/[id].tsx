@@ -222,7 +222,7 @@ function Player({ lessonId }: { lessonId: string }) {
                 <T style={{ fontSize: 30 }}>▶️</T>
                 <T v="h1" style={{ flex: 1 }}>{step.title ?? 'Mira cómo funciona'}</T>
               </View>
-              <SqlDemoView cells={step.cells} setup={step.setup} intro={step.intro} onComplete={() => setDemoDone(true)} />
+              <SqlDemoView cells={step.cells} setup={step.setup} intro={step.intro} stats={step.stats} onComplete={() => setDemoDone(true)} />
             </View>
           </StepScroll>
         )}

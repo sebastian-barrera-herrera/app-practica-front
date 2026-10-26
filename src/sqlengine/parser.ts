@@ -231,7 +231,13 @@ class Parser {
         this.next();
         this.acceptKw('TRANSACTION') || this.acceptKw('WORK') || this.acceptKw('DEFERRED') || this.acceptKw('IMMEDIATE') || this.acceptKw('EXCLUSIVE');
         if (this.isKw('TRANSACTION')) this.next();
-        return { k: 'tx', op: 'begin' };
+        return { k: 'tx', op: 'begin', ...this.txModes() };
+      }
+      case 'SET': {
+        // SET TRANSACTION ISOLATION LEVEL … (lo demás de SET no se admite)
+        this.next();
+        this.expectKw('TRANSACTION');
+        return { k: 'tx', op: 'isolation', ...this.txModes() };
       }
       case 'COMMIT':
       case 'END': {
@@ -343,9 +349,48 @@ class Parser {
         q.limit = this.isKw('ROW') || this.isKw('ROWS') ? { k: 'lit', v: 1, t: 'int', pos: this.t.pos } : this.expr();
         this.acceptKw('ROWS') || this.acceptKw('ROW');
         this.expectKw('ONLY');
+      } else if (this.isKw('FOR')) {
+        // FOR UPDATE / SHARE: bloqueo de filas para otras sesiones; con una sola sesión no cambia nada, pero se acepta
+        this.next();
+        if (this.acceptKw('NO')) this.expectKw('KEY');
+        else this.acceptKw('KEY');
+        if (!this.acceptKw('UPDATE')) this.expectKw('SHARE');
+        if (this.acceptKw('OF')) {
+          do this.ident('el nombre de una tabla');
+          while (this.acceptOp(','));
+        }
+        if (!this.acceptKw('NOWAIT') && this.acceptKw('SKIP')) this.expectKw('LOCKED');
       } else break;
     }
     return q;
+  }
+
+  /** Modos de transacción: ISOLATION LEVEL …, READ ONLY / READ WRITE, [NOT] DEFERRABLE (separados por comas). */
+  txModes(): { level?: string; readOnly?: boolean } {
+    const out: { level?: string; readOnly?: boolean } = {};
+    for (;;) {
+      if (this.acceptKw('ISOLATION')) {
+        this.expectKw('LEVEL');
+        if (this.acceptKw('SERIALIZABLE')) out.level = 'SERIALIZABLE';
+        else if (this.acceptKw('REPEATABLE')) {
+          this.expectKw('READ');
+          out.level = 'REPEATABLE READ';
+        } else {
+          this.expectKw('READ');
+          if (this.acceptKw('COMMITTED')) out.level = 'READ COMMITTED';
+          else {
+            this.expectKw('UNCOMMITTED');
+            out.level = 'READ UNCOMMITTED';
+          }
+        }
+      } else if (this.acceptKw('READ')) {
+        if (this.acceptKw('ONLY')) out.readOnly = true;
+        else this.expectKw('WRITE');
+      } else if (this.acceptKw('NOT')) this.expectKw('DEFERRABLE');
+      else if (!this.acceptKw('DEFERRABLE')) break;
+      this.acceptOp(',');
+    }
+    return out;
   }
 
   /** UNION / EXCEPT (misma precedencia, de izquierda a derecha); INTERSECT une más fuerte. */
@@ -475,7 +520,7 @@ class Parser {
     const t = this.t;
     if (t.kind !== 'id') return false;
     const u = t.text.toUpperCase();
-    return ['FROM', 'WHERE', 'GROUP', 'HAVING', 'ORDER', 'LIMIT', 'OFFSET', 'UNION', 'INTERSECT', 'EXCEPT', 'WINDOW', 'FETCH', 'RETURNING', 'ON', 'USING', 'JOIN', 'INNER', 'LEFT', 'RIGHT', 'FULL', 'CROSS', 'NATURAL', 'SET', 'WHEN', 'THEN', 'ELSE', 'END'].includes(u);
+    return ['FROM', 'WHERE', 'GROUP', 'HAVING', 'ORDER', 'LIMIT', 'OFFSET', 'UNION', 'INTERSECT', 'EXCEPT', 'WINDOW', 'FETCH', 'FOR', 'RETURNING', 'ON', 'USING', 'JOIN', 'INNER', 'LEFT', 'RIGHT', 'FULL', 'CROSS', 'NATURAL', 'SET', 'WHEN', 'THEN', 'ELSE', 'END'].includes(u);
   }
 
   groupBy(s: Select): void {

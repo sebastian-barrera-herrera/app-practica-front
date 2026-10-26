@@ -2,6 +2,7 @@
 import React from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import Animated, { FadeIn, ZoomIn } from 'react-native-reanimated';
+import Svg, { Circle, ClipPath, Defs, G } from 'react-native-svg';
 import { tap } from '@/lib/haptics';
 import { highlightSql } from '@/ui/sqlhighlight';
 import { sqlTokColor } from '@/ui/sqlcolors';
@@ -151,6 +152,85 @@ export function Badge({ text, color }: { text: string; color: string }) {
   return (
     <Animated.View entering={ZoomIn.duration(200)} style={{ alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 2, borderRadius: radius.pill, backgroundColor: color + '33', borderWidth: 1, borderColor: color }}>
       <T style={{ fontFamily: fonts.monoBold, fontSize: 11.5, lineHeight: 16 }} color={color}>{text}</T>
+    </Animated.View>
+  );
+}
+
+/**
+ * Consulta SQL línea a línea: las líneas «activas» se resaltan, se pueden tocar y llevan a la izquierda el número de orden
+ * en que las ejecuta la base de datos (si se indica).
+ */
+export function SqlLines({ lines, active = [], color, size = 12, onLine, order }: { lines: string[]; active?: number[]; color?: string; size?: number; onLine?: (i: number) => void; order?: Record<number, number> }) {
+  const c = color ?? sqlHue().a;
+  const lh = Math.round(size * 1.55);
+  return (
+    <View style={{ backgroundColor: dk.termBg, borderRadius: radius.md, borderWidth: 1, borderColor: dk.line, paddingVertical: 6, overflow: 'hidden' }}>
+      {lines.map((ln, i) => {
+        const on = active.includes(i);
+        const toks = highlightSql(ln)[0] ?? [];
+        return (
+          <Pressable
+            key={i}
+            disabled={!onLine}
+            accessibilityRole="button"
+            accessibilityLabel={`Línea: ${ln.trim()}`}
+            onPress={() => { tap(); onLine?.(i); }}
+            style={{ flexDirection: 'row', alignItems: 'center', minHeight: onLine ? Math.max(lh + 6, 32) : lh + 2, paddingRight: 8, backgroundColor: on ? c + '2E' : 'transparent', borderLeftWidth: 3, borderLeftColor: on ? c : 'transparent', opacity: active.length && !on ? 0.5 : 1 }}
+          >
+            <View style={{ width: 26, alignItems: 'center' }}>
+              {order?.[i] ? <T style={{ fontFamily: fonts.monoBold, fontSize: 11, lineHeight: 14 }} color={on ? c : dk.faint}>{order[i]}</T> : null}
+            </View>
+            <T style={{ fontFamily: fonts.mono, fontSize: size, lineHeight: lh, flexShrink: 1 }} color={dk.termText}>
+              {toks.length
+                ? toks.map((t, j) => (
+                    <T key={j} style={{ fontFamily: t.k === 'kw' || t.k === 'dec' ? fonts.monoBold : fonts.mono, fontSize: size, fontStyle: t.k === 'com' ? 'italic' : 'normal' }} color={sqlTokColor(t)}>{t.s}</T>
+                  ))
+                : ' '}
+            </T>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+/** Dos círculos que se solapan (diagrama de Venn). `a`, `ab` y `b` indican qué zonas se rellenan. */
+export function Venn({ a, ab, b, labelA, labelB, colorA, colorB, width = 230, height = 118 }: { a: boolean; ab: boolean; b: boolean; labelA: string; labelB: string; colorA?: string; colorB?: string; width?: number; height?: number }) {
+  const ca = colorA ?? colors.cyan;
+  const cb = colorB ?? colors.amber;
+  const mix = colors.mint;
+  const bg = colors.card;
+  const r = 44;
+  const ay = height / 2;
+  const ax = width / 2 - 28;
+  const bx = width / 2 + 28;
+  return (
+    <View style={{ alignItems: 'center' }}>
+      <Svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
+        <Defs>
+          <ClipPath id="clipA"><Circle cx={ax} cy={ay} r={r} /></ClipPath>
+        </Defs>
+        {a ? <Circle cx={ax} cy={ay} r={r} fill={ca} fillOpacity={0.55} /> : null}
+        {b ? <Circle cx={bx} cy={ay} r={r} fill={cb} fillOpacity={0.55} /> : null}
+        <G clipPath="url(#clipA)">
+          <Circle cx={bx} cy={ay} r={r} fill={ab ? mix : bg} fillOpacity={ab ? 0.85 : 1} />
+        </G>
+        <Circle cx={ax} cy={ay} r={r} fill="none" stroke={ca} strokeWidth={2.5} />
+        <Circle cx={bx} cy={ay} r={r} fill="none" stroke={cb} strokeWidth={2.5} />
+      </Svg>
+      <View style={{ position: 'absolute', left: 0, right: 0, top: 4, flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 2 }}>
+        <T style={{ fontFamily: fonts.monoBold, fontSize: 12 }} color={ca}>{labelA}</T>
+        <T style={{ fontFamily: fonts.monoBold, fontSize: 12 }} color={cb}>{labelB}</T>
+      </View>
+    </View>
+  );
+}
+
+/** Ficha pequeña (un dato) con color. */
+export function Chip({ text, color, dim, strong, size = 12 }: { text: string; color: string; dim?: boolean; strong?: boolean; size?: number }) {
+  return (
+    <Animated.View entering={ZoomIn.duration(220)} style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.pill, backgroundColor: color + (strong ? '55' : '2B'), borderWidth: 1, borderColor: color, opacity: dim ? 0.3 : 1 }}>
+      <T style={{ fontFamily: fonts.mono, fontSize: size, lineHeight: size + 5 }} color={colors.text}>{text}</T>
     </Animated.View>
   );
 }

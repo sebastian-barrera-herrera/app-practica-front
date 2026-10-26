@@ -157,7 +157,7 @@ export type Stmt =
   | { k: 'drop'; what: 'table' | 'index' | 'view' | 'trigger'; name: string; ifExists: boolean; cascade: boolean; pos: number }
   | { k: 'alter'; table: string; action: AlterAction; pos: number }
   | { k: 'truncate'; table: string; pos: number }
-  | { k: 'tx'; op: 'begin' | 'commit' | 'rollback' | 'savepoint' | 'release' | 'rollback_to'; name?: string }
+  | { k: 'tx'; op: 'begin' | 'commit' | 'rollback' | 'savepoint' | 'release' | 'rollback_to' | 'isolation'; name?: string; level?: string; readOnly?: boolean }
   | { k: 'explain'; stmt: Stmt; analyze: boolean }
   | { k: 'meta'; cmd: string; arg?: string }
   | { k: 'pragma'; name: string; arg?: string };

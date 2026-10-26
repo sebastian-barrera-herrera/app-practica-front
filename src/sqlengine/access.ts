@@ -169,7 +169,11 @@ export function planAccess(
     const prefix = def.cols.slice(0, len);
     const usedEq = prefix.map((c) => eq.get(c)).filter(Boolean) as { v: CE; text: string }[];
     const inFirst = !eq.has(prefix[0]) ? inl.get(prefix[0]) : undefined;
-    const text = inFirst ? inFirst.text : usedEq.map((x) => x.text).join(' AND ');
+    // tras las igualdades, un rango sobre la siguiente columna del índice también se resuelve dentro del índice
+    const nextCol = !inFirst && len < def.cols.length ? def.cols[len] : undefined;
+    const nextRange = nextCol !== undefined ? ranges.get(nextCol) : undefined;
+    const rangeText = nextRange ? [nextRange.lo?.text, nextRange.hi?.text].filter(Boolean).join(' AND ') : '';
+    const text = [inFirst ? inFirst.text : usedEq.map((x) => x.text).join(' AND '), rangeText].filter(Boolean).join(' AND ');
     return {
       index: def.name,
       plan: `Búsqueda en el índice «${def.name}» de «${name}» (${text})`,
@@ -204,10 +208,32 @@ export function planAccess(
           if (hit) out.push(...hit);
         }
         // las filas deben salir en el orden de la tabla
-        if (out.length > 1) inTableOrder(tbl, out);
-        rt.stats.rowsRead += out.length;
+        let res = out;
+        if (nextRange && nextCol !== undefined) {
+          const lo = nextRange.lo ? coerce(nextCol, nextRange.lo.v.ev(e)) : undefined;
+          const hi = nextRange.hi ? coerce(nextCol, nextRange.hi.v.ev(e)) : undefined;
+          if ((!lo || lo.ok) && (!hi || hi.ok)) {
+            res = out.filter((r) => {
+              const v = r[nextCol];
+              if (v === null) return false;
+              if (lo) {
+                if (lo.v === null) return false;
+                const c = compareValues(v, lo.v);
+                if (c < 0 || (c === 0 && !nextRange.lo!.incl)) return false;
+              }
+              if (hi) {
+                if (hi.v === null) return false;
+                const c = compareValues(v, hi.v);
+                if (c > 0 || (c === 0 && !nextRange.hi!.incl)) return false;
+              }
+              return true;
+            });
+          }
+        }
+        if (res.length > 1) inTableOrder(tbl, res);
+        rt.stats.rowsRead += res.length;
         if (!rt.stats.indexes.includes(def.name)) rt.stats.indexes.push(def.name);
-        return out;
+        return res;
       },
     };
   }

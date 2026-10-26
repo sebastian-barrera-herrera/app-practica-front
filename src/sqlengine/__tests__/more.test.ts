@@ -35,6 +35,17 @@ describe('índices y EXPLAIN', () => {
     expect(r.rows).toEqual([[1998], [1999], [2000]]);
     expect(r.stats.rowsRead).toBe(3);
   });
+  test('índice compuesto: igualdad en la primera columna y rango en la segunda se resuelven dentro del índice', () => {
+    const s = big();
+    s.exec('CREATE INDEX idx_gi ON big (grp, id)');
+    const r = s.query('SELECT id FROM big WHERE grp = 3 AND id >= 1900 AND id < 1950');
+    expect(r.rows).toEqual([[1903], [1913], [1923], [1933], [1943]]);
+    expect(r.stats.rowsRead).toBe(5);
+    expect(r.stats.indexes).toEqual(['idx_gi']);
+    s.exec('DROP INDEX idx_gi');
+    s.exec('CREATE INDEX idx_ig ON big (name, id)');
+    expect(s.query("SELECT id FROM big WHERE grp = 3 AND name <> 'x'").stats.indexes).toEqual([]);
+  });
   test('EXPLAIN enseña si se usa índice; EXPLAIN ANALYZE cuenta las filas leídas', () => {
     const s = big();
     let plan = s.query('EXPLAIN SELECT * FROM big WHERE grp = 3').plan!.join('\n');

@@ -1,4 +1,4 @@
-import { fill, learn, lesson, mc, order, tf } from '../build';
+import { learn, lesson, mc, order, tf } from '../build';
 import { ordered, same, sqlCode, sqlDemo, sqlErr, sqlOut, sqlPractice, sqlWorld } from '../sqlbuild';
 
 export const s6 = sqlWorld({
@@ -282,7 +282,7 @@ Y en el \`SELECT\` puedes poner una subconsulta escalar correlacionada, que calc
       learn(
         'WITH: pasos con nombre',
         `
-Las subconsultas anidadas se vuelven ilegibles. Una **CTE** (*Common Table Expression*, «expresión de tabla común») te deja **definir una consulta con nombre al principio** y usarla después como si fuera una tabla:
+Las subconsultas anidadas se vuelven ilegibles. Una **CTE** (_Common Table Expression_, «expresión de tabla común») te deja **definir una consulta con nombre al principio** y usarla después como si fuera una tabla:
 
 \`\`\`
 WITH caros AS (
@@ -400,7 +400,7 @@ WHERE precio > ALL (SELECT precio FROM productos WHERE categoria = 'pantallas');
       learn(
         'El mejor de cada grupo',
         `
-Una pregunta clásica: «el producto **más caro de cada categoría**». \`GROUP BY\` te daría el precio máximo, pero no *qué producto* es. La solución con subconsulta correlacionada: «el producto cuyo precio es igual al máximo **de su propia categoría**».
+Una pregunta clásica: «el producto **más caro de cada categoría**». \`GROUP BY\` te daría el precio máximo, pero no _qué producto_ es. La solución con subconsulta correlacionada: «el producto cuyo precio es igual al máximo **de su propia categoría**».
 
 \`\`\`
 SELECT categoria, nombre, precio
