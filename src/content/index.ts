@@ -76,7 +76,7 @@ export const COURSES: Record<CourseId, CourseDef> = {
     name: 'AWS',
     emoji: '☁️',
     tagline: 'De la nube básica a arquitecturas expertas, practicando en un AWS simulado',
-    lab: { title: 'Consola AWS', emoji: '🖥️', kind: 'aws', blurb: 'Una cuenta de AWS simulada con la CLI real: crea buckets, usuarios y servidores sin pagar nada ni arriesgar nada.' },
+    lab: { title: 'Consola', emoji: '🖥️', kind: 'aws', blurb: 'Una cuenta de AWS simulada con la CLI real: crea buckets, usuarios y servidores sin pagar nada ni arriesgar nada.' },
     nouns: { challenge: 'reto de AWS', challenges: 'retos de AWS', library: 'Biblioteca de AWS', libraryBlurb: 'Servicios y conceptos: cuándo usarlos y cuándo no', item: 'servicio' },
     worlds: AWS_WORLDS,
     levels: LEVELS,

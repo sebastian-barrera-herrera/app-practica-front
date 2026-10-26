@@ -292,7 +292,7 @@ export default function Today() {
           {on.length === 0 ? (
             <T v="small" color={colors.dim} style={{ marginTop: 8 }}>Añade un curso en «Cursos» para fijar tu tiempo diario.</T>
           ) : (
-            <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginTop: 14 }}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-around', rowGap: 16, marginTop: 14 }}>
               {on.map((c) => {
                 const def = COURSE_LIST.find((x) => x.id === c)!;
                 const sec = studySeconds(root, c, today);
@@ -306,7 +306,7 @@ export default function Today() {
                       router.push('/(tabs)/roadmap');
                     }}
                     accessibilityLabel={`${def.name}: ${Math.floor(sec / 60)} de ${Math.floor(goal / 60)} minutos`}
-                    style={{ alignItems: 'center', gap: 6 }}
+                    style={{ alignItems: 'center', gap: 6, width: on.length > 3 ? '50%' : undefined }}
                   >
                     <GoalRing value={sec / goal} size={96} stroke={9} color={col}>
                       <T style={{ fontSize: 26 }}>{def.emoji}</T>
