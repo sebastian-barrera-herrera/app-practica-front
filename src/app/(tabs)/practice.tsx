@@ -100,7 +100,7 @@ export default function Practice() {
             <Card>
               <View style={{ gap: 12 }}>
                 <T v="small" color={colors.dim}>
-                  Cada zona tiene su examen al terminar sus lecciones. Las certificaciones evalúan todo un nivel (75 % para aprobar).
+                  Cada zona tiene su misión final y su examen al terminar sus lecciones: hay que superarlos para abrir la zona siguiente. Las certificaciones evalúan todo un nivel (75 % para aprobar).
                 </T>
                 {course.levels.map((lv, i) => {
                   const ws = levelWorlds(course, lv.id as LevelId);

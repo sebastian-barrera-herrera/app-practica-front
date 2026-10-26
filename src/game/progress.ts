@@ -189,16 +189,33 @@ export function worldComplete(s: ProgressState, w: WorldDef) {
   return w.lessons.every((l) => lessonDone(s, l.id));
 }
 
+/** ¿Está resuelta la misión final de la zona? (una zona sin misión cuenta como resuelta) */
+export const bossSolved = (s: ProgressState, w: WorldDef): boolean => !w.boss || !!s.challenges[w.boss.id]?.solved;
+
+/** ¿Está aprobado el examen de la zona? */
+export const examPassed = (s: ProgressState, w: WorldDef): boolean => !!s.exams[`exam-${w.id}`]?.passed;
+
+/** Zona superada del todo: todas las lecciones, la misión final y el examen. Es lo que abre la zona siguiente. */
+export const worldCleared = (s: ProgressState, w: WorldDef): boolean => worldComplete(s, w) && bossSolved(s, w) && examPassed(s, w);
+
+/** Lo que falta para superar una zona. */
+export function worldMissing(s: ProgressState, w: WorldDef): { lessons: number; boss: boolean; exam: boolean } {
+  return { lessons: w.lessons.filter((l) => !lessonDone(s, l.id)).length, boss: !bossSolved(s, w), exam: !examPassed(s, w) };
+}
+
 export function worldUnlocked(s: ProgressState, worlds: WorldDef[], index: number): boolean {
   if (s.settings.unlockAll || index === 0) return true;
   // un examen de salto abre la zona elegida y todas las anteriores
   if (index <= s.skipTo) return true;
-  return worldComplete(s, worlds[index - 1]);
+  // una zona que ya se empezó (progreso anterior a pedir misión y examen) no se vuelve a cerrar
+  if (worlds[index].lessons.some((l) => lessonDone(s, l.id))) return true;
+  // para entrar hay que superar del todo la anterior: lecciones + misión final + examen
+  return worldCleared(s, worlds[index - 1]);
 }
 
-/** ¿La zona está abierta solo gracias a un examen de salto (la anterior sigue sin completarse)? */
+/** ¿La zona está abierta solo gracias a un examen de salto (la anterior sigue sin superarse)? */
 export const openedBySkip = (s: ProgressState, worlds: WorldDef[], index: number): boolean =>
-  index > 0 && index <= s.skipTo && !s.settings.unlockAll && !worldComplete(s, worlds[index - 1]);
+  index > 0 && index <= s.skipTo && !s.settings.unlockAll && !worldCleared(s, worlds[index - 1]);
 
 /** ¿La lección está disponible? (la primera de cada mundo siempre que el mundo esté abierto) */
 export function lessonUnlocked(s: ProgressState, worlds: WorldDef[], worldIndex: number, lessonIndex: number): boolean {
@@ -209,14 +226,37 @@ export function lessonUnlocked(s: ProgressState, worlds: WorldDef[], worldIndex:
   return lessonDone(s, worlds[worldIndex].lessons[lessonIndex - 1].id);
 }
 
-export function nextLesson(s: ProgressState, worlds: WorldDef[]): { world: WorldDef; lessonIndex: number } | null {
+/** Lo siguiente que toca en la ruta: una lección, la misión final o el examen de una zona. */
+export type NextStep =
+  | { kind: 'lesson'; world: WorldDef; lessonIndex: number }
+  | { kind: 'boss'; world: WorldDef }
+  | { kind: 'exam'; world: WorldDef };
+
+export function nextStep(s: ProgressState, worlds: WorldDef[]): NextStep | null {
   // tras un examen de salto la ruta continúa desde la zona a la que se saltó
-  for (const w of worlds.slice(Math.max(0, s.skipTo))) {
-    for (let i = 0; i < w.lessons.length; i++) {
-      if (!lessonDone(s, w.lessons[i].id)) return { world: w, lessonIndex: i };
-    }
+  for (let i = Math.max(0, s.skipTo); i < worlds.length; i++) {
+    const w = worlds[i];
+    const li = w.lessons.findIndex((l) => !lessonDone(s, l.id));
+    if (li >= 0) return { kind: 'lesson', world: w, lessonIndex: li };
+    // si ya se avanzó a la zona siguiente (progreso anterior a esta regla) la misión y el examen son opcionales
+    const moved = worlds[i + 1]?.lessons.some((l) => lessonDone(s, l.id)) ?? false;
+    if (moved || s.settings.unlockAll) continue;
+    if (!bossSolved(s, w)) return { kind: 'boss', world: w };
+    if (!examPassed(s, w)) return { kind: 'exam', world: w };
   }
   return null;
+}
+
+/** La siguiente lección pendiente (null si lo que toca es una misión, un examen o ya no queda nada). */
+export function nextLesson(s: ProgressState, worlds: WorldDef[]): { world: WorldDef; lessonIndex: number } | null {
+  const n = nextStep(s, worlds);
+  return n && n.kind === 'lesson' ? { world: n.world, lessonIndex: n.lessonIndex } : null;
+}
+
+/** Ruta (expo-router) de un paso de `nextStep`. */
+export function stepRoute(step: NextStep, courseId: string): { pathname: '/lesson/[id]'; params: { id: string } } | { pathname: '/session/[mode]'; params: { mode: string; course: string } } {
+  if (step.kind === 'lesson') return { pathname: '/lesson/[id]', params: { id: step.world.lessons[step.lessonIndex].id } };
+  return { pathname: '/session/[mode]', params: { mode: `${step.kind === 'boss' ? 'boss' : 'exam'}-${step.world.id}`, course: courseId } };
 }
 
 export const todayXp = (s: ProgressState, now: number) => s.dailyXp[dayKey(now)] ?? 0;

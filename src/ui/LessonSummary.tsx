@@ -14,7 +14,7 @@ import { Mascot } from './Mascot';
 import { T } from './Text';
 import { colors } from './theme';
 
-export function LessonSummary({ lesson, outcome, hasNext, onNext, onBack }: { lesson: Lesson; outcome: FinishOutcome; hasNext: boolean; onNext: () => void; onBack: () => void }) {
+export function LessonSummary({ lesson, outcome, nextLabel, onNext, onBack }: { lesson: Lesson; outcome: FinishOutcome; /** Texto del botón para seguir (si no hay, solo se ofrece volver). */ nextLabel?: string; onNext: () => void; onBack: () => void }) {
   // con 2 o 3 estrellas vibra el confeti; con 1, un aviso de lección completada
   useEffect(() => {
     if (outcome.stars < 2) success();
@@ -96,8 +96,8 @@ export function LessonSummary({ lesson, outcome, hasNext, onNext, onBack }: { le
         )}
       </ScrollView>
       <View style={{ padding: 16, gap: 8 }}>
-        {hasNext && <Button label="Siguiente lección" onPress={onNext} />}
-        <Button label="Volver a la ruta" kind={hasNext ? 'ghost' : 'primary'} onPress={onBack} />
+        {nextLabel ? <Button label={nextLabel} onPress={onNext} /> : null}
+        <Button label="Volver a la ruta" kind={nextLabel ? 'ghost' : 'primary'} onPress={onBack} />
       </View>
     </View>
   );

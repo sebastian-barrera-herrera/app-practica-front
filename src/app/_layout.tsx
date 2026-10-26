@@ -86,6 +86,7 @@ export default function RootLayout() {
             <Stack.Screen name="courses" />
             <Stack.Screen name="levels" />
             <Stack.Screen name="shop" />
+            <Stack.Screen name="avatar" />
             <Stack.Screen name="achievements" />
             <Stack.Screen name="library/index" />
             <Stack.Screen name="library/[cmd]" />

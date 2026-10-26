@@ -6,7 +6,7 @@ import { COURSES, courseDef, worldById, type CourseDef } from '@/content';
 import { FAST_TYPES, questionById, type QItem } from '@/content/pool';
 import type { AnyChallenge, CourseId, Question } from '@/content/types';
 import { certExam, skipExam, skippedWorlds, skipWait, worldExam, type ExamPlan } from '@/game/exams';
-import { worldComplete } from '@/game/progress';
+import { bossSolved, worldCleared } from '@/game/progress';
 import { SKIP_COOLDOWN_MS } from '@/game/shop';
 import type { Achievement } from '@/game/achievements';
 import { blitzPool, dailyChallenge, reviewSession, surpriseSession } from '@/game/sessions';
@@ -66,7 +66,7 @@ function SessionRoute({ mode, scope, course }: { mode: string; scope?: string; c
           resumeKey={mode}
           planOf={(seed) => {
             const s = flat(useGame.getState(), course.id);
-            return skipExam(course, w, skippedWorlds(course, w, (x) => worldComplete(s, x)), seed);
+            return skipExam(course, w, skippedWorlds(course, w, (x) => worldCleared(s, x)), seed);
           }}
         />
       );
@@ -584,6 +584,11 @@ function ExamRun({ course, planOf, resumeKey }: { course: CourseDef; planOf: (se
   if (phase === 'end') {
     if (!end) return <Screen><T>Calculando…</T></Screen>;
     const mistakes: Mistake[] = results.current.filter((r) => !r.correct).map((r) => ({ q: r.item.q.q, correct: correctText(r.item.q), why: r.item.q.why }));
+    // examen de una zona: ¿abre ya la siguiente o falta la misión final?
+    const examWorld = plan.id.startsWith('exam-') ? course.worlds.find((w) => `exam-${w.id}` === plan.id) : undefined;
+    const examState = examWorld ? flat(useGame.getState(), course.id) : undefined;
+    const examNext = examWorld && examState && end.passed ? course.worlds[course.worlds.indexOf(examWorld) + 1] : undefined;
+    const bossPending = !!examWorld && !!examState && end.passed && !bossSolved(examState, examWorld);
     return (
       <Screen edges={['top', 'bottom']} padded={false}>
         <SessionSummary
@@ -597,6 +602,8 @@ function ExamRun({ course, planOf, resumeKey }: { course: CourseDef; planOf: (se
             ...(plan.challenges.length ? [{ label: 'Retos superados', value: `${solved.current}/${plan.challenges.length}`, color: colors.cyan }] : []),
             { label: 'Resultado', value: end.passed ? 'APROBADO' : 'NO APROBADO', color: end.passed ? colors.green : colors.rose },
             ...(plan.unlocks && end.passed ? [{ label: 'Zona abierta', value: `🔓 ${plan.unlocks.worldTitle}`, color: colors.green }] : []),
+            ...(examNext && !bossPending ? [{ label: 'Zona superada', value: `🔓 Se abre «${examNext.title}»`, color: colors.green }] : []),
+            ...(bossPending ? [{ label: 'Te falta', value: '🥋 la misión final de la zona', color: colors.amber }] : []),
           ]}
           xp={end.xp}
           achievements={end.ach}
@@ -605,6 +612,7 @@ function ExamRun({ course, planOf, resumeKey }: { course: CourseDef; planOf: (se
           confetti={end.passed}
           actions={[
             ...(end.passed ? [] : [{ label: 'Repasar y reintentar', onPress: () => router.replace({ pathname: '/session/[mode]', params: { mode: plan.id, course: course.id } }) }]),
+            ...(bossPending && examWorld ? [{ label: 'Ir a la misión final', onPress: () => router.replace({ pathname: '/session/[mode]', params: { mode: `boss-${examWorld.id}`, course: course.id } }) }] : []),
             { label: 'Volver', kind: end.passed ? ('primary' as const) : ('ghost' as const), onPress: () => router.back() },
           ]}
         />
@@ -697,7 +705,17 @@ function ChallengeShell({ course, challenge, title, xp, onDone, doneLabel }: { c
 function BossRun({ course, worldId }: { course: CourseDef; worldId: string }) {
   const w = worldById(worldId);
   if (!w?.boss) return <Screen><T>Misión no encontrada</T></Screen>;
-  return <ChallengeShell course={course} challenge={w.boss} title={`Misión: ${w.title}`} xp={60} doneLabel="Completar misión" onDone={() => router.back()} />;
+  const examDone = () => !!flat(useGame.getState(), course.id).exams[`exam-${w.id}`]?.passed;
+  return (
+    <ChallengeShell
+      course={course}
+      challenge={w.boss}
+      title={`Misión: ${w.title}`}
+      xp={60}
+      doneLabel={examDone() ? 'Completar misión' : 'Completar y seguir al examen'}
+      onDone={() => (examDone() ? router.back() : router.replace({ pathname: '/session/[mode]', params: { mode: `exam-${w.id}`, course: course.id } }))}
+    />
+  );
 }
 
 function DailyRun({ course }: { course: CourseDef }) {

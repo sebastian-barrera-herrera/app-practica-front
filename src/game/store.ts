@@ -15,6 +15,7 @@ import { addCoins } from './economy';
 import { claimMission as claimMissionFn } from './missions';
 import { useResume } from './resume';
 import { buy as buyFn, consumePass as consumePassFn, type ShopId } from './shop';
+import { buyCosmetic as buyCosmeticFn, equipCosmetic as equipCosmeticFn, type CosKind } from './cosmetics';
 import { dayKey } from './streak';
 import {
   addStudySeconds, flat, initialRoot, mergeSettings, migrateRoot, ROOT_VERSION, setCourseOn as setCourseOnFn, unflat, unlockAchievements, withCourse,
@@ -45,6 +46,10 @@ export interface Actions {
   claimMission: (id: string) => number;
   /** Compra un objeto de la tienda. */
   buyItem: (id: ShopId) => { ok: boolean; reason?: string };
+  /** Compra un avatar, marco, fondo o accesorio con monedas (no lo pone). */
+  buyCosmetic: (kind: CosKind, id: string) => { ok: boolean; reason?: string };
+  /** Se pone un avatar, marco, fondo o accesorio que ya se tiene. */
+  equipCosmetic: (kind: CosKind, id: string) => { ok: boolean; reason?: string };
   /** Gasta un pase sin espera, si hay, y quita la espera del examen de salto indicado. */
   spendPass: (course: CourseId, examId: string) => boolean;
   bump: (course: CourseId, patch: Partial<ProgressState['stats']>) => Achievement[];
@@ -122,6 +127,18 @@ export const useGame = create<Store>()(
         buyItem: (id) => {
           const r = buyFn(state(), id, now());
           if (r.ok) set({ xp: r.root.xp, streak: r.root.streak, extras: r.root.extras, updatedAt: now() });
+          return { ok: r.ok, reason: r.reason };
+        },
+
+        buyCosmetic: (kind, id) => {
+          const r = buyCosmeticFn(state(), id, kind);
+          if (r.ok) set({ extras: r.root.extras, updatedAt: now() });
+          return { ok: r.ok, reason: r.reason };
+        },
+
+        equipCosmetic: (kind, id) => {
+          const r = equipCosmeticFn(state(), id, kind);
+          if (r.ok) set({ extras: r.root.extras, updatedAt: now() });
           return { ok: r.ok, reason: r.reason };
         },
 

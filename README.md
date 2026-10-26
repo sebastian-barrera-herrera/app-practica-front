@@ -12,7 +12,7 @@ Cada curso tiene su propio progreso, sus colores, su laboratorio y su biblioteca
 
 ## Qué hay en la app
 
-- **Roadmap** por zonas y niveles (básico, intermedio, avanzado) con una **misión final** por zona.
+- **Roadmap** por zonas y niveles (básico, intermedio, avanzado) con una **misión final** y un **examen** por zona. Para abrir una zona hay que **superar la anterior** (lecciones + misión final + examen), salvo que la saltes con el examen de salto.
 - **Lecciones**: explicación → demo animada → ilustración interactiva → quizzes → retos de código con pistas. Tipos de pregunta: opción múltiple, verdadero/falso, rellenar huecos, unir pares, *predecir la salida* (se calcula ejecutando el código en el motor) y escribir código.
 - **Práctica**: reto diario, *Blitz* cronometrado, repaso espaciado (Leitner) y examen sorpresa.
 - **Laboratorio**: terminal Linux simulada · editor y REPL de Python con salida en vivo, `input()` interactivo y sistema de archivos virtual · **laboratorio de SQL** con 10 bases de datos de ejemplo (tienda, cine, escuela, empresa, biblioteca, red social, banco, vuelos, 6.000 ventas y una base vacía), explorador de tablas, historial y 19 ejemplos.
@@ -20,6 +20,7 @@ Cada curso tiene su propio progreso, sus colores, su laboratorio y su biblioteca
 - **Gamificación**: XP y niveles, estrellas por lección, racha, logros generales y por curso, metas diarias por curso.
 - **Pantalla de Niveles**: qué es cada nivel, cuánto XP falta, qué zonas se desbloquean y qué recompensas hay.
 - **Examen de salto**: si ya sabes una zona, puedes desbloquear la siguiente (o todo un nivel) aprobando un examen difícil, sin pasar por las lecciones.
+- **Avatares y personalización** (`src/game/cosmetics.ts`, pantalla «Mi avatar»): 48 objetos que se compran con monedas —19 avatares, 8 marcos (hasta el arcoíris giratorio), 9 fondos y 12 accesorios— de comunes a legendarios, que se combinan en el perfil. Lo comprado se sincroniza entre dispositivos.
 - **Monedas, misiones diarias, combo y tienda**: las monedas se ganan jugando; las misiones del día y el combo de aciertos seguidos dan extras que se gastan en la tienda (escudos de racha, XP doble y pases sin espera para los exámenes de salto).
 - **Alertas de práctica** (notificaciones locales): recordatorios a tus horas, aviso de racha en peligro, exámenes sorpresa y «te echamos de menos», con **botones de acción**, sonidos elegibles y respeto a la ventana horaria que fijes.
 - **Tema claro, oscuro o del sistema.**

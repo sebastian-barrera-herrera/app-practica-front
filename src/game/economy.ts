@@ -14,6 +14,16 @@ export interface DayAct {
   rv: number;
 }
 
+/** Aspecto del perfil: ids de avatar, marco, fondo y accesorio del catálogo (`cosmetics.ts`). */
+export interface Look {
+  avatar: string;
+  frame: string;
+  bg: string;
+  acc: string;
+}
+
+export const defaultLook = (): Look => ({ avatar: 'penguin', frame: 'none', bg: 'none', acc: 'none' });
+
 export interface Extras {
   coinsEarned: number;
   coinsSpent: number;
@@ -27,9 +37,17 @@ export interface Extras {
   act: Record<string, DayAct>;
   /** Mejor combo (aciertos seguidos a la primera) alcanzado. */
   bestCombo: number;
+  /** Lo que lleva puesto el perfil (lo comprado está en `bought` como «cos:id»). */
+  look: Look;
 }
 
-export const initialExtras = (): Extras => ({ coinsEarned: 0, coinsSpent: 0, boostUntil: 0, bought: {}, used: {}, claimed: {}, act: {}, bestCombo: 0 });
+export const initialExtras = (): Extras => ({ coinsEarned: 0, coinsSpent: 0, boostUntil: 0, bought: {}, used: {}, claimed: {}, act: {}, bestCombo: 0, look: defaultLook() });
+
+function mergeLook(p: Partial<Look> | undefined): Look {
+  const d = defaultLook();
+  const str = (v: unknown, def: string) => (typeof v === 'string' && v.length > 0 && v.length < 40 ? v : def);
+  return { avatar: str(p?.avatar, d.avatar), frame: str(p?.frame, d.frame), bg: str(p?.bg, d.bg), acc: str(p?.acc, d.acc) };
+}
 
 /** Completa un `extras` leído de disco o de la nube con lo que falte. */
 export function mergeExtras(p: Partial<Extras> | undefined): Extras {
@@ -45,6 +63,7 @@ export function mergeExtras(p: Partial<Extras> | undefined): Extras {
     claimed: { ...b.claimed, ...(x.claimed ?? {}) },
     act: { ...b.act, ...(x.act ?? {}) },
     bestCombo: num(x.bestCombo),
+    look: mergeLook(x.look),
   };
 }
 

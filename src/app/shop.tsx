@@ -5,6 +5,7 @@ import { balance, boostActive, COINS, levelReward, owned } from '@/game/economy'
 import { canBuy, MAX_SHIELDS, SHOP } from '@/game/shop';
 import { useGame } from '@/game/store';
 import { success, warn } from '@/lib/haptics';
+import { Avatar } from '@/ui/Avatar';
 import { Button } from '@/ui/Button';
 import { Card } from '@/ui/Card';
 import { Screen } from '@/ui/Screen';
@@ -21,6 +22,7 @@ const EARN: [string, string][] = [
   ['🎯', 'Misiones diarias: 🪙 10, 15 y 25 (+30 si completas las tres)'],
   ['🏅', 'Cada logro desbloqueado da monedas'],
   ['⭐', `Subir de nivel: 🪙 ${levelReward(2)} y más cuanto más subes`],
+  ['🥋', 'Las monedas se acumulan: ahorra para los avatares épicos y legendarios'],
 ];
 
 function minutesLeft(until: number, now: number) {
@@ -56,6 +58,16 @@ export default function Shop() {
             <T v="small" color={colors.dim}>Todo el XP que ganes ahora vale el doble.</T>
           </Card>
         )}
+        <Card accent={colors.violet}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+            <Avatar size={70} />
+            <View style={{ flex: 1, gap: 2 }}>
+              <T v="h3">Personaliza tu perfil</T>
+              <T v="small" color={colors.dim}>Avatares, marcos, fondos y accesorios: de comunes a legendarios.</T>
+            </View>
+          </View>
+          <Button style={{ marginTop: 12 }} label="Ver avatares y accesorios" onPress={() => router.push('/avatar')} />
+        </Card>
         {SHOP.map((item) => {
           const can = canBuy(root, item.id);
           const have = item.id === 'shield' ? root.streak.freezes : item.id === 'pass' ? owned(root.extras, 'pass') : undefined;

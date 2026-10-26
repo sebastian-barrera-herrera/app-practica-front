@@ -4,6 +4,8 @@ import { Pressable, ScrollView, View } from 'react-native';
 import Animated, { FadeIn, FadeInRight } from 'react-native-reanimated';
 import { courseDef, lessonById, worldOfLesson } from '@/content';
 import { buildQueue, insertRetry, type QueueItem } from '@/game/lessonQueue';
+import { bossSolved, examPassed, worldUnlocked } from '@/game/progress';
+import { flat } from '@/game/root';
 import { useResume, validLesson, type LessonStats } from '@/game/resume';
 import { useGame, type FinishOutcome } from '@/game/store';
 import { success } from '@/lib/haptics';
@@ -105,12 +107,25 @@ function Player({ lessonId }: { lessonId: string }) {
     setPos(pos - 1);
   }, [pos]);
 
-  const nextLessonId = useMemo(() => {
+  /** Lo que se ofrece al terminar la lección: la siguiente, o (si era la última de la zona) su misión final y su examen. */
+  const nextAction = useMemo((): { label: string; go: () => void } | null => {
+    if (!outcome) return null;
     const wi = course.worlds.findIndex((w) => w.id === world.id);
     const li = world.lessons.findIndex((l) => l.id === lesson.id);
-    if (li + 1 < world.lessons.length) return world.lessons[li + 1].id;
-    return course.worlds[wi + 1]?.lessons[0]?.id ?? null;
-  }, [world, lesson.id, course]);
+    if (li + 1 < world.lessons.length) {
+      const id = world.lessons[li + 1].id;
+      return { label: 'Siguiente lección', go: () => router.replace({ pathname: '/lesson/[id]', params: { id } }) };
+    }
+    const st = flat(store.getState(), course.id);
+    if (!bossSolved(st, world)) return { label: '🥋 Misión final de la zona', go: () => router.replace({ pathname: '/session/[mode]', params: { mode: `boss-${world.id}`, course: course.id } }) };
+    if (!examPassed(st, world)) return { label: '📝 Examen de la zona', go: () => router.replace({ pathname: '/session/[mode]', params: { mode: `exam-${world.id}`, course: course.id } }) };
+    const nextWorld = course.worlds[wi + 1];
+    if (nextWorld && worldUnlocked(st, course.worlds, wi + 1)) {
+      const id = nextWorld.lessons[0].id;
+      return { label: 'Primera lección de la siguiente zona', go: () => router.replace({ pathname: '/lesson/[id]', params: { id } }) };
+    }
+    return null;
+  }, [outcome, world, lesson.id, course, store]);
 
   if (outcome) {
     return (
@@ -118,8 +133,8 @@ function Player({ lessonId }: { lessonId: string }) {
         <LessonSummary
           lesson={lesson}
           outcome={outcome}
-          hasNext={!!nextLessonId}
-          onNext={() => router.replace({ pathname: '/lesson/[id]', params: { id: nextLessonId! } })}
+          nextLabel={nextAction?.label}
+          onNext={() => nextAction?.go()}
           onBack={() => router.back()}
         />
       </Screen>

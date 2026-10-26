@@ -29,7 +29,10 @@ describe('examen de salto', () => {
   });
 
   test('una zona que se abrió "de verdad" no cuenta como saltada', () => {
-    const s = { ...initialState(), skipTo: 2, lessons: doneLessons(2) };
+    // la zona anterior está superada del todo (lecciones + misión final + examen)
+    const challenges = Object.fromEntries(worlds.slice(0, 2).map((w) => [w.boss!.id, { solved: true, bestCommands: 1 }]));
+    const exams = Object.fromEntries(worlds.slice(0, 2).map((w) => [`exam-${w.id}`, { best: 0.9, passed: true, attempts: 1 }]));
+    const s = { ...initialState(), skipTo: 2, lessons: doneLessons(2), challenges, exams };
     expect(openedBySkip(s, worlds, 2)).toBe(false);
   });
 

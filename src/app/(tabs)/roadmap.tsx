@@ -4,7 +4,7 @@ import { Pressable, ScrollView, View } from 'react-native';
 import Animated, { Easing, FadeInDown, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 import type { CourseDef } from '@/content';
 import type { WorldDef } from '@/content/types';
-import { lessonDone, lessonUnlocked, nextLesson, openedBySkip, worldComplete, worldProgress, worldUnlocked } from '@/game/progress';
+import { lessonDone, lessonUnlocked, nextStep, openedBySkip, stepRoute, worldComplete, worldMissing, worldProgress, worldUnlocked } from '@/game/progress';
 import { lessonResumeLabel, useResume } from '@/game/resume';
 import { useCourse } from '@/game/store';
 import { CourseHeader, CourseSwitcher } from '@/ui/CourseSwitcher';
@@ -61,6 +61,11 @@ function WorldSection({ w, wi, course }: { w: WorldDef; wi: number; course: Cour
   // las pruebas de la zona se abren al completarla o al abrir la zona con un examen de salto
   const testsOpen = complete || s.settings.unlockAll || wi <= s.skipTo;
   const bySkip = openedBySkip(s, WORLDS, wi);
+  const missing = worldMissing(s, w);
+  // qué le falta a la zona anterior para abrir esta
+  const pm = wi > 0 ? worldMissing(s, WORLDS[wi - 1]) : null;
+  const prevParts = pm ? [pm.lessons > 0 ? `${pm.lessons} ${pm.lessons === 1 ? 'lección' : 'lecciones'}` : '', pm.boss ? 'la misión final' : '', pm.exam ? 'el examen' : ''].filter(Boolean) : [];
+  const prevMissing = prevParts.length ? ` (te falta: ${prevParts.join(', ')})` : '';
   return (
     <View style={{ marginBottom: 12 }}>
       <Card accent={w.color} style={{ opacity: unlocked ? 1 : 0.6 }} onPress={() => (unlocked ? undefined : warn())}>
@@ -79,10 +84,17 @@ function WorldSection({ w, wi, course }: { w: WorldDef; wi: number; course: Cour
           <T v="tiny" color={colors.dim}>{prog.done}/{prog.total} lecciones{exam?.passed ? ' · 📝 examen aprobado' : ''}</T>
         </View>
         {bySkip ? <T v="tiny" bold color={colors.amber} style={{ marginTop: 6 }}>⚡ Abierta con un examen de salto</T> : null}
+        {unlocked ? (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 8 }}>
+            <T v="tiny" bold color={missing.lessons === 0 ? colors.mint : colors.dim}>{missing.lessons === 0 ? '✓' : '○'} Lecciones</T>
+            {w.boss ? <T v="tiny" bold color={!missing.boss ? colors.mint : colors.dim}>{!missing.boss ? '✓' : '○'} Misión final</T> : null}
+            <T v="tiny" bold color={!missing.exam ? colors.mint : colors.dim}>{!missing.exam ? '✓' : '○'} Examen</T>
+          </View>
+        ) : null}
       </Card>
       {!unlocked && wi > 0 ? (
         <Card accent={colors.amber} style={{ marginTop: 8 }}>
-          <T v="small" color={colors.dim}>🔒 Termina la zona anterior… o demuestra que ya lo sabes y salta directo.</T>
+          <T v="small" color={colors.dim}>🔒 Para entrar hay que superar la zona anterior{prevMissing}. O demuestra que ya lo sabes y salta directo.</T>
           <Button
             style={{ marginTop: 10 }}
             label="⚡ Examen de salto"
@@ -151,9 +163,9 @@ export default function Roadmap() {
   const col = courseColor(course.id);
   const WORLDS = course.worlds;
   // eslint-disable-next-line react-hooks/exhaustive-deps -- solo depende de las lecciones completadas
-  const next = useMemo(() => nextLesson(s, WORLDS), [s.lessons, course.id]);
+  const next = useMemo(() => nextStep(s, WORLDS), [s.lessons, s.challenges, s.exams, s.skipTo, course.id]);
   const resumes = useResume((r) => r.lessons);
-  const nextLes = next ? next.world.lessons[next.lessonIndex] : null;
+  const nextLes = next && next.kind === 'lesson' ? next.world.lessons[next.lessonIndex] : null;
   const where = nextLes ? lessonResumeLabel(resumes[nextLes.id], nextLes.steps.length) : undefined;
   const total = WORLDS.reduce((n, w) => n + w.lessons.length, 0);
   const doneCount = WORLDS.reduce((n, w) => n + w.lessons.filter((l) => s.lessons[l.id]?.done).length, 0);
@@ -177,11 +189,17 @@ export default function Roadmap() {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
               <Mascot size={86} mood={next ? 'happy' : 'cheer'} />
               <View style={{ flex: 1, gap: 6 }}>
-                {next ? (
+                {nextLes ? (
                   <>
                     <T v="tiny" color={col} bold>{where ? `RETOMA DONDE QUEDASTE · ${where.toUpperCase()}` : 'CONTINÚA TU RUTA'}</T>
-                    <T v="h3">{next.world.lessons[next.lessonIndex].emoji} {next.world.lessons[next.lessonIndex].title}</T>
-                    <T v="tiny" color={colors.dim}>{doneCount}/{total} lecciones · ~{next.world.lessons[next.lessonIndex].minutes} min</T>
+                    <T v="h3">{nextLes.emoji} {nextLes.title}</T>
+                    <T v="tiny" color={colors.dim}>{doneCount}/{total} lecciones · ~{nextLes.minutes} min</T>
+                  </>
+                ) : next ? (
+                  <>
+                    <T v="tiny" color={col} bold>LECCIONES TERMINADAS · TOCA SUPERAR LA ZONA</T>
+                    <T v="h3">{next.kind === 'boss' ? '🥋 Misión final' : '📝 Examen'}: {next.world.title}</T>
+                    <T v="tiny" color={colors.dim}>{next.kind === 'boss' ? 'Resuélvela y después haz el examen para abrir la siguiente zona' : 'Apruébalo para abrir la siguiente zona'}</T>
                   </>
                 ) : (
                   <>
@@ -195,8 +213,8 @@ export default function Roadmap() {
               <Button
                 style={{ marginTop: 12 }}
                 color={col}
-                label={where ? 'Retomar lección' : 'Empezar lección'}
-                onPress={() => router.push({ pathname: '/lesson/[id]', params: { id: next.world.lessons[next.lessonIndex].id } })}
+                label={nextLes ? (where ? 'Retomar lección' : 'Empezar lección') : next.kind === 'boss' ? 'Ir a la misión final' : 'Ir al examen'}
+                onPress={() => router.push(stepRoute(next, course.id))}
               />
             )}
           </Card>

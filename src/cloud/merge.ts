@@ -78,6 +78,8 @@ function mergeExtrasOf(a: Extras, b: Extras): Extras {
     claimed: mergeRecords<string[]>(a.claimed, b.claimed, (x, y) => [...new Set([...x, ...y])]),
     act: mergeRecords<DayAct>(a.act, b.act, (x, y) => ({ q: Math.max(x.q, y.q), ok: Math.max(x.ok, y.ok), ch: Math.max(x.ch, y.ch), rv: Math.max(x.rv, y.rv) })),
     bestCombo: Math.max(a.bestCombo, b.bestCombo),
+    // lo que lleva puesto lo decide quien lo cambió el último (mergeRoots lo corrige con la copia más reciente)
+    look: a.look,
   };
 }
 const unionMap = <T,>(a: Record<string, T[]>, b: Record<string, T[]>) => mergeRecords<T[]>(a, b, (x, y) => [...new Set([...x, ...y])]);
@@ -103,7 +105,7 @@ export function mergeRoots(a: RootState, b: RootState): RootState {
     // el onboarding ni el nombre que ya había en la otra
     settings: mergeSettings({ ...newer.settings, onboarded: newer.settings.onboarded || older.settings.onboarded, name: newer.settings.name || older.settings.name }),
     surprise: { lastShown: Math.max(a.surprise.lastShown, b.surprise.lastShown), scheduledUntil: Math.max(a.surprise.scheduledUntil, b.surprise.scheduledUntil) },
-    extras: mergeExtrasOf(a.extras, b.extras),
+    extras: { ...mergeExtrasOf(a.extras, b.extras), look: newer.extras.look },
     active: newer.active,
     courses: Object.fromEntries(COURSE_KEYS.map((c) => [c, mergeSlice(a.courses[c], b.courses[c])])) as RootState['courses'],
     study: byCourse((c) => mergeDayMap(a.study[c] ?? {}, b.study[c] ?? {})),

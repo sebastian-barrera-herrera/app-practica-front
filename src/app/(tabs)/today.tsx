@@ -8,7 +8,7 @@ import { COURSE_LIST, type CourseDef } from '@/content';
 import type { CourseId } from '@/content/types';
 import { balance } from '@/game/economy';
 import { missionStates } from '@/game/missions';
-import { nextLesson } from '@/game/progress';
+import { nextStep, stepRoute } from '@/game/progress';
 import { byCourse, dayComplete, enabledCourses, flat, goalSeconds, goalStreak, studySeconds } from '@/game/root';
 import { lessonResumeLabel, useResume } from '@/game/resume';
 import { reviewSession, shouldOfferSurprise } from '@/game/sessions';
@@ -20,6 +20,7 @@ import { Button } from '@/ui/Button';
 import { Card } from '@/ui/Card';
 import { courseColor } from '@/ui/courseColors';
 import { GoalRing } from '@/ui/GoalRing';
+import { Avatar } from '@/ui/Avatar';
 import { Mascot } from '@/ui/Mascot';
 import { ProgressBar } from '@/ui/ProgressBar';
 import { Screen } from '@/ui/Screen';
@@ -155,10 +156,10 @@ function CourseNext({ course }: { course: CourseDef }) {
   const root = useGame();
   const s = flat(root, course.id);
   const col = courseColor(course.id);
-  const next = nextLesson(s, course.worlds);
+  const next = nextStep(s, course.worlds);
   const done = course.lessons.filter((l) => s.lessons[l.id]?.done).length;
   const rev = reviewSession(s, Date.now(), course);
-  const lesson = next ? next.world.lessons[next.lessonIndex] : null;
+  const lesson = next && next.kind === 'lesson' ? next.world.lessons[next.lessonIndex] : null;
   const started = done > 0;
   const resumes = useResume((r) => r.lessons);
   const where = lesson ? lessonResumeLabel(resumes[lesson.id], lesson.steps.length) : undefined;
@@ -177,6 +178,11 @@ function CourseNext({ course }: { course: CourseDef }) {
               <T v="h3" numberOfLines={2}>{where ? 'Retoma: ' : started ? 'Sigue con: ' : 'Empieza con: '}{lesson.emoji} {lesson.title}</T>
               {where ? <T v="tiny" bold color={col}>▶ {where}</T> : null}
             </>
+          ) : next ? (
+            <>
+              <T v="h3" numberOfLines={2}>{next.kind === 'boss' ? '🥋 Misión final' : '📝 Examen'}: {next.world.title}</T>
+              <T v="tiny" bold color={col}>{next.kind === 'boss' ? 'Supérala para abrir la siguiente zona' : 'Apruébalo para abrir la siguiente zona'}</T>
+            </>
           ) : (
             <T v="h3">¡Ruta completa! 🎉</T>
           )}
@@ -187,11 +193,13 @@ function CourseNext({ course }: { course: CourseDef }) {
         <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
           <View style={{ flex: 1 }}>
             <Button
-              label={lesson ? (where ? 'Retomar' : started ? 'Continuar' : 'Empezar') : 'Practicar'}
+              label={lesson ? (where ? 'Retomar' : started ? 'Continuar' : 'Empezar') : next ? (next.kind === 'boss' ? 'Ir a la misión' : 'Ir al examen') : 'Practicar'}
               color={col}
               onPress={() => {
-                if (lesson) router.push({ pathname: '/lesson/[id]', params: { id: lesson.id } });
-                else {
+                if (next) {
+                  useGame.getState().setActive(course.id);
+                  router.push(stepRoute(next, course.id));
+                } else {
                   useGame.getState().setActive(course.id);
                   router.push('/(tabs)/practice');
                 }
@@ -229,6 +237,9 @@ export default function Today() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40, gap: 14 }}>
         {/* saludo */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingTop: 6 }}>
+          <Pressable onPress={() => router.push('/avatar')} accessibilityRole="button" accessibilityLabel="Mi avatar">
+            <Avatar size={50} animated={false} />
+          </Pressable>
           <View style={{ flex: 1, gap: 2 }}>
             <T v="small" color={colors.dim}>{greeting(new Date(now).getHours())}{name ? `, ${name}` : ''} 👋</T>
             <T v="h1">Tu día en Dev Dojo</T>

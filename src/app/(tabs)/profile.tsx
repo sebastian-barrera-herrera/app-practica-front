@@ -15,7 +15,7 @@ import { Button } from '@/ui/Button';
 import { Card } from '@/ui/Card';
 import { ConfirmModal } from '@/ui/ConfirmModal';
 import { courseColor } from '@/ui/courseColors';
-import { Mascot } from '@/ui/Mascot';
+import { Avatar } from '@/ui/Avatar';
 import { ProgressBar } from '@/ui/ProgressBar';
 import { Screen } from '@/ui/Screen';
 import { T } from '@/ui/Text';
@@ -111,7 +111,10 @@ export default function Profile() {
     <Screen>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40, gap: 14 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingTop: 8 }}>
-          <Mascot size={92} mood={alive ? 'cool' : 'think'} />
+          <Pressable onPress={() => router.push('/avatar')} accessibilityRole="button" accessibilityLabel="Cambiar mi avatar" style={{ alignItems: 'center', gap: 4 }}>
+            <Avatar size={92} mood={alive ? 'cool' : 'think'} />
+            <T v="tiny" bold color={colors.violet}>✏️ Cambiar</T>
+          </Pressable>
           <View style={{ flex: 1, gap: 2 }}>
             <T v="h1" numberOfLines={1}>{root.settings.name || user?.name || 'Aprendiz'}</T>
             <T v="tiny" color={colors.dim} numberOfLines={1}>{user?.email}</T>

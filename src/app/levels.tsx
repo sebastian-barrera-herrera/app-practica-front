@@ -4,7 +4,7 @@ import { Pressable, ScrollView, View } from 'react-native';
 import { COURSE_LIST } from '@/content';
 import { levelCoins, levelReward } from '@/game/economy';
 import { levelWorlds } from '@/game/exams';
-import { worldComplete } from '@/game/progress';
+import { worldCleared } from '@/game/progress';
 import { flat, shownCourses } from '@/game/root';
 import { useGame } from '@/game/store';
 import { levelProgress, levelRank, xpForLevel } from '@/game/xp';
@@ -74,6 +74,12 @@ export default function Levels() {
                 <T v="small" bold>Etapas del curso</T>: cada curso se divide en <T v="small" bold>Básico, Intermedio y Avanzado</T>. Las verás como franjas de color en la pestaña <T v="small" bold>Ruta</T>, y al terminar una etapa puedes sacar su certificación (🥉 🥈 🥇).
               </T>
             </View>
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <T style={{ fontSize: 26 }}>🔒</T>
+              <T v="small" style={{ flex: 1 }}>
+                <T v="small" bold>Cómo se abre una zona</T>: hay que <T v="small" bold>superar la anterior</T>, es decir, terminar sus lecciones, la <T v="small" bold>misión final 🥋</T> y aprobar su <T v="small" bold>examen 📝</T>. Si ya dominas un tema, el <T v="small" bold>examen de salto ⚡</T> te deja entrar sin pasar por todo eso.
+              </T>
+            </View>
           </View>
         </Card>
 
@@ -89,7 +95,7 @@ export default function Levels() {
                     <T v="small" bold color={ink(col)}>{c.emoji} {c.name}</T>
                     {c.levels.map((lv) => {
                       const ws = levelWorlds(c, lv.id);
-                      const done = ws.filter((w) => worldComplete(s, w)).length;
+                      const done = ws.filter((w) => worldCleared(s, w)).length;
                       const cert = s.exams[`cert-${lv.id}`]?.passed;
                       return (
                         <View key={lv.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
