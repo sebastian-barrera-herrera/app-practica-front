@@ -5,6 +5,7 @@ import { AwsError, op } from '../registry';
 import type { Account, Alarm, Budget } from '../types';
 import { iso, mkArn, newId } from '../util';
 import { refreshEc2 } from './ec2';
+import { liveAlarmState } from './metrics';
 
 // ───────────────────────── coste estimado ─────────────────────────
 
@@ -80,7 +81,7 @@ function alarmState(a: Account, region: string, al: Alarm): Alarm['StateValue'] 
     if (region !== 'us-east-1') return 'INSUFFICIENT_DATA';
     return estimatedCharges(a) > al.Threshold ? 'ALARM' : 'OK';
   }
-  return al.StateValue;
+  return liveAlarmState(a, region, al) ?? al.StateValue;
 }
 
 const alarmView = (c: { acct: Account; region: string }, al: Alarm) => {

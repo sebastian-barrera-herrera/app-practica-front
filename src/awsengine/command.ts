@@ -128,7 +128,7 @@ export function setupAws(w: World, o: WorldOptions): void {
   acct.clock = Math.max(acct.clock, w.sys.clock.now);
   w.sys.ext[AWS_KEY] = acct;
   // herramientas de red que se usan con AWS: dig/nslookup (DNS) e ipcalc (subredes)
-  for (const p of ['dnsutils', 'ipcalc']) installPackage(w.sys, w.fs, p);
+  for (const p of ['dnsutils', 'ipcalc', 'httpd-tools']) installPackage(w.sys, w.fs, p);
   const bin = w.fs.writeFile('/usr/local/bin/aws', STUB, { cred: null, mode: 0o755 });
   bin.uid = 'root';
   bin.gid = 'root';

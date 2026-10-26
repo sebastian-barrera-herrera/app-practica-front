@@ -87,7 +87,12 @@ export type IllustrationId =
   | 'aws-ddb-partition'
   | 'aws-price-calc'
   | 'aws-support-plans'
-  | 'aws-org-tree';
+  | 'aws-org-tree'
+  | 'aws-elb-flow'
+  | 'aws-asg-scale'
+  | 'aws-spof'
+  | 'aws-r53-policies'
+  | 'aws-cloudfront-flow';
 
 // ───────────────────────── preguntas ─────────────────────────
 

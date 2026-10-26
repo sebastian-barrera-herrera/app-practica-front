@@ -7,6 +7,7 @@ import { JmesError, search } from './jmespath';
 import { OUTPUT_FORMATS, renderOutput, type OutputFormat } from './render';
 import { AwsError, OPS, Raw, SERVICE_SUMMARY, UsageErr, iamAction, opsOf, servicesList, type AuthzTarget, type AwsIO, type Caller, type GlobalOpts, type OpCtx, type OpDef } from './registry';
 import { assumeRoleCore } from './services/sts';
+import { tick } from './tick';
 import { pascal } from './util';
 
 export const CLI_VERSION = 'aws-cli/2.27.5 Python/3.13.3 Linux/6.8.0-45-generic exe/x86_64.ubuntu.24';
@@ -181,6 +182,7 @@ function execAws(argv: string[], io: AwsIO): AwsResult | Promise<AwsResult> {
 
   const acct = io.acct;
   acct.clock += 1500;
+  tick(acct);
 
   try {
     // formato de salida

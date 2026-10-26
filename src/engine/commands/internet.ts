@@ -110,6 +110,37 @@ export function dnsLookup(sys: System, name: string, type: string): { records: D
 /** Servidores web extra que atienden una petición antes que los sitios fijos. Devuelven null si no la reconocen. */
 export const httpHandlers: ((req: { sys: System; host: string; port: number; scheme: string; path: string; query: string; method: string }) => Fetched | null)[] = [];
 
+/** Una prueba de carga (`ab`): la atiende quien conozca el destino (p. ej. el balanceador de una cuenta de AWS). */
+export interface LoadReq {
+  sys: System;
+  host: string;
+  port: number;
+  scheme: string;
+  path: string;
+  concurrency: number;
+  /** Peticiones a enviar (como máximo). */
+  requests: number;
+  /** Duración máxima en segundos (0 = sin límite). */
+  seconds: number;
+}
+
+export interface LoadRes {
+  ok: boolean;
+  error?: string;
+  status?: number;
+  server?: string;
+  bodyLength?: number;
+  completed: number;
+  failed: number;
+  non2xx: number;
+  /** Segundos que ha durado la prueba. */
+  duration: number;
+  /** Peticiones por segundo que ha sostenido. */
+  rps: number;
+}
+
+export const loadHandlers: ((req: LoadReq) => LoadRes | null)[] = [];
+
 export function isIp(s: string) {
   return /^\d{1,3}(\.\d{1,3}){3}$/.test(s);
 }

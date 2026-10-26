@@ -690,7 +690,7 @@ function iamPassRole(c: OpCtx, profile: string): AuthzTarget[] {
   return ip?.roles.length ? [{ action: 'iam:PassRole', resource: `arn:aws:iam::${c.acct.id}:role/${ip.roles[0]}`, context: { 'iam:PassedToService': 'ec2.amazonaws.com' } }] : [];
 }
 
-function parseProfile(v: any): string | undefined {
+export function parseProfile(v: any): string | undefined {
   if (!v) return undefined;
   if (v.Name) return v.Name;
   if (v.Arn) return String(v.Arn).split('/').pop();
@@ -826,6 +826,26 @@ op('ec2', 'describe-instance-status', 'instance-ids:l filters:f include-all-inst
 });
 const a_ok = (c: OpCtx, i: Ec2Instance) => c.acct.clock - i.stateAt >= 60000 || i.stateAt < Date.parse(i.LaunchTime) + 30000;
 
+/** Termina una instancia: pasa a `shutting-down`, borra su disco raíz si toca y suelta sus IP elásticas. */
+export function ec2Terminate(a: Account, r: Ec2Region, i: Ec2Instance): void {
+  if (i.state === 'terminated' || i.state === 'shutting-down') return;
+  i.state = 'shutting-down';
+  i.stateAt = a.clock;
+  i.PublicIpAddress = undefined;
+  const v = r.volumes[i.rootVolumeId];
+  if (v?.attachment?.DeleteOnTermination) delete r.volumes[v.VolumeId];
+  for (const vol of Object.values(r.volumes)) {
+    if (vol.attachment?.InstanceId !== i.InstanceId) continue;
+    vol.attachment = undefined;
+    vol.state = 'available';
+  }
+  for (const ad of Object.values(r.addresses)) {
+    if (ad.InstanceId !== i.InstanceId) continue;
+    ad.InstanceId = undefined;
+    ad.AssociationId = undefined;
+  }
+}
+
 function transition(c: OpCtx, verb: 'start' | 'stop' | 'terminate' | 'reboot') {
   const a = c.acct;
   const r = refreshEc2(a, c.region);
@@ -859,21 +879,7 @@ function transition(c: OpCtx, verb: 'start' | 'stop' | 'terminate' | 'reboot') {
         continue;
       }
       if (i.DisableApiTermination) throw new AwsError('OperationNotPermitted', `The instance '${id}' may not be terminated. Modify its 'disableApiTermination' instance attribute and try again.`);
-      i.state = 'shutting-down';
-      i.stateAt = a.clock;
-      i.PublicIpAddress = undefined;
-      const v = r.volumes[i.rootVolumeId];
-      if (v?.attachment?.DeleteOnTermination) delete r.volumes[v.VolumeId];
-      for (const vol of Object.values(r.volumes)) {
-        if (vol.attachment?.InstanceId !== id) continue;
-        vol.attachment = undefined;
-        vol.state = 'available';
-      }
-      for (const ad of Object.values(r.addresses)) {
-        if (ad.InstanceId !== id) continue;
-        ad.InstanceId = undefined;
-        ad.AssociationId = undefined;
-      }
+      ec2Terminate(a, r, i);
     } else {
       if (i.state !== 'running') throw new AwsError('IncorrectInstanceState', `The instance '${id}' is not in a state from which it can be rebooted.`);
       continue;

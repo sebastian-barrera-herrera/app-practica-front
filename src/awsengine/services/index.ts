@@ -13,3 +13,7 @@ import './billing';
 import './govern';
 import './configure';
 import './misc';
+import './metrics';
+import './elb';
+import './autoscaling';
+import './edge';

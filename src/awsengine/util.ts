@@ -1,4 +1,5 @@
 /** Utilidades del simulador de AWS: identificadores deterministas, ARN, fechas, comodines y CIDR. */
+import { md5 } from '../engine/commands/hash';
 import { hash32 } from '../engine/format';
 import type { Account, Rec } from './types';
 
@@ -244,4 +245,10 @@ export function shellSplit(line: string): string[] {
   }
   if (cur || has) out.push(cur);
   return out;
+}
+
+/** IP pública «estable» de un nombre de AWS (balanceadores, CloudFront, buckets…): se deduce del propio nombre. */
+export function fakeIp(host: string, salt = ''): string {
+  const h = md5(host + salt);
+  return `52.${(parseInt(h.slice(0, 2), 16) % 100) + 150}.${parseInt(h.slice(2, 4), 16)}.${(parseInt(h.slice(4, 6), 16) % 250) + 2}`;
 }

@@ -5,7 +5,7 @@ import { defineCommand, parseOpts, type Ctx } from '../registry';
 import { SignalEx } from '../shell';
 import { FsError } from '../vfs';
 import { createWorld, type World } from '../world';
-import { dnsLookup, fakeRand, httpFetch, isIp, isLocal, latencyFor, resolveHost, SITES, statusText } from './internet';
+import { dnsLookup, fakeRand, httpFetch, isIp, isLocal, latencyFor, loadHandlers, resolveHost, SITES, statusText } from './internet';
 import { strftime } from './system';
 import { formatPrintf, splitLines } from './util';
 
@@ -1149,3 +1149,81 @@ defineCommand('python3', {
 });
 
 export { isoFull, color, C, padStart, FsError, formatPrintf, SITES };
+
+// ───────────────────────── ab (ApacheBench) ─────────────────────────
+
+defineCommand('ab', { summary: 'Prueba de carga HTTP (ApacheBench)', usage: 'ab [-n peticiones] [-c concurrencia] [-t segundos] URL', category: 'redes', package: 'httpd-tools', level: 3, options: [['-n', 'número de peticiones'], ['-c', 'peticiones simultáneas'], ['-t', 'segundos máximos de prueba (implica -n 50000 si no se da)'], ['-k', 'mantener conexiones (keep-alive)']], examples: [['ab -n 1000 -c 50 http://mi-alb-123.us-east-1.elb.amazonaws.com/', 'Mil peticiones, 50 a la vez'], ['ab -n 1000000 -c 200 -t 600 http://web.ejemplo.com/', 'Diez minutos de carga sostenida']] }, (c) => {
+  let n = 1;
+  let conc = 1;
+  let secs = 0;
+  let url = '';
+  const a = c.args;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] === '-n') n = parseInt(a[++i] ?? '', 10);
+    else if (a[i] === '-c') conc = parseInt(a[++i] ?? '', 10);
+    else if (a[i] === '-t') {
+      secs = parseInt(a[++i] ?? '', 10);
+      if (!a.includes('-n')) n = 50000;
+    } else if (!a[i].startsWith('-')) url = a[i];
+  }
+  const usage = 'Usage: ab [options] [http[s]://]hostname[:port]/path\nOptions are:\n    -n requests     Number of requests to perform\n    -c concurrency  Number of multiple requests to make at a time\n    -t timelimit    Seconds to max. to spend on benchmarking\n';
+  if (!url) {
+    c.err('ab: wrong number of arguments\n' + usage);
+    return 1;
+  }
+  if (!(n > 0) || !(conc > 0)) {
+    c.err('ab: Invalid number of requests/concurrency\n' + usage);
+    return 1;
+  }
+  if (conc > n) {
+    c.err('ab: Cannot use concurrency level greater than total number of requests\n' + usage);
+    return 1;
+  }
+  const m = /^(?:(https?):\/\/)?([^/:?#]+)(?::(\d+))?(\/[^?#]*)?/.exec(url);
+  if (!m || !m[4]) {
+    c.err('ab: invalid URL (the path is required: end it with /)\n' + usage);
+    return 1;
+  }
+  const scheme = m[1] ?? 'http';
+  const host = m[2];
+  const port = m[3] ? parseInt(m[3], 10) : scheme === 'https' ? 443 : 80;
+  const path = m[4];
+  let res = null as ReturnType<(typeof loadHandlers)[number]>;
+  for (const h of loadHandlers) {
+    res = h({ sys: c.sh.sys, host, port, scheme, path, concurrency: conc, requests: n, seconds: secs });
+    if (res) break;
+  }
+  c.out('This is ApacheBench, Version 2.3 <$Revision: 1913912 $>\nCopyright 1996 Adam Twiss, Zeus Technology Ltd, http://www.zeustech.net/\nLicensed to The Apache Software Foundation, http://www.apache.org/\n\n');
+  c.out(`Benchmarking ${host} (be patient)\n`);
+  if (!res) {
+    c.err(`apr_socket_connect(): Connection refused (111)\n`);
+    return 1;
+  }
+  if (!res.ok) {
+    c.err(`${res.error ?? 'apr_pollset_poll: The timeout specified has expired (70007)'}\n`);
+    return 1;
+  }
+  c.sh.sys.clock.now += Math.round(res.duration * 1000);
+  const step = Math.max(100, Math.floor(res.completed / 10 / 100) * 100);
+  for (let k = step; k < res.completed; k += step) c.out(`Completed ${k} requests\n`);
+  c.out(`Finished ${res.completed} requests\n\n\n`);
+  const len = res.bodyLength ?? 0;
+  const mean = (conc / res.rps) * 1000;
+  const f1 = (x: number) => x.toFixed(3);
+  c.out(`Server Software:        ${res.server ?? 'awselb/2.0'}\nServer Hostname:        ${host}\nServer Port:            ${port}\n\n`);
+  c.out(`Document Path:          ${path}\nDocument Length:        ${len} bytes\n\n`);
+  c.out(`Concurrency Level:      ${conc}\nTime taken for tests:   ${f1(res.duration)} seconds\nComplete requests:      ${res.completed}\nFailed requests:        ${res.failed}\n`);
+  if (res.non2xx) c.out(`Non-2xx responses:      ${res.non2xx}\n`);
+  c.out(`Total transferred:      ${res.completed * (len + 180)} bytes\nHTML transferred:       ${res.completed * len} bytes\n`);
+  c.out(`Requests per second:    ${res.rps.toFixed(2)} [#/sec] (mean)\nTime per request:       ${f1(mean)} [ms] (mean)\nTime per request:       ${f1(1000 / res.rps)} [ms] (mean, across all concurrent requests)\nTransfer rate:          ${((res.completed * (len + 180)) / 1024 / res.duration).toFixed(2)} [Kbytes/sec] received\n\n`);
+  const q = (k: number) => Math.round(mean * k);
+  c.out('Connection Times (ms)\n              min  mean[+/-sd] median   max\n');
+  c.out(`Connect:        ${String(Math.round(mean * 0.1)).padStart(4)}  ${String(Math.round(mean * 0.12)).padStart(4)}   ${String(Math.round(mean * 0.03)).padStart(3)}.0   ${String(Math.round(mean * 0.1)).padStart(4)}  ${String(Math.round(mean * 0.4)).padStart(5)}\n`);
+  c.out(`Processing:     ${String(Math.round(mean * 0.6)).padStart(4)}  ${String(Math.round(mean * 0.78)).padStart(4)}   ${String(Math.round(mean * 0.1)).padStart(3)}.0   ${String(Math.round(mean * 0.75)).padStart(4)}  ${String(Math.round(mean * 1.9)).padStart(5)}\n`);
+  c.out(`Waiting:        ${String(Math.round(mean * 0.55)).padStart(4)}  ${String(Math.round(mean * 0.72)).padStart(4)}   ${String(Math.round(mean * 0.1)).padStart(3)}.0   ${String(Math.round(mean * 0.7)).padStart(4)}  ${String(Math.round(mean * 1.8)).padStart(5)}\n`);
+  c.out(`Total:          ${String(q(0.7)).padStart(4)}  ${String(q(0.9)).padStart(4)}   ${String(q(0.12)).padStart(3)}.0   ${String(q(0.85)).padStart(4)}  ${String(q(2.2)).padStart(5)}\n\n`);
+  c.out('Percentage of the requests served within a certain time (ms)\n');
+  for (const [p, k] of [[50, 0.85], [66, 0.95], [75, 1.02], [80, 1.08], [90, 1.25], [95, 1.5], [98, 1.8], [99, 2.0]] as const) c.out(`  ${p}%${String(q(k)).padStart(8)}\n`);
+  c.out(` 100%${String(q(2.2)).padStart(8)} (longest request)\n`);
+  return 0;
+});

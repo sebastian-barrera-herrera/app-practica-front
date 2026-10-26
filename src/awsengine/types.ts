@@ -524,6 +524,194 @@ export interface RegionalState {
   sns: Record<string, SnsTopic>;
   ddb?: Record<string, DdbTable>;
   rds?: RdsState;
+  elb?: ElbState;
+  asg?: AsgState;
+  /** Plantillas de lanzamiento de EC2. */
+  launchTemplates?: Record<string, LaunchTemplate>;
+}
+
+// ───────────── Elastic Load Balancing ─────────────
+
+export interface LbAction {
+  Type: 'forward' | 'redirect' | 'fixed-response';
+  Order?: number;
+  TargetGroupArn?: string;
+  ForwardConfig?: { TargetGroups: { TargetGroupArn: string; Weight?: number }[]; TargetGroupStickinessConfig?: { Enabled?: boolean; DurationSeconds?: number } };
+  RedirectConfig?: { Protocol?: string; Port?: string; Host?: string; Path?: string; Query?: string; StatusCode: string };
+  FixedResponseConfig?: { StatusCode: string; ContentType?: string; MessageBody?: string };
+}
+
+export interface LbCondition {
+  Field: string;
+  Values?: string[];
+  PathPatternConfig?: { Values: string[] };
+  HostHeaderConfig?: { Values: string[] };
+  HttpRequestMethodConfig?: { Values: string[] };
+}
+
+export interface LbRule {
+  RuleArn: string;
+  Priority: string;
+  Conditions: LbCondition[];
+  Actions: LbAction[];
+  IsDefault: boolean;
+}
+
+export interface LbListener {
+  ListenerArn: string;
+  LoadBalancerArn: string;
+  Port: number;
+  Protocol: string;
+  Certificates?: { CertificateArn: string }[];
+  SslPolicy?: string;
+  rules: LbRule[];
+}
+
+export interface LoadBalancer {
+  LoadBalancerArn: string;
+  DNSName: string;
+  CanonicalHostedZoneId: string;
+  LoadBalancerName: string;
+  Scheme: 'internet-facing' | 'internal';
+  Type: 'application' | 'network' | 'gateway';
+  VpcId: string;
+  subnetIds: string[];
+  SecurityGroups: string[];
+  IpAddressType: string;
+  attributes: Record<string, string>;
+  listeners: Record<string, LbListener>;
+  /** Reloj virtual (ms) en que se creó. */
+  createdAt: number;
+  Tags: Tag[];
+  /** Contador de peticiones atendidas (para el reparto por turnos). */
+  served: number;
+}
+
+export interface TgTarget {
+  Id: string;
+  Port: number;
+  registeredAt: number;
+  /** Reloj virtual en que se pidió retirarlo (drenaje de conexiones). */
+  deregisteredAt?: number;
+  /** Memoria de las comprobaciones de salud: cuánto lleva dando el mismo resultado y qué estado se ha comunicado. */
+  hs?: { ok: boolean; since: number; state: 'initial' | 'healthy' | 'unhealthy'; lastEval: number; reason?: string; description?: string };
+}
+
+export interface TargetGroup {
+  TargetGroupArn: string;
+  TargetGroupName: string;
+  Protocol: string;
+  Port: number;
+  VpcId: string;
+  TargetType: 'instance' | 'ip' | 'lambda';
+  HealthCheckProtocol: string;
+  HealthCheckPort: string;
+  HealthCheckPath: string;
+  HealthCheckIntervalSeconds: number;
+  HealthCheckTimeoutSeconds: number;
+  HealthyThresholdCount: number;
+  UnhealthyThresholdCount: number;
+  Matcher: { HttpCode: string };
+  targets: TgTarget[];
+  attributes: Record<string, string>;
+  Tags: Tag[];
+}
+
+export interface ElbState {
+  lbs: Record<string, LoadBalancer>;
+  tgs: Record<string, TargetGroup>;
+}
+
+// ───────────── Auto Scaling ─────────────
+
+export interface LaunchTemplate {
+  LaunchTemplateId: string;
+  LaunchTemplateName: string;
+  CreateTime: string;
+  DefaultVersionNumber: number;
+  LatestVersionNumber: number;
+  versions: { VersionNumber: number; VersionDescription?: string; LaunchTemplateData: Record<string, any>; CreateTime: string }[];
+  Tags: Tag[];
+}
+
+export interface ScalingPolicy {
+  PolicyName: string;
+  PolicyARN: string;
+  PolicyType: 'TargetTrackingScaling' | 'SimpleScaling' | 'StepScaling';
+  AdjustmentType?: string;
+  ScalingAdjustment?: number;
+  Cooldown?: number;
+  StepAdjustments?: { MetricIntervalLowerBound?: number; MetricIntervalUpperBound?: number; ScalingAdjustment: number }[];
+  MetricAggregationType?: string;
+  EstimatedInstanceWarmup?: number;
+  TargetTrackingConfiguration?: { PredefinedMetricSpecification?: { PredefinedMetricType: string; ResourceLabel?: string }; TargetValue: number; DisableScaleIn?: boolean };
+  Enabled: boolean;
+}
+
+export interface AsgInstance {
+  InstanceId: string;
+  AvailabilityZone: string;
+  LifecycleState: 'Pending' | 'InService' | 'Terminating' | 'Standby';
+  HealthStatus: 'Healthy' | 'Unhealthy';
+  /** Reloj virtual en que entró en servicio (o se pidió). */
+  since: number;
+  ProtectedFromScaleIn: boolean;
+}
+
+export interface AsgActivity {
+  ActivityId: string;
+  Description: string;
+  Cause: string;
+  StartTime: string;
+  EndTime?: string;
+  StatusCode: 'Successful' | 'InProgress' | 'Failed';
+  StatusMessage?: string;
+  Progress: number;
+}
+
+export interface Asg {
+  AutoScalingGroupName: string;
+  AutoScalingGroupARN: string;
+  LaunchTemplate: { LaunchTemplateId: string; LaunchTemplateName: string; Version: string };
+  MinSize: number;
+  MaxSize: number;
+  DesiredCapacity: number;
+  DefaultCooldown: number;
+  AvailabilityZones: string[];
+  subnetIds: string[];
+  TargetGroupARNs: string[];
+  HealthCheckType: 'EC2' | 'ELB';
+  HealthCheckGracePeriod: number;
+  DefaultInstanceWarmup: number;
+  CreatedTime: string;
+  Tags: Tag[];
+  SuspendedProcesses: string[];
+  policies: Record<string, ScalingPolicy>;
+  instances: AsgInstance[];
+  activities: AsgActivity[];
+  /** Último instante (ms de reloj virtual) hasta el que se ha simulado. */
+  lastEval: number;
+  /** Cuándo se escaló por última vez (para el enfriamiento). */
+  lastScale: number;
+  /** Minutos seguidos con la métrica por debajo del objetivo (para reducir). */
+  lowMinutes: number;
+  /** Historial por minuto de lo que vio el grupo. */
+  history: { t: number; cpu: number; n: number; rps: number }[];
+  /** Acciones programadas (cambian min/max/deseado a una hora). */
+  scheduled?: { ScheduledActionName: string; StartTime?: string; Recurrence?: string; MinSize?: number; MaxSize?: number; DesiredCapacity?: number; lastRun?: number }[];
+}
+
+export interface AsgState {
+  groups: Record<string, Asg>;
+}
+
+/** Una prueba de carga (la lanza el comando `ab`): peticiones por segundo contra un balanceador. */
+export interface LoadTest {
+  lbArn: string;
+  region: string;
+  rps: number;
+  from: number;
+  until: number;
 }
 
 // ───────────── Route 53 ─────────────
@@ -539,6 +727,8 @@ export interface RecordSet {
   Region?: string;
   Failover?: 'PRIMARY' | 'SECONDARY';
   HealthCheckId?: string;
+  GeoLocation?: { ContinentCode?: string; CountryCode?: string; SubdivisionCode?: string };
+  MultiValueAnswer?: boolean;
 }
 
 export interface HostedZone {
@@ -552,8 +742,33 @@ export interface HostedZone {
   records: RecordSet[];
 }
 
+export interface HealthCheck {
+  Id: string;
+  CallerReference: string;
+  HealthCheckConfig: {
+    Type: string;
+    IPAddress?: string;
+    FullyQualifiedDomainName?: string;
+    Port?: number;
+    ResourcePath?: string;
+    RequestInterval: number;
+    FailureThreshold: number;
+    Inverted?: boolean;
+    Disabled?: boolean;
+    ChildHealthChecks?: string[];
+    HealthThreshold?: number;
+    EnableSNI?: boolean;
+    AlarmIdentifier?: { Region: string; Name: string };
+  };
+  HealthCheckVersion: number;
+  Tags: Tag[];
+  /** Lo que han visto los comprobadores y lo que Route 53 da por bueno (con retraso). */
+  state?: { probe: boolean; reported: boolean; since: number; lastEval: number };
+}
+
 export interface Route53State {
   zones: Record<string, HostedZone>;
+  healthChecks?: Record<string, HealthCheck>;
 }
 
 // ───────────── facturación, organizaciones y soporte ─────────────
@@ -656,4 +871,68 @@ export interface Account {
   org?: Organization;
   /** Plan de soporte (por defecto `basic`). */
   supportPlan?: 'basic' | 'developer' | 'business' | 'enterprise';
+  /** Pruebas de carga activas o recientes (Auto Scaling y las métricas del balanceador las usan). */
+  loads?: LoadTest[];
+  /** CloudFront (servicio global). */
+  cloudfront?: CloudFrontState;
+  /** Global Accelerator (servicio global). */
+  accelerators?: Record<string, Accelerator>;
+}
+
+// ───────────── CloudFront y Global Accelerator ─────────────
+
+export interface CfOrigin {
+  Id: string;
+  DomainName: string;
+  OriginPath?: string;
+  OriginAccessControlId?: string;
+  S3?: boolean;
+  CustomOriginConfig?: { HTTPPort: number; HTTPSPort: number; OriginProtocolPolicy: string };
+}
+
+export interface CfDistribution {
+  Id: string;
+  ARN: string;
+  DomainName: string;
+  Status: 'InProgress' | 'Deployed';
+  /** Reloj virtual (ms) en que terminó (o terminará) el despliegue. */
+  deployedAt: number;
+  LastModifiedTime: string;
+  Enabled: boolean;
+  Comment: string;
+  DefaultRootObject: string;
+  Origins: CfOrigin[];
+  DefaultCacheBehavior: { TargetOriginId: string; ViewerProtocolPolicy: string; MinTTL: number; DefaultTTL: number; MaxTTL: number; Compress: boolean; AllowedMethods: string[] };
+  PriceClass: string;
+  Aliases: string[];
+  ETag: string;
+  Tags: Tag[];
+  /** Caché de borde: ruta → copia guardada y el instante (ms) en que se guardó. */
+  cache: Record<string, { at: number; status: number; type: string; body: string; headers: Record<string, string> }>;
+  invalidations: { Id: string; Paths: string[]; CreateTime: string; Status: string }[];
+}
+
+export interface CfOac {
+  Id: string;
+  Name: string;
+  OriginAccessControlOriginType: string;
+  SigningBehavior: string;
+  SigningProtocol: string;
+}
+
+export interface CloudFrontState {
+  distributions: Record<string, CfDistribution>;
+  oacs: Record<string, CfOac>;
+}
+
+export interface Accelerator {
+  AcceleratorArn: string;
+  Name: string;
+  IpAddressType: string;
+  Enabled: boolean;
+  IpSets: { IpFamily: string; IpAddresses: string[] }[];
+  DnsName: string;
+  Status: 'IN_PROGRESS' | 'DEPLOYED';
+  CreatedTime: string;
+  listeners: { ListenerArn: string; Protocol: string; PortRanges: { FromPort: number; ToPort: number }[]; endpointGroups: { EndpointGroupArn: string; EndpointGroupRegion: string; EndpointConfigurations: { EndpointId: string; Weight: number }[]; TrafficDialPercentage: number }[] }[];
 }

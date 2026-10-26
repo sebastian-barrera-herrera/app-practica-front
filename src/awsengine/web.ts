@@ -2,17 +2,21 @@
  * El «internet» de AWS visto desde la terminal: lo que responden `curl` y `wget` cuando apuntas a un bucket de S3
  * (público, privado, URL prefirmada, sitio web estático) o a una instancia EC2 (según su grupo de seguridad).
  */
-import { dnsResolvers, hostResolvers, httpHandlers, type Fetched } from '../engine/commands/internet';
+import { dnsResolvers, hostResolvers, httpHandlers, loadHandlers, type Fetched } from '../engine/commands/internet';
 import type { System } from '../engine/sys';
 import { evaluate, principalPolicies, type PolicySource } from './policy';
 import { awsAccountOf } from './state';
 import { anonymousAllowed, anonymousCanRead } from './services/s3';
 import { signUrl } from './services/s3cmd';
-import type { Account, S3Bucket } from './types';
+import type { Account, LoadBalancer, S3Bucket } from './types';
+import { instancePage } from './hosting';
 import { traceFromInternet } from './net';
-import { r53Address, r53Lookup } from './services/route53';
-import { secretFor, stableId } from './util';
-import { md5 } from '../engine/commands/hash';
+import { clientGeo, r53Address, r53Lookup } from './services/route53';
+import { cfByDomain, cfServe, gas, gaServe } from './services/edge';
+import { elb, healthyTargets, lbByDns, lbFromInternet, lbHandle, lbState } from './services/elb';
+import { instanceType } from './catalog';
+import { tick } from './tick';
+import { fakeIp, secretFor, stableId } from './util';
 
 const S3_WEBSITE = /^([a-z0-9][a-z0-9.-]*)\.s3-website[.-]([a-z0-9-]+)\.amazonaws\.com$/;
 const S3_VIRTUAL = /^([a-z0-9][a-z0-9.-]*)\.s3(?:[.-]([a-z0-9-]+))?\.amazonaws\.com$/;
@@ -132,13 +136,9 @@ function ec2Request(a: Account, host: string, port: number, scheme: string, path
       if (i.state !== 'running') return timeout;
       // el paquete tiene que atravesar IGW, tabla de rutas, NACL y grupo de seguridad (si algo lo corta, curl se queda esperando)
       if (!traceFromInternet(a, reg.ec2, i, 'tcp', port).reachable) return timeout;
-      const ud = i.UserData ?? '';
-      const web = /(httpd|nginx|apache2)/.test(ud) && /(install|systemctl|service)/.test(ud);
-      if (!web || (scheme === 'https' && port === 443)) return { ok: false, curlCode: 7, error: `Failed to connect to ${host} port ${port} after 38 ms: Couldn't connect to server` };
-      const echo = /echo\s+(?:"([^"]*)"|'([^']*)')\s*>\s*\/var\/www\/html\/index\.html/.exec(ud);
-      const body = echo ? (echo[1] ?? echo[2]) + '\n' : '<html><body><h1>It works!</h1></body></html>\n';
-      if (path !== '/' && path !== '/index.html') return { ok: true, status: 404, type: 'text/html', body: '<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML 2.0//EN">\n<html><head><title>404 Not Found</title></head><body><h1>Not Found</h1></body></html>\n', ip, headers: { Server: 'Apache/2.4.62 (Amazon Linux)' } };
-      return { ok: true, status: 200, type: 'text/html; charset=UTF-8', body, ip, headers: { Server: 'Apache/2.4.62 (Amazon Linux)' } };
+      const page = instancePage(i, path);
+      if (!page || (scheme === 'https' && port === 443) || port !== 80) return { ok: false, curlCode: 7, error: `Failed to connect to ${host} port ${port} after 38 ms: Couldn't connect to server` };
+      return { ok: true, status: page.status, type: page.type, body: page.body, ip, headers: page.headers };
     }
   }
   return null;
@@ -146,19 +146,27 @@ function ec2Request(a: Account, host: string, port: number, scheme: string, path
 
 // ───────────────────────── registro ─────────────────────────
 
-const fakeIp = (host: string) => {
-  const h = md5(host);
-  return `52.${parseInt(h.slice(0, 2), 16) % 100 + 150}.${parseInt(h.slice(2, 4), 16)}.${parseInt(h.slice(4, 6), 16) % 250 + 2}`;
-};
-
 dnsResolvers.push((sys: System, name: string, type: string) => {
   const a = awsAccountOf(sys);
   const r = a ? r53Lookup(a, name, type) : null;
   if (!r) return null;
   return {
     nxdomain: r.nxdomain,
-    records: r.answers.map((x) => ({ ...x, data: x.data.startsWith('s3-website:') ? fakeIp(x.data.slice(11)) : x.data })),
+    records: r.answers.map((x) => ({ ...x, data: x.data.startsWith('s3-website:') ? fakeIp(x.data.slice(11)) : x.data.startsWith('lb:') ? fakeIp(x.data.split(':')[1], x.data.split(':')[2]) : x.data.startsWith('edge:') ? fakeIp(x.data.slice(5)) : x.data })),
   };
+});
+
+/** Los nombres propios de AWS (balanceadores, CloudFront, aceleradores) que no están en ninguna zona tuya. */
+dnsResolvers.push((sys: System, name: string, type: string) => {
+  const a = awsAccountOf(sys);
+  if (!a || type !== 'A') return null;
+  const n = name.toLowerCase().replace(/\.$/, '');
+  const lb = lbByDns(a, n);
+  if (lb) return lbState(a, lb.lb) === 'active' ? { nxdomain: false, records: ['a', 'b'].map((salt) => ({ name: n + '.', type: 'A', ttl: 60, data: fakeIp(n, salt) })) } : { nxdomain: true, records: [] };
+  if (cfByDomain(a, n)?.DomainName === n) return { nxdomain: false, records: [0, 1, 2, 3].map((k) => ({ name: n + '.', type: 'A', ttl: 60, data: fakeIp(n, 'cf' + k) })) };
+  const acc = Object.values(gas(a)).find((x) => x.DnsName === n);
+  if (acc) return { nxdomain: false, records: acc.IpSets[0].IpAddresses.map((ip) => ({ name: n + '.', type: 'A', ttl: 300, data: ip })) };
+  return null;
 });
 
 hostResolvers.push((sys: System, name: string) => {
@@ -166,6 +174,11 @@ hostResolvers.push((sys: System, name: string) => {
   const hit = own ? r53Address(own, name) : null;
   if (hit?.ip) return { ip: hit.ip };
   if (hit?.s3Website) return { ip: fakeIp(hit.s3Website) };
+  if (hit?.lb || hit?.edge) return { ip: fakeIp(hit.lb ?? hit.edge ?? name) };
+  const n = name.toLowerCase();
+  const lbHit = own ? lbByDns(own, n) : null;
+  if (lbHit) return lbState(own!, lbHit.lb) === 'active' ? { ip: fakeIp(n, 'a') } : null;
+  if (own && (cfByDomain(own, n)?.DomainName === n || Object.values(gas(own)).some((x) => x.DnsName === n))) return { ip: fakeIp(n) };
   const e = EC2_DNS.exec(name);
   if (e) return { ip: `${e[1]}.${e[2]}.${e[3]}.${e[4]}` };
   if (S3_WEBSITE.test(name) || S3_VIRTUAL.test(name) || S3_PATH.test(name)) return { ip: fakeIp(name) };
@@ -173,10 +186,62 @@ hostResolvers.push((sys: System, name: string) => {
   return null;
 });
 
-httpHandlers.push((req) => {
-  const a = awsAccountOf(req.sys);
-  if (!a) return null;
-  a.clock = Math.max(a.clock, req.sys.clock.now);
+const timeoutFor = (host: string, port: number): Fetched => ({ ok: false, curlCode: 28, error: `Failed to connect to ${host} port ${port} after 130312 ms: Couldn't connect to server` });
+
+/** Una petición a un balanceador de carga (desde internet o desde CloudFront). */
+function lbRequest(a: Account, hit: { lb: LoadBalancer; region: string }, req: { host: string; port: number; scheme: string; method: string; path: string; query: string }, hostHeader: string, srcIp = a.sourceIp): Fetched {
+  if (lbState(a, hit.lb) !== 'active') return { ok: false, curlCode: 6, error: `Could not resolve host: ${req.host}` };
+  if (!lbFromInternet(a, hit.region, hit.lb, req.port, srcIp).ok) return timeoutFor(req.host, req.port);
+  return lbHandle(a, hit.region, hit.lb, { port: req.port, scheme: req.scheme, method: req.method, host: hostHeader, path: req.path, query: req.query, srcIp });
+}
+
+/** CloudFront: la caché de borde delante de un bucket o de un balanceador. */
+function cloudfrontRequest(a: Account, d: NonNullable<ReturnType<typeof cfByDomain>>, req: { host: string; scheme: string; method: string; path: string; query: string; port: number }): Fetched {
+  const geo = clientGeo(a.sourceIp);
+  return cfServe(a, d, { scheme: req.scheme, method: req.method, path: req.path + (req.query ? '?' + req.query : ''), host: req.host }, {
+    country: geo.country,
+    publicRead: (b, key) => anonymousCanRead(b, key, anonCtx(a)),
+    viaLb: (host, path) => {
+      const w = S3_WEBSITE.exec(host);
+      if (w) return websiteRequest(a, w[1], path);
+      const hit = lbByDns(a, host);
+      if (hit) return lbRequest(a, hit, { host, port: 80, scheme: 'http', method: 'GET', path, query: '' }, host, '130.176.0.10');
+      return ec2Request(a, host, 80, 'http', path);
+    },
+  });
+}
+
+/** Cuánto aguanta (peticiones por segundo) un balanceador con lo que tiene sano ahora mismo. */
+function lbCapacity(a: Account, region: string, lbArn: string): number {
+  const s = elb(a, region);
+  const lb = s.lbs[lbArn];
+  if (!lb) return 0;
+  const r = a.regions[region].ec2;
+  const tgs = new Set<string>();
+  for (const l of Object.values(lb.listeners)) for (const rule of l.rules) for (const act of rule.Actions) for (const g of act.ForwardConfig?.TargetGroups.map((x) => x.TargetGroupArn) ?? (act.TargetGroupArn ? [act.TargetGroupArn] : [])) tgs.add(g);
+  let cap = 0;
+  for (const arn of tgs) for (const t of healthyTargets(a, region, s.tgs[arn])) cap += (instanceType(r.instances[t.Id]?.InstanceType ?? 't3.micro')?.vcpu ?? 2) * 60;
+  return cap;
+}
+
+export interface WebReq {
+  host: string;
+  port: number;
+  scheme: string;
+  path: string;
+  query: string;
+  method: string;
+}
+
+/** Lo que responde «internet» (la cuenta de AWS) a una petición web, o null si el nombre no es de ella. */
+export function awsHttp(a: Account, req: WebReq): Fetched | null {
+  tick(a);
+  const lbDirect = lbByDns(a, req.host);
+  if (lbDirect) return lbRequest(a, lbDirect, req, req.host);
+  const dist = cfByDomain(a, req.host);
+  if (dist && dist.DomainName === req.host.toLowerCase()) return cloudfrontRequest(a, dist, req);
+  const acc = Object.values(gas(a)).find((x) => x.DnsName === req.host.toLowerCase() || x.IpSets.some((s) => s.IpAddresses.includes(req.host)));
+  if (acc) return gaServe(a, acc, { port: req.port, path: req.path, host: req.host, srcIp: a.sourceIp, geo: clientGeo(a.sourceIp) });
   const w = S3_WEBSITE.exec(req.host);
   if (w) {
     if (req.scheme === 'https') return { ok: false, curlCode: 35, error: `OpenSSL SSL_connect: SSL_ERROR_SYSCALL in connection to ${req.host}:443` };
@@ -192,10 +257,59 @@ httpHandlers.push((req) => {
   if (v) return s3Request(a, v[1], decodeURIComponent(req.path.replace(/^\//, '')), req.query, req.method);
   // un nombre de una zona de Route 53: apunta a un sitio web de S3 (el bucket se llama igual que el dominio) o a una IP
   const dns = r53Address(a, req.host);
+  if (dns?.lb) {
+    const hit = lbByDns(a, dns.lb);
+    if (hit) return lbRequest(a, hit, req, req.host);
+  }
+  if (dns?.edge) {
+    const d = cfByDomain(a, dns.edge);
+    if (d) return cloudfrontRequest(a, d, req);
+    const ga = Object.values(gas(a)).find((x) => x.DnsName === dns.edge);
+    if (ga) return gaServe(a, ga, { port: req.port, path: req.path, host: req.host, srcIp: a.sourceIp, geo: clientGeo(a.sourceIp) });
+  }
   if (dns?.s3Website) {
     if (req.scheme === 'https') return { ok: false, curlCode: 35, error: `OpenSSL SSL_connect: SSL_ERROR_SYSCALL in connection to ${req.host}:443` };
     return websiteRequest(a, req.host, req.path);
   }
   if (dns?.ip) return ec2Request(a, dns.ip, req.port, req.scheme, req.path);
   return ec2Request(a, req.host, req.port, req.scheme, req.path);
+}
+
+httpHandlers.push((req) => {
+  const a = awsAccountOf(req.sys);
+  if (!a) return null;
+  a.clock = Math.max(a.clock, req.sys.clock.now);
+  return awsHttp(a, req);
+});
+
+/** Para el corrector: una petición `GET` a una URL desde fuera de AWS. */
+export function fetchFromInternet(a: Account, url: string): Fetched {
+  const m = /^(?:(https?):\/\/)?([^/:?#]+)(?::(\d+))?(\/[^?#]*)?(?:\?([^#]*))?/.exec(url);
+  if (!m) return { ok: false, curlCode: 3, error: 'URL using bad/illegal format' };
+  const scheme = m[1] ?? 'http';
+  return awsHttp(a, { host: m[2], port: m[3] ? Number(m[3]) : scheme === 'https' ? 443 : 80, scheme, path: m[4] ?? '/', query: m[5] ?? '', method: 'GET' }) ?? { ok: false, curlCode: 6, error: `Could not resolve host: ${m[2]}` };
+}
+
+/** `ab`: la carga se aplica al balanceador al que llegue el nombre. Las instancias que atienden son las que están sanas. */
+loadHandlers.push((req) => {
+  const a = awsAccountOf(req.sys);
+  if (!a) return null;
+  a.clock = Math.max(a.clock, req.sys.clock.now);
+  tick(a);
+  let hit = lbByDns(a, req.host);
+  if (!hit) {
+    const dns = r53Address(a, req.host);
+    if (dns?.lb) hit = lbByDns(a, dns.lb);
+  }
+  if (!hit) return null;
+  const first = lbRequest(a, hit, { host: req.host, port: req.port, scheme: req.scheme, method: 'GET', path: req.path, query: '' }, req.host);
+  if (!first.ok) return { ok: false, error: first.curlCode === 28 ? 'apr_pollset_poll: The timeout specified has expired (70007)' : 'apr_socket_connect(): Connection refused (111)', completed: 0, failed: 0, non2xx: 0, duration: 0, rps: 0 };
+  const cap = lbCapacity(a, hit.region, hit.lb.LoadBalancerArn);
+  const potential = req.concurrency / 0.02;
+  const good = (first.status ?? 500) < 400 && cap > 0;
+  const rps = good ? Math.min(potential, cap) : potential;
+  const completed = Math.max(1, Math.min(req.requests, req.seconds > 0 ? Math.round(rps * req.seconds) : req.requests));
+  const duration = Math.max(0.05, completed / rps);
+  a.loads = [...(a.loads ?? []).filter((l) => l.until > a.clock - 7200000), { lbArn: hit.lb.LoadBalancerArn, region: hit.region, rps: potential, from: a.clock, until: a.clock + Math.round(duration * 1000) }];
+  return { ok: true, status: first.status, server: first.headers?.Server, bodyLength: first.body?.length ?? 0, completed, failed: 0, non2xx: good ? 0 : completed, duration, rps };
 });

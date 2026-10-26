@@ -5,6 +5,7 @@ import { Ec2Lifecycle, EbsVsStore, PurchaseModels } from './AwsCompute';
 import { PolicyEval, StsAssume } from './AwsIam';
 import { DbChooser, DdbPartition, MultiAz } from './AwsData';
 import { OrgTree, PriceCalc, SupportPlans } from './AwsCosts';
+import { AsgScale, CloudfrontFlow, ElbFlow, R53Policies, Spof } from './AwsHa';
 import { CidrCalc, DnsFlow, PacketTrace, SgVsNacl, VpcLayout } from './AwsNetwork';
 import { S3Classes, S3Security } from './AwsStorage';
 import { AptFlow, BootSequence, DnsLookup, NetRoute, SshHandshake, SudoFlow } from './Flows';
@@ -105,6 +106,11 @@ const MAP: Partial<Record<IllustrationId, React.ComponentType>> = {
   'aws-price-calc': PriceCalc,
   'aws-support-plans': SupportPlans,
   'aws-org-tree': OrgTree,
+  'aws-elb-flow': ElbFlow,
+  'aws-asg-scale': AsgScale,
+  'aws-spof': Spof,
+  'aws-r53-policies': R53Policies,
+  'aws-cloudfront-flow': CloudfrontFlow,
 };
 
 export function Illustration({ id }: { id: IllustrationId }) {

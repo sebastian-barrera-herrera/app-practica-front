@@ -151,7 +151,7 @@ export interface OpDef {
 }
 
 export const OPS = new Map<string, OpDef>();
-export const SERVICE_PREFIX: Record<string, string> = { s3api: 's3', s3: 's3', cloudwatch: 'cloudwatch', budgets: 'budgets' };
+export const SERVICE_PREFIX: Record<string, string> = { s3api: 's3', s3: 's3', cloudwatch: 'cloudwatch', budgets: 'budgets', elbv2: 'elasticloadbalancing', elb: 'elasticloadbalancing' };
 export const SERVICE_SUMMARY: Record<string, string> = {
   sts: 'AWS Security Token Service',
   iam: 'AWS Identity and Access Management',
@@ -169,6 +169,10 @@ export const SERVICE_SUMMARY: Record<string, string> = {
   cloudwatch: 'Amazon CloudWatch',
   sns: 'Amazon Simple Notification Service',
   ssm: 'AWS Systems Manager (parámetros públicos)',
+  elbv2: 'Elastic Load Balancing (ALB, NLB y GWLB)',
+  autoscaling: 'Amazon EC2 Auto Scaling',
+  cloudfront: 'Amazon CloudFront (CDN)',
+  globalaccelerator: 'AWS Global Accelerator',
   configure: 'Configura la CLI (credenciales, región, formato)',
 };
 
@@ -187,7 +191,7 @@ export type OpOptions = Partial<Pick<OpDef, 'authz' | 'global' | 'paginate' | 'd
 
 /** Define una operación. `params` usa el mini-lenguaje `nombre:tipo[!]` separado por espacios. */
 /** Servicios que no exigen una región configurada. */
-const GLOBAL_SERVICES = new Set(['iam', 'sts', 's3', 's3api', 'budgets', 'configure', 'route53', 'ce', 'organizations', 'support']);
+const GLOBAL_SERVICES = new Set(['iam', 'sts', 's3', 's3api', 'budgets', 'configure', 'route53', 'ce', 'organizations', 'support', 'cloudfront', 'globalaccelerator']);
 
 export function op(service: string, name: string, params: string, summary: string, options: OpOptions, handler: OpDef['handler']): void {
   const def: OpDef = { service, name, api: options.api ?? pascal(name), params: parseParams(params), summary, handler, global: GLOBAL_SERVICES.has(service), ...options };

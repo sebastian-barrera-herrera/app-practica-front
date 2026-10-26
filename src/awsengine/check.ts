@@ -5,6 +5,7 @@ import { awsAccountOf } from './state';
 import { runAwsSync } from './cli';
 import { settleEc2 } from './services/ec2';
 import { settleRds } from './services/rds';
+import { tick } from './tick';
 import type { AwsIO } from './registry';
 import { clone, shellSplit } from './util';
 
@@ -43,6 +44,13 @@ export function awsCheck(check: AwsCheckSpec, term: Terminal): CheckResult {
   const acct = clone(live);
   settleEc2(acct);
   settleRds(acct);
+  // balanceadores, grupos de Auto Scaling y comprobaciones de salud tardan minutos en asentarse
+  if (Object.values(acct.regions).some((r) => Object.keys(r.elb?.lbs ?? {}).length || Object.keys(r.asg?.groups ?? {}).length) || Object.keys(acct.route53?.healthChecks ?? {}).length || Object.keys(acct.cloudfront?.distributions ?? {}).length) {
+    for (let k = 0; k < 8; k++) {
+      acct.clock += 60000;
+      tick(acct);
+    }
+  }
   const io: AwsIO = {
     acct,
     env: {},
