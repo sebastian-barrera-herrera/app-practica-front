@@ -57,7 +57,7 @@ from botocore.exceptions import ClientError, NoCredentialsError, ParamValidation
 
 __version__ = '1.35.0'
 
-_CLI = {'s3': 's3api', 'cognito-idp': 'cognito-idp', 'stepfunctions': 'stepfunctions', 'states': 'stepfunctions'}
+_CLI = {'s3': 's3api', 'cognito-idp': 'cognito-idp', 'stepfunctions': 'stepfunctions', 'states': 'stepfunctions', 'codedeploy': 'deploy'}
 
 
 class StreamingBody:

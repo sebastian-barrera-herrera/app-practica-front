@@ -193,7 +193,13 @@ function execAws(argv: string[], io: AwsIO): AwsResult | Promise<AwsResult> {
       }
       const { ['$cli-input-json']: _drop, ...mine } = params;
       void _drop;
-      params = { ...j, ...mine };
+      // las claves del JSON siguen los nombres de la API (`pipeline`, `stackName`…): se asocian a los parámetros de la operación
+      const mapped: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(j)) {
+        const up = k[0].toUpperCase() + k.slice(1);
+        mapped[o.params.some((x) => x.key === k) ? k : o.params.some((x) => x.key === up) ? up : k] = v;
+      }
+      params = { ...mapped, ...mine };
     }
     for (const p of o.params) if (p.required && params[p.key] === undefined) {
       const missing = o.params.filter((x) => x.required && params[x.key] === undefined).map((x) => `--${x.name}`);

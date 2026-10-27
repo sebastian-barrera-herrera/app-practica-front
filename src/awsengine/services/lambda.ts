@@ -69,6 +69,18 @@ function versionFor(fn: LambdaFn, qualifier?: string): LambdaVersion {
   return target === '$LATEST' ? fn : (fn.versions.find((v) => v.Version === target) ?? fn);
 }
 
+/** Versión que atiende una invocación: con un alias de tráfico ponderado (`RoutingConfig`), una parte de las peticiones va a la versión adicional. */
+function pickVersion(fn: LambdaFn, qualifier?: string): LambdaVersion {
+  const al = qualifier ? fn.aliases[qualifier] : undefined;
+  const w = al?.RoutingConfig?.AdditionalVersionWeights;
+  const [ver, weight] = Object.entries(w ?? {})[0] ?? [];
+  if (al && ver) {
+    al.hits = (al.hits ?? 0) + 1;
+    if ((al.hits * 37) % 100 < Math.round(weight * 100)) return versionFor(fn, ver);
+  }
+  return versionFor(fn, qualifier);
+}
+
 const snapshot = (fn: LambdaFn, version: string): LambdaVersion => ({
   Version: version,
   CodeSha256: fn.CodeSha256,
@@ -224,7 +236,7 @@ export function runFunction(a: Account, region: string, fn: LambdaFn, qualifier:
 }
 
 function runFunctionOnce(a: Account, region: string, fn: LambdaFn, qualifier: string | undefined, event: string, o: { caller?: boolean } = {}): InvokeOutcome {
-  const v = versionFor(fn, qualifier);
+  const v = pickVersion(fn, qualifier);
   const requestId = uuid(a, 'lreq');
   const arnQ = fnArn(a, region, fn.FunctionName) + (qualifier && qualifier !== '$LATEST' ? ':' + qualifier : '');
   const version = v.Version;
@@ -898,14 +910,27 @@ const aliasView = (a: Account, region: string, fn: LambdaFn, al: LambdaFn['alias
   Name: al.Name,
   FunctionVersion: al.FunctionVersion,
   Description: al.Description,
+  ...(al.RoutingConfig ? { RoutingConfig: al.RoutingConfig } : {}),
   RevisionId: uuid(a, 'lal' + al.Name + al.FunctionVersion),
 });
+
+const routingOf = (c: { p: Record<string, any> }, fn: LambdaFn): LambdaFn['aliases'][string]['RoutingConfig'] => {
+  const r = c.p.RoutingConfig as { AdditionalVersionWeights?: Record<string, unknown> } | undefined;
+  if (!r) return undefined;
+  const w = Object.entries(r.AdditionalVersionWeights ?? {});
+  if (w.length > 1) throw new AwsError('InvalidParameterValueException', 'Only one additional version can be specified in the routing configuration.', 400);
+  for (const [v, x] of w) {
+    if (!fn.versions.some((q) => q.Version === v)) throw new AwsError('ResourceNotFoundException', `Function not found: ${fn.FunctionArn}:${v}`, 404);
+    if (typeof x !== 'number' || x < 0 || x > 1) throw new AwsError('ValidationException', `1 validation error detected: Value '${x}' at 'routingConfig.additionalVersionWeights' failed to satisfy constraint: Member must have value between 0 and 1`, 400);
+  }
+  return { AdditionalVersionWeights: Object.fromEntries(w.map(([k, x]) => [k, Number(x)])) };
+};
 
 op(
   'lambda',
   'create-alias',
-  'function-name:s! name:s! function-version:s! description:s',
-  'Crea un alias: un nombre estable (`prod`) que apunta a una versión.',
+  'function-name:s! name:s! function-version:s! description:s routing-config:j',
+  'Crea un alias: un nombre estable (`prod`) que apunta a una versión. Con `--routing-config` una parte del tráfico va a otra versión (despliegue canario).',
   { res: (c) => fnArn(c.acct, c.region, String(c.p.FunctionName)) },
   (c) => {
     const { fn, region } = findFn(c, c.p.FunctionName);
@@ -916,6 +941,7 @@ op(
       Name: c.p.Name,
       FunctionVersion: c.p.FunctionVersion,
       Description: c.p.Description ?? '',
+      ...(c.p.RoutingConfig ? { RoutingConfig: routingOf(c, fn) } : {}),
     };
     return aliasView(c.acct, region, fn, fn.aliases[c.p.Name]);
   },
@@ -924,8 +950,8 @@ op(
 op(
   'lambda',
   'update-alias',
-  'function-name:s! name:s! function-version:s description:s',
-  'Apunta un alias a otra versión (así se «despliega» sin cambiar el nombre que usan los demás).',
+  'function-name:s! name:s! function-version:s description:s routing-config:j',
+  'Apunta un alias a otra versión (así se «despliega» sin cambiar el nombre que usan los demás). `--routing-config` reparte una parte del tráfico a una segunda versión (canario).',
   { res: (c) => fnArn(c.acct, c.region, String(c.p.FunctionName)) },
   (c) => {
     const { fn, region } = findFn(c, c.p.FunctionName);
@@ -937,6 +963,7 @@ op(
       al.FunctionVersion = c.p.FunctionVersion;
     }
     if (c.p.Description !== undefined) al.Description = c.p.Description;
+    if (c.p.RoutingConfig !== undefined) al.RoutingConfig = routingOf(c, fn);
     return aliasView(c.acct, region, fn, al);
   },
 );

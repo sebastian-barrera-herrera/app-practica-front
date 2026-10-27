@@ -46,6 +46,15 @@ export function sdkCall(a: Account, region: string, caller: Caller | null, servi
   if (!o) return { ok: false, error: { Code: 'UnknownOperationException', Message: `The operation ${opName} is not available for service ${service} in this simulator.`, Status: 400 } };
   const files = new Map<string, string>();
   const p: Record<string, unknown> = { ...params };
+  // boto3 usa `camelCase` en algunos servicios (CodeBuild, CodeDeploy…): se acepta también aquí
+  for (const k of Object.keys(p)) {
+    if (o.params.some((x) => x.key === k)) continue;
+    const up = k[0].toUpperCase() + k.slice(1);
+    if (o.params.some((x) => x.key === up)) {
+      p[up] = p[k];
+      delete p[k];
+    }
+  }
   const missing = o.params.filter((x) => x.required && !x.name.startsWith('outfile') && p[x.key] === undefined);
   if (missing.length) return { ok: false, error: { Code: 'ParamValidationError', Message: missing.map((x) => `Missing required parameter in input: "${x.key}"`).join('\n'), Status: 400 } };
   // `put-object` recibe el contenido en `Body` (en la CLI es un archivo) y `get-object` lo devuelve en `Body` (en la CLI, un archivo de salida)

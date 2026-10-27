@@ -154,8 +154,9 @@ describe('biblioteca de AWS', () => {
       const term = r.examples?.length ? mkTerm({ aws: r.scenario ?? 'base', packages: ['zip', 'unzip'] }) : null;
       for (const [cmd, , kind] of r.examples ?? []) {
         const res = await term!.exec(cmd);
-        if (kind === 'error') expect(res.status).not.toBe(0);
-        else if (res.status !== 0) throw new Error(`${r.name}: «${cmd}» falló: ${res.err}`);
+        if (kind === 'error') {
+          if (res.status === 0) throw new Error(`${r.name}: «${cmd}» debería fallar`);
+        } else if (res.status !== 0) throw new Error(`${r.name}: «${cmd}» falló: ${res.err}`);
       }
     }
   });

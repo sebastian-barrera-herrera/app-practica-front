@@ -58,6 +58,9 @@ export function awsCheck(check: AwsCheckSpec, term: Terminal): CheckResult {
       Object.keys(r.elasticache?.groups ?? {}).length ||
       Object.keys(r.elasticache?.clusters ?? {}).length ||
       Object.keys(r.dms?.instances ?? {}).length ||
+      Object.keys(r.cfn?.stacks ?? {}).length ||
+      Object.keys(r.cicd?.pipelines ?? {}).length ||
+      Object.keys(r.cicd?.builds ?? {}).length ||
       Object.keys(r.rds?.proxies ?? {}).length ||
       Object.values(r.ddb ?? {}).some((t) => t.ttl?.Enabled) ||
       Object.values(r.events?.buses ?? {}).some((b) => Object.values(b.rules).some((x) => x.ScheduleExpression)) ||

@@ -613,7 +613,7 @@ export interface LambdaFn extends LambdaVersion {
   FunctionArn: string;
   /** Versiones publicadas. */
   versions: LambdaVersion[];
-  aliases: Record<string, { Name: string; FunctionVersion: string; Description: string }>;
+  aliases: Record<string, { Name: string; FunctionVersion: string; Description: string; RoutingConfig?: { AdditionalVersionWeights: Record<string, number> }; hits?: number }>;
   policy: LambdaPolicyStatement[];
   reserved?: number;
   /** Concurrencia aprovisionada por versión o alias. */
@@ -1039,6 +1039,8 @@ export interface RegionalState {
   elasticache?: CacheState;
   dms?: DmsState;
   datasync?: DataSyncState;
+  cfn?: CfnState;
+  cicd?: CicdState;
   rds?: RdsState;
   elb?: ElbState;
   asg?: AsgState;
@@ -1724,4 +1726,234 @@ export interface CognitoPool {
 
 export interface CognitoState {
   pools: Record<string, CognitoPool>;
+}
+
+// ───────────────────────── CloudFormation (Z12) ─────────────────────────
+
+export interface CfnResource {
+  logicalId: string;
+  type: string;
+  physicalId: string;
+  /** Propiedades ya resueltas (sin funciones intrínsecas) con las que se creó o actualizó. */
+  props: Rec;
+  attrs: Record<string, string>;
+  deletionPolicy?: string;
+  /** El nombre físico lo generó CloudFormation (si no, lo puso el usuario). */
+  autoNamed: boolean;
+  /** `DELETE_FAILED` u otro estado que no viene de los eventos. */
+  stuck?: string;
+}
+
+export interface CfnEvent {
+  id: string;
+  at: number;
+  logicalId: string;
+  physicalId?: string;
+  type: string;
+  status: string;
+  reason?: string;
+}
+
+export interface CfnOutput {
+  Key: string;
+  Value: string;
+  Description?: string;
+  ExportName?: string;
+}
+
+export interface CfnStack {
+  id: string;
+  name: string;
+  /** Plantilla ya procesada (con las transformaciones aplicadas) y el texto original. */
+  template: Rec;
+  originalText: string;
+  originalIsJson: boolean;
+  params: Record<string, string>;
+  caps: string[];
+  tags: { Key: string; Value: string }[];
+  resources: Record<string, CfnResource>;
+  outputs: CfnOutput[];
+  events: CfnEvent[];
+  created: number;
+  updated?: number;
+  deleted?: number;
+  termProtection: boolean;
+  disableRollback: boolean;
+  onFailure?: string;
+  roleArn?: string;
+  description?: string;
+  /** Si es una instancia de un conjunto de pilas. */
+  stackSet?: string;
+  drift?: { status: string; at: number; detectionId: string; items: CfnDriftItem[] };
+  /** Estado «bloqueado» (REVIEW_IN_PROGRESS de los conjuntos de cambios de tipo CREATE). */
+  review?: boolean;
+  changeSets: string[];
+}
+
+export interface CfnDriftItem {
+  logicalId: string;
+  physicalId: string;
+  type: string;
+  status: 'IN_SYNC' | 'MODIFIED' | 'DELETED';
+  expected: Rec;
+  actual: Rec;
+  differences: { PropertyPath: string; ExpectedValue: string; ActualValue: string; DifferenceType: 'NOT_EQUAL' | 'ADD' | 'REMOVE' }[];
+}
+
+export interface CfnChange {
+  Action: 'Add' | 'Modify' | 'Remove';
+  LogicalResourceId: string;
+  PhysicalResourceId?: string;
+  ResourceType: string;
+  Replacement?: 'True' | 'False' | 'Conditional';
+  Scope: string[];
+  Details: { Target: { Attribute: string; Name?: string; RequiresRecreation: string }; Evaluation: string; ChangeSource: string }[];
+}
+
+export interface CfnChangeSet {
+  id: string;
+  name: string;
+  stackId: string;
+  stackName: string;
+  type: 'CREATE' | 'UPDATE';
+  templateText: string;
+  templateIsJson: boolean;
+  params: Record<string, string>;
+  caps: string[];
+  changes: CfnChange[];
+  created: number;
+  status: 'CREATE_COMPLETE' | 'FAILED' | 'DELETE_COMPLETE';
+  statusReason?: string;
+  execution: 'AVAILABLE' | 'UNAVAILABLE' | 'EXECUTE_COMPLETE' | 'EXECUTE_FAILED' | 'OBSOLETE';
+  description?: string;
+}
+
+export interface CfnStackSet {
+  id: string;
+  name: string;
+  templateText: string;
+  templateIsJson: boolean;
+  params: Record<string, string>;
+  caps: string[];
+  adminRole?: string;
+  execRole: string;
+  status: 'ACTIVE' | 'DELETED';
+  /** `region` → id de la pila creada. */
+  instances: Record<string, { account: string; region: string; stackId: string }>;
+  operations: { id: string; action: string; at: number; status: string }[];
+  description?: string;
+}
+
+export interface CfnState {
+  stacks: Record<string, CfnStack>;
+  changeSets: Record<string, CfnChangeSet>;
+  stackSets: Record<string, CfnStackSet>;
+}
+
+// ───────────────────────── CI/CD (Z12) ─────────────────────────
+
+export interface CbProject {
+  name: string;
+  arn: string;
+  serviceRole: string;
+  source: { type: string; location?: string; buildspec?: string };
+  environment: { image: string; computeType: string; type?: string; environmentVariables?: { name: string; value: string }[] };
+  artifacts: { type: string; location?: string; packaging?: string; name?: string };
+  created: number;
+  timeoutInMinutes: number;
+  description?: string;
+  artifactPath?: string;
+}
+
+export interface CbBuild {
+  id: string;
+  arn: string;
+  project: string;
+  startedAt: number;
+  endsAt: number;
+  status: 'IN_PROGRESS' | 'SUCCEEDED' | 'FAILED' | 'STOPPED';
+  phases: { phaseType: string; status: string; secs: number; start: number; end: number }[];
+  logs: string[];
+  sourceVersion?: string;
+  artifacts: Record<string, string>;
+  failedPhase?: string;
+  reason?: string;
+  initiator?: string;
+}
+
+export interface CpAction {
+  name: string;
+  category: 'Source' | 'Build' | 'Test' | 'Deploy' | 'Approval' | 'Invoke';
+  provider: string;
+  config: Record<string, string>;
+  inputs: string[];
+  outputs: string[];
+  runOrder: number;
+}
+
+export interface CpStage {
+  name: string;
+  actions: CpAction[];
+}
+
+export interface CpExecution {
+  id: string;
+  pipeline: string;
+  startedAt: number;
+  status: 'InProgress' | 'Succeeded' | 'Failed' | 'Stopped';
+  trigger: string;
+  /** Resultado de cada acción, en el orden de ejecución. */
+  actions: { stage: string; action: string; status: 'InProgress' | 'Succeeded' | 'Failed' | 'Abandoned'; startedAt: number; endsAt: number; summary?: string; token?: string; externalId?: string; code?: string; depId?: string }[];
+  artifacts: Record<string, Record<string, string>>;
+  sourceRevision?: string;
+  /** Pausa en una aprobación manual: dónde continuar. */
+  resume?: { stage: number; action: number };
+  stopped?: boolean;
+  /** Cuenta atrás del retraso de la última acción (para el estado). */
+  lastEnd?: number;
+}
+
+export interface CpPipeline {
+  name: string;
+  arn: string;
+  roleArn: string;
+  artifactBucket: string;
+  stages: CpStage[];
+  version: number;
+  created: number;
+  updated: number;
+  executions: CpExecution[];
+  /** Pasos aprobados en las acciones manuales: token → resultado. */
+  approvals: Record<string, { status: 'Approved' | 'Rejected'; summary: string }>;
+  /** Última versión vista de cada origen de S3 (para disparar ejecuciones al cambiar). */
+  lastSource: Record<string, string>;
+}
+
+export interface CdDeployment {
+  id: string;
+  application: string;
+  group: string;
+  startedAt: number;
+  status: 'Created' | 'InProgress' | 'Succeeded' | 'Failed' | 'Stopped';
+  config: string;
+  /** Despliegue de Lambda: alias y versiones (o de EC2: instancias). */
+  alias?: string;
+  from?: string;
+  to?: string;
+  steps: { at: number; weight: number }[];
+  hooks: { name: string; fn: string; ok?: boolean }[];
+  error?: string;
+  revision: string;
+}
+
+export interface CdState {
+  apps: Record<string, { name: string; platform: string; groups: Record<string, { name: string; serviceRole: string; config: string; targetFn?: string; alias?: string; alarms?: string[]; autoRollback: boolean }> }>;
+  deployments: Record<string, CdDeployment>;
+}
+
+export interface CicdState {
+  projects: Record<string, CbProject>;
+  builds: Record<string, CbBuild>;
+  pipelines: Record<string, CpPipeline>;
+  cd: CdState;
 }

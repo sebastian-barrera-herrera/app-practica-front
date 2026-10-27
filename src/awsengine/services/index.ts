@@ -37,3 +37,8 @@ import './secrets';
 import './rds2';
 import './cache';
 import './migrate';
+import './cfn';
+import './cfncli';
+import './codebuild';
+import './codedeploy';
+import './codepipeline';

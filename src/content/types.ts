@@ -107,7 +107,12 @@ export type IllustrationId =
   | 'aws-ddb-streams'
   | 'aws-rds-proxy'
   | 'aws-cache-patterns'
-  | 'aws-migration';
+  | 'aws-migration'
+  | 'aws-cfn-flow'
+  | 'aws-cfn-change'
+  | 'aws-sam-cdk'
+  | 'aws-pipeline-run'
+  | 'aws-deploy-shift';
 
 // ───────────────────────── preguntas ─────────────────────────
 

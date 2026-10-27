@@ -113,6 +113,13 @@ op('apigatewayv2', 'delete-route', 'api-id:s! route-id:s!', 'Borra una ruta.', {
   return undefined;
 });
 
+op('apigatewayv2', 'delete-integration', 'api-id:s! integration-id:s!', 'Borra una integración.', { res: () => '*' }, (c) => {
+  const x = findApi(c, c.p.ApiId);
+  if (!x.integrations[c.p.IntegrationId]) throw new AwsError('NotFoundException', `Invalid Integration identifier specified ${c.p.IntegrationId}`, 404);
+  delete x.integrations[c.p.IntegrationId];
+  return undefined;
+});
+
 op('apigatewayv2', 'create-stage', 'api-id:s! stage-name:s! auto-deploy:b default-route-settings:j', 'Crea una etapa (`prod`, `dev`…). Sin `--auto-deploy` hay que desplegar con `create-deployment`.', { res: () => '*' }, (c) => {
   const x = findApi(c, c.p.ApiId);
   if (x.stages[c.p.StageName]) throw new AwsError('ConflictException', `Stage already exists: ${c.p.StageName}`, 409);
