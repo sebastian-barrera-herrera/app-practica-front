@@ -5,6 +5,7 @@ import { AwsError, op, type OpCtx } from '../registry';
 import type { Account, ApiGw, ApiRoute, ApiStage, ApiGwState } from '../types';
 import { iso, mkArn, newId, toArr } from '../util';
 import { readJwt } from './cognito';
+import { apiMetrics } from './cwbuiltin';
 import { fnArn, lambdaAllows, resolveFn, runFunction } from './lambda';
 
 export const apigwOf = (a: Account, region: string): ApiGwState => {
@@ -190,7 +191,16 @@ function matchRoute(key: string, method: string, path: string): { score: number;
 }
 
 /** Atiende una petición a `https://<id>.execute-api.<región>.amazonaws.com/…`. Devuelve null si el nombre no es de una API. */
-export function apiRequest(a: Account, req: { host: string; path: string; query: string; method: string; body?: string; headers?: Record<string, string> }): Fetched | null {
+type ApiReq = { host: string; path: string; query: string; method: string; body?: string; headers?: Record<string, string> };
+
+export function apiRequest(a: Account, req: ApiReq): Fetched | null {
+  const t0 = a.clock;
+  const res = apiRequestInner(a, req);
+  if (res) apiMetrics(a, req.host, res.status ?? 0, a.clock - t0 + 3);
+  return res;
+}
+
+function apiRequestInner(a: Account, req: ApiReq): Fetched | null {
   const m = /^([a-z0-9]{10})\.execute-api\.([a-z0-9-]+)\.amazonaws\.com$/.exec(req.host);
   if (!m) return null;
   const x = apigwOf(a, m[2]).apis[m[1]];

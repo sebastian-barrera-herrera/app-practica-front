@@ -1,4 +1,5 @@
 import type { AasState, ArState, DockerState, EcrState, EcsState, EksState } from './types-containers';
+import type { ConfigState, CtState, CwState, LogQuery, MetricFilter, SsmAssociation, SsmAutomation, SsmBaseline, SsmDocument, SsmParam, SsmPatchState, SsmWindow, XrayState } from './types-ops';
 /** Modelo de la cuenta de AWS simulada (todo es JSON plano: se puede clonar con structuredClone). */
 
 export type Json = null | boolean | number | string | Json[] | { [k: string]: Json };
@@ -531,6 +532,20 @@ export interface Alarm {
   AlarmDescription?: string;
   TreatMissingData?: string;
   StateValue: 'OK' | 'ALARM' | 'INSUFFICIENT_DATA';
+  OKActions?: string[];
+  InsufficientDataActions?: string[];
+  ActionsEnabled?: boolean;
+  DatapointsToAlarm?: number;
+  Unit?: string;
+  ExtendedStatistic?: string;
+  /** Alarma de matemática de métricas: lista de consultas (`Id`, `Expression` o `MetricStat`, `ReturnData`). */
+  Metrics?: { Id: string; Expression?: string; MetricStat?: { Metric: { Namespace: string; MetricName: string; Dimensions?: { Name: string; Value: string }[] }; Period: number; Stat: string; Unit?: string }; Label?: string; ReturnData?: boolean; Period?: number }[];
+  StateReason?: string;
+  StateReasonData?: string;
+  StateUpdated?: number;
+  ConfigUpdated?: number;
+  /** Última vez que se evaluó con datos (para el historial de acciones). */
+  tags?: Record<string, string>;
 }
 
 export interface SnsSub {
@@ -1059,6 +1074,9 @@ export interface RegionalState {
   aas?: AasState;
   apprunner?: ArState;
   eks?: EksState;
+  cw?: CwState;
+  config?: ConfigState;
+  xray?: XrayState;
   /** Plantillas de lanzamiento de EC2. */
   launchTemplates?: Record<string, LaunchTemplate>;
 }
@@ -1224,10 +1242,13 @@ export interface LogGroup {
   retentionInDays?: number;
   streams: Record<string, LogStream>;
   tags: Record<string, string>;
+  metricFilters?: Record<string, MetricFilter>;
+  kmsKeyId?: string;
 }
 
 export interface LogsState {
   groups: Record<string, LogGroup>;
+  queries?: Record<string, LogQuery>;
 }
 
 // ───────────── Systems Manager ─────────────
@@ -1255,6 +1276,15 @@ export interface SsmSession {
 export interface SsmState {
   commands: Record<string, SsmCommand>;
   sessions: Record<string, SsmSession>;
+  params?: Record<string, SsmParam>;
+  baselines?: Record<string, SsmBaseline>;
+  /** Grupo de parches por defecto de la región (id de la línea base). */
+  defaultBaseline?: Record<string, string>;
+  patchStates?: Record<string, SsmPatchState>;
+  documents?: Record<string, SsmDocument>;
+  windows?: Record<string, SsmWindow>;
+  assocs?: Record<string, SsmAssociation>;
+  automations?: Record<string, SsmAutomation>;
 }
 
 // ───────────── Auto Scaling ─────────────
@@ -1518,6 +1548,8 @@ export interface Account {
   dx?: DxState;
   /** Docker del ordenador del alumno (imágenes locales y contenedores). */
   docker?: DockerState;
+  /** CloudTrail: historial de eventos de la cuenta y trails. */
+  ct?: CtState;
 }
 
 export interface DxState {

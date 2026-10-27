@@ -3,6 +3,7 @@ import { regional } from '../account';
 import { AwsError, op, type OpCtx } from '../registry';
 import type { Account, LogEvent, LogGroup, LogStream, LogsState } from '../types';
 import { mkArn } from '../util';
+import { checkPattern, matchFilter } from './logpattern';
 
 export const logsOf = (a: Account, region: string): LogsState => {
   const r = regional(a, region);
@@ -18,11 +19,16 @@ export function logsCreateGroup(a: Account, region: string, name: string, retent
   return s.groups[name];
 }
 
+/** Quien quiera enterarse de cada registro que entra (los filtros de métricas, por ejemplo). */
+export const ingestHooks: ((a: Account, region: string, g: LogGroup, stream: string, ev: LogEvent) => void)[] = [];
+
 /** Escribe un registro (crea el grupo y el flujo si hace falta). */
 export function logsPut(a: Account, region: string, group: string, stream: string, message: string, ts = a.clock): void {
   const g = logsCreateGroup(a, region, group);
   const st = (g.streams[stream] ??= { logStreamName: stream, creationTime: a.clock, events: [] });
-  st.events.push({ timestamp: ts, message, ingestionTime: a.clock });
+  const ev: LogEvent = { timestamp: ts, message, ingestionTime: a.clock };
+  st.events.push(ev);
+  for (const h of ingestHooks) h(a, region, g, stream, ev);
   if (g.retentionInDays) {
     const cut = a.clock - g.retentionInDays * 86400000;
     st.events = st.events.filter((e) => e.timestamp >= cut);
@@ -42,7 +48,7 @@ const findStream = (g: LogGroup, name: string): LogStream => {
 
 const bytes = (g: LogGroup) => Object.values(g.streams).reduce((n, s) => n + s.events.reduce((m, e) => m + e.message.length + 26, 0), 0);
 
-const groupView = (c: OpCtx, g: LogGroup) => ({ logGroupName: g.logGroupName, creationTime: g.creationTime, ...(g.retentionInDays ? { retentionInDays: g.retentionInDays } : {}), metricFilterCount: 0, arn: arn(c, g.logGroupName), storedBytes: bytes(g), logGroupClass: 'STANDARD', logGroupArn: mkArn('logs', c.region, c.acct.id, `log-group:${g.logGroupName}`) });
+const groupView = (c: OpCtx, g: LogGroup) => ({ logGroupName: g.logGroupName, creationTime: g.creationTime, ...(g.retentionInDays ? { retentionInDays: g.retentionInDays } : {}), metricFilterCount: Object.keys(g.metricFilters ?? {}).length, arn: arn(c, g.logGroupName), storedBytes: bytes(g), logGroupClass: 'STANDARD', logGroupArn: mkArn('logs', c.region, c.acct.id, `log-group:${g.logGroupName}`) });
 
 op('logs', 'create-log-group', 'log-group-name:s! tags:j', 'Crea un grupo de registros (un contenedor de flujos con la misma retención y permisos).', { res: (c) => arn(c, c.p.LogGroupName) }, (c) => {
   const n = String(c.p.LogGroupName);
@@ -108,7 +114,9 @@ op('logs', 'put-log-events', 'log-group-name:s! log-stream-name:s! log-events:f!
       rejected++;
       continue;
     }
-    s.events.push({ timestamp: ts, message: String(e.message), ingestionTime: c.acct.clock });
+    const ev: LogEvent = { timestamp: ts, message: String(e.message), ingestionTime: c.acct.clock };
+    s.events.push(ev);
+    for (const h of ingestHooks) h(c.acct, c.region, g, c.p.LogStreamName, ev);
   }
   s.events.sort((x, y) => x.timestamp - y.timestamp);
   return { nextSequenceToken: String(s.events.length).padStart(20, '0'), ...(rejected ? { rejectLogEventsInfo: { tooOldLogEventEndIndex: rejected } } : {}) };
@@ -124,20 +132,14 @@ op('logs', 'get-log-events', 'log-group-name:s! log-stream-name:s! start-time:i 
   return { events: evs.map(evView), nextForwardToken: 'f/' + String(s.events.length), nextBackwardToken: 'b/0' };
 });
 
-/** Patrón de filtro sencillo: `ERROR`, `"dos palabras"`, `?ERROR ?WARN`, `-DEBUG` y varios términos (todos deben aparecer). */
+/** ¿Cumple el mensaje el patrón de filtro? (términos, JSON `{ $.x = 1 }` o texto separado por espacios `[a, b]`). */
 export function matchPattern(pattern: string | undefined, message: string): boolean {
-  if (!pattern || !pattern.trim()) return true;
-  const toks = pattern.match(/"[^"]*"|\S+/g) ?? [];
-  const ors = toks.filter((t) => t.startsWith('?')).map((t) => t.slice(1).replace(/^"|"$/g, ''));
-  const ands = toks.filter((t) => !t.startsWith('?') && !t.startsWith('-')).map((t) => t.replace(/^"|"$/g, ''));
-  const nots = toks.filter((t) => t.startsWith('-')).map((t) => t.slice(1).replace(/^"|"$/g, ''));
-  if (ors.length && !ors.some((t) => message.includes(t))) return false;
-  if (!ands.every((t) => message.includes(t))) return false;
-  return !nots.some((t) => message.includes(t));
+  return matchFilter(pattern, message).ok;
 }
 
 op('logs', 'filter-log-events', 'log-group-name:s! log-stream-names:l filter-pattern:s start-time:i end-time:i limit:i', 'Busca registros en todos los flujos de un grupo con un patrón (`ERROR`, `?ERROR ?WARN`, `"texto exacto"`).', { paginate: 'events', res: (c) => arn(c, c.p.LogGroupName) }, (c) => {
   const g = findGroup(c.acct, c.region, c.p.LogGroupName);
+  checkPattern(c.p.FilterPattern);
   const out: { logStreamName: string; ev: LogEvent }[] = [];
   for (const s of Object.values(g.streams)) {
     if (c.p.LogStreamNames && !(c.p.LogStreamNames as string[]).includes(s.logStreamName)) continue;

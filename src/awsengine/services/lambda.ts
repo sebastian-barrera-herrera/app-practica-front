@@ -208,30 +208,53 @@ let DEPTH = 0;
 /** Lambda detecta los bucles recursivos y corta la cadena a las 16 invocaciones. */
 const MAX_DEPTH = 16;
 
+/** Una llamada de SDK que hizo la función durante una invocación (X-Ray la dibuja como sub-segmento). */
+export interface LambdaCall {
+  service: string;
+  op: string;
+  ok: boolean;
+  ms: number;
+  error?: string;
+}
+
+/** Quien quiera enterarse de cada invocación (métricas de CloudWatch, trazas de X-Ray…). */
+export const lambdaHooks: ((a: Account, region: string, fn: LambdaFn, qualifier: string | undefined, out: InvokeOutcome, calls: LambdaCall[]) => void)[] = [];
+let CALLS: LambdaCall[] = [];
+
 /** Ejecuta una versión de una función. No avanza el reloj de la cuenta (lo hace quien llama con `durationMs`). */
 export function runFunction(a: Account, region: string, fn: LambdaFn, qualifier: string | undefined, event: string, o: { caller?: boolean } = {}): InvokeOutcome {
-  if (DEPTH >= MAX_DEPTH) {
-    const v = versionFor(fn, qualifier);
-    return {
-      statusCode: 429,
-      functionError: 'Unhandled',
-      payload: JSON.stringify({
-        errorType: 'RecursiveInvocationException',
-        errorMessage: `Lambda detected an infinite loop: ${fn.FunctionName} was invoked ${MAX_DEPTH} times in a chain by the same event source and the chain was stopped.`,
-      }),
-      logs: [],
-      durationMs: 0,
-      billedMs: 0,
-      maxMemoryMb: 0,
-      requestId: uuid(a, 'lreq'),
-      version: v.Version,
-    };
-  }
-  DEPTH++;
+  const saved = CALLS;
+  CALLS = [];
   try {
-    return runFunctionOnce(a, region, fn, qualifier, event, o);
+    let out: InvokeOutcome;
+    if (DEPTH >= MAX_DEPTH) {
+      const v = versionFor(fn, qualifier);
+      out = {
+        statusCode: 429,
+        functionError: 'Unhandled',
+        payload: JSON.stringify({
+          errorType: 'RecursiveInvocationException',
+          errorMessage: `Lambda detected an infinite loop: ${fn.FunctionName} was invoked ${MAX_DEPTH} times in a chain by the same event source and the chain was stopped.`,
+        }),
+        logs: [],
+        durationMs: 0,
+        billedMs: 0,
+        maxMemoryMb: 0,
+        requestId: uuid(a, 'lreq'),
+        version: v.Version,
+      };
+    } else {
+      DEPTH++;
+      try {
+        out = runFunctionOnce(a, region, fn, qualifier, event, o);
+      } finally {
+        DEPTH--;
+      }
+    }
+    for (const h of lambdaHooks) h(a, region, fn, qualifier, out, CALLS);
+    return out;
   } finally {
-    DEPTH--;
+    CALLS = saved;
   }
 }
 
@@ -290,6 +313,7 @@ function runFunctionOnce(a: Account, region: string, fn: LambdaFn, qualifier: st
       if (!reach.ok) return JSON.stringify({ __error: { Code: 'EndpointConnectionError', Message: `Could not connect to the endpoint URL: "https://${service}.${reg || region}.amazonaws.com/" (${reach.why})`, Status: 0 }, __delay: 60000 });
     }
     const r = sdkCall(a, reg || region, fnCaller, service, opName, parsed);
+    CALLS.push({ service, op: opName, ok: r.ok, ms: 4 + (md5(service + opName).charCodeAt(0) % 30), ...(r.ok ? {} : { error: r.error?.Code }) });
     return JSON.stringify(r.ok ? r.data : { __error: r.error });
   };
   let initMs: number | undefined;
