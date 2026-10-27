@@ -8,6 +8,7 @@ import { OrgTree, PriceCalc, SupportPlans } from './AwsCosts';
 import { EndpointPaths, FlowReach, HybridChooser, PeeringTgw, SsmAccess } from './AwsConnect';
 import { CachePatterns, DdbHotKey, DdbStreams, MigrationPaths, RdsProxyPool } from './AwsDeepData';
 import { CfnChange, CfnFlow, DeployShift, PipelineRun, SamCdk } from './AwsIac';
+import { ContainerLayers, ContainerScaling, EcsDeploy, EksArch, FargateCost } from './AwsContainers';
 import { ApiFlow, CognitoFlow, EventRouting, LambdaLifecycle, SqsVisibility } from './AwsServerless';
 import { AsgScale, CloudfrontFlow, ElbFlow, R53Policies, Spof } from './AwsHa';
 import { CidrCalc, DnsFlow, PacketTrace, SgVsNacl, VpcLayout } from './AwsNetwork';
@@ -130,6 +131,11 @@ const MAP: Partial<Record<IllustrationId, React.ComponentType>> = {
   'aws-rds-proxy': RdsProxyPool,
   'aws-cache-patterns': CachePatterns,
   'aws-migration': MigrationPaths,
+  'aws-container-layers': ContainerLayers,
+  'aws-ecs-deploy': EcsDeploy,
+  'aws-fargate-cost': FargateCost,
+  'aws-eks-arch': EksArch,
+  'aws-container-scaling': ContainerScaling,
   'aws-cfn-flow': CfnFlow,
   'aws-cfn-change': CfnChange,
   'aws-sam-cdk': SamCdk,

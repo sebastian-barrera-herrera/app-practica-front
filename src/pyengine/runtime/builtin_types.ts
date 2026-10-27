@@ -22,11 +22,13 @@ objectType.computeMro();
 typeType.computeMro();
 
 const all: PyType[] = [objectType, typeType];
+/** Solo los tipos que existen al cargar el módulo se guardan en `all`: los que crean las sesiones (módulos nativos) no, o cada sesión quedaría retenida para siempre. */
+let booting = true;
 function T(name: string, bases: PyType[] = [objectType], flags = F_BASETYPE): PyType {
   const t = mk(name, bases, flags);
   t.cls = typeType;
   t.computeMro();
-  all.push(t);
+  if (booting) all.push(t);
   return t;
 }
 
@@ -132,6 +134,7 @@ export const Ellipsis = new PyEllipsis(ellipsisType);
 
 // los diccionarios de los primeros tipos se crearon antes de que existiera `dict`
 for (const t of all) t.dict!.cls = dictType;
+booting = false;
 
 /** tipo de un valor de Python */
 export function typeOf(x: any): PyType {

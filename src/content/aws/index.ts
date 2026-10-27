@@ -11,5 +11,6 @@ import { a9 } from './a9';
 import { a10 } from './a10';
 import { a11 } from './a11';
 import { a12 } from './a12';
+import { a13 } from './a13';
 
-export const AWS_WORLDS: WorldDef[] = [a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12];
+export const AWS_WORLDS: WorldDef[] = [a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13];

@@ -261,7 +261,8 @@ op('eks', 'create-cluster', 'name:s! kubernetes-version:s role-arn:s! resources-
     clusterSg: csg.GroupId,
     publicAccess: vpc.endpointPublicAccess === undefined ? true : vpc.endpointPublicAccess === true || vpc.endpointPublicAccess === 'true',
     privateAccess: vpc.endpointPrivateAccess === true || vpc.endpointPrivateAccess === 'true',
-    creator: principalOf(c.acct, c.caller.arn),
+    // un clúster creado por el propio escenario es del usuario del alumno
+    creator: principalOf(c.acct, !c.caller || c.caller.accessKeyId === 'AKIASERVICE' ? `arn:aws:iam::${c.acct.id}:user/alumno` : c.caller.arn),
     accessEntries: {},
     nodegroups: {},
     fargateProfiles: {},

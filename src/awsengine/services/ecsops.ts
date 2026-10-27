@@ -563,7 +563,7 @@ export function serviceView(a: Account, region: string, svc: EcsService) {
     runningCount: running,
     pendingCount: live.length - running,
     ...(svc.launchType ? { launchType: svc.launchType } : {}),
-    ...(svc.capacityProviderStrategy ? { capacityProviderStrategy: svc.capacityProviderStrategy } : {}),
+    ...(svc.capacityProviderStrategy ? { capacityProviderStrategy: svc.capacityProviderStrategy.map((x) => ({ capacityProvider: x.capacityProvider, weight: x.weight ?? 0, base: x.base ?? 0 })) } : {}),
     platformVersion: svc.platformVersion,
     platformFamily: 'Linux',
     taskDefinition: tdArn(a, region, (svc.deployments.find((d) => d.status === 'PRIMARY') ?? svc.deployments[0])?.taskDefinition.split(':')[0] ?? '', Number((svc.deployments.find((d) => d.status === 'PRIMARY') ?? svc.deployments[0])?.taskDefinition.split(':')[1] ?? 1)),

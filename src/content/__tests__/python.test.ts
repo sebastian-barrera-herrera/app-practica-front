@@ -18,6 +18,10 @@ const run = async (code: string, setup?: PyChallenge['setup']) => {
 
 const none = PY.worlds.length === 0;
 
+// El intérprete corre sin ceder el turno al bucle de eventos: cediéndolo tras cada test, el motor libera las sesiones ya
+// terminadas (los `WeakRef` de los tipos se mantienen vivos hasta el final del turno) y la suite no agota la memoria.
+afterEach(() => new Promise<void>((r) => setTimeout(r, 0)));
+
 describe('curso de Python: estructura', () => {
   if (none) {
     test.skip('sin contenido todavía', () => {});

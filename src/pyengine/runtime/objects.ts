@@ -62,7 +62,28 @@ export class PyType extends PyObject {
   private cacheVer = 0;
   /** si el tipo (o un ancestro) define __getattr__, __getattribute__, __setattr__... se anota aquí */
   special: { getattr: boolean; getattribute: boolean; setattr: boolean; delattr: boolean } = { getattr: false, getattribute: false, setattr: false, delattr: false };
-  subclasses: PyType[] = [];
+  /** Subclases: con referencias débiles, para que las clases de una sesión terminada (y con ellas su intérprete) se puedan liberar. */
+  private subRefs: { deref(): PyType | undefined }[] = [];
+  private subPrune = 64;
+  get subclasses(): PyType[] {
+    const out: PyType[] = [];
+    for (const r of this.subRefs) {
+      const t = r.deref();
+      if (t !== undefined) out.push(t);
+    }
+    return out;
+  }
+  addSubclass(t: PyType): void {
+    if (this.subRefs.length >= this.subPrune) {
+      this.subRefs = this.subRefs.filter((r) => r.deref() !== undefined);
+      this.subPrune = Math.max(64, this.subRefs.length * 2);
+    }
+    this.subRefs.push(typeof WeakRef === 'function' ? new WeakRef(t) : { deref: () => t });
+  }
+  removeSubclass(t: PyType): void {
+    const i = this.subRefs.findIndex((r) => r.deref() === t);
+    if (i >= 0) this.subRefs.splice(i, 1);
+  }
 
   constructor(name: string, bases: PyType[], dictInit?: Record<string, any>, meta?: PyType) {
     super(meta as PyType);

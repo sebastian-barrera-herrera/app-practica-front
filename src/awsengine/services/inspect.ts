@@ -107,7 +107,10 @@ op('_check', 'http', 'url:s! method:s body:s header:l bearer-of:s', 'Pide una UR
   const url = String(c.p.Url)
     .replace(/^((?:https?:\/\/)?)api:first/, (_m, pre: string) => (pre || 'https://') + (Object.entries(c.acct.regions).flatMap(([region, r]) => Object.values(r.apigw?.apis ?? {}).map((x) => apiHost(x.ApiId, region)))[0] ?? 'sin-api.execute-api.us-east-1.amazonaws.com'))
     .replace(/^((?:https?:\/\/)?)lb:([^/]+)/, (_m, pre: string, name: string) => pre + (Object.values(c.acct.regions).flatMap((r) => Object.values(r.elb?.lbs ?? {})).find((l) => l.LoadBalancerName === name)?.DNSName ?? name))
-    .replace(/^((?:https?:\/\/)?)cf:first/, (_m, pre: string) => pre + (Object.values(c.acct.cloudfront?.distributions ?? {})[0]?.DomainName ?? 'sin-distribucion'));
+    .replace(/^((?:https?:\/\/)?)cf:first/, (_m, pre: string) => pre + (Object.values(c.acct.cloudfront?.distributions ?? {})[0]?.DomainName ?? 'sin-distribucion'))
+    // `https://apprunner:tienda/` = la URL del servicio de App Runner con ese nombre; `http://k8s:web/` = el balanceador del servicio `web` de Kubernetes
+    .replace(/^((?:https?:\/\/)?)apprunner:([^/]+)/, (_m, pre: string, name: string) => pre + (Object.values(c.acct.regions).flatMap((r) => Object.values(r.apprunner?.services ?? {})).find((x) => x.name === name && x.status !== 'DELETED')?.url ?? name))
+    .replace(/^((?:https?:\/\/)?)k8s:([^/]+)/, (_m, pre: string, name: string) => pre + (Object.values(c.acct.regions).flatMap((r) => Object.values(r.eks?.clusters ?? {})).flatMap((cl) => Object.values(cl.k8s.services)).find((x) => x.name === name && x.lb && c.acct.clock >= x.lb.readyAt)?.lb?.dns ?? name));
   const headers: Record<string, string> = Object.fromEntries(toArr<string>(c.p.Header).map((h) => [h.slice(0, h.indexOf(':')).trim().toLowerCase(), h.slice(h.indexOf(':') + 1).trim()]));
   // `--bearer-of ana@tienda.es`: pide la URL con el token de identidad de ese usuario de Cognito
   if (c.p.BearerOf) {
@@ -172,4 +175,15 @@ op('_check', 'cognito', '', 'Resumen del primer grupo de usuarios de Cognito de 
   const pool = Object.values(c.acct.regions).flatMap((r) => Object.values(r.cognito?.pools ?? {}))[0];
   if (!pool) return { Pools: 0, Clients: [], Users: [] };
   return { Pools: 1, Id: pool.Id, Clients: Object.values(pool.clients).map((k) => ({ ClientName: k.ClientName, Flows: k.ExplicitAuthFlows })), Users: Object.values(pool.users).map((u) => ({ Username: u.Username, Status: u.status, Groups: u.groups })) };
+});
+
+/** `_check load --lb web --rps 120 --minutes 20`: aplica carga sostenida a un balanceador (como lo haría `ab`) para ver cómo reacciona el escalado. */
+op('_check', 'load', 'lb:s! rps:n! minutes:n', 'Carga sostenida contra un balanceador (por nombre).', { global: true, authz: false, anon: true }, (c) => {
+  for (const [region, r] of Object.entries(c.acct.regions)) {
+    const lb = Object.values(r.elb?.lbs ?? {}).find((l) => l.LoadBalancerName === c.p.Lb);
+    if (!lb) continue;
+    c.acct.loads = [...(c.acct.loads ?? []), { lbArn: lb.LoadBalancerArn, region, rps: Number(c.p.Rps), from: c.acct.clock, until: c.acct.clock + Number(c.p.Minutes ?? 10) * 60000 }];
+    return { Started: true };
+  }
+  throw new AwsError('LoadBalancerNotFound', `El balanceador «${c.p.Lb}» no existe`);
 });

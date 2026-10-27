@@ -112,7 +112,12 @@ export type IllustrationId =
   | 'aws-cfn-change'
   | 'aws-sam-cdk'
   | 'aws-pipeline-run'
-  | 'aws-deploy-shift';
+  | 'aws-deploy-shift'
+  | 'aws-container-layers'
+  | 'aws-ecs-deploy'
+  | 'aws-fargate-cost'
+  | 'aws-eks-arch'
+  | 'aws-container-scaling';
 
 // ───────────────────────── preguntas ─────────────────────────
 

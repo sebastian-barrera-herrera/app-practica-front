@@ -402,7 +402,7 @@ function typeNew(metaArg: any, name: any, basesArg: any, nsArg: any, kwArg: any)
     throw e;
   }
   // layout: no se pueden combinar dos tipos nativos con disposición distinta
-  for (const b of bases) b.subclasses.push(t);
+  for (const b of bases) b.addSubclass(t);
   if (t.slots !== null || t.ownSlots) { /* instDict calculado en computeMro */ }
   // __classcell__
   const cc = ns.get('__classcell__');
@@ -513,15 +513,15 @@ tprop('__bases__', (t) => new PyTuple(t.bases.slice()), (t, v) => {
     if (b.isSubtype(t)) throw typeError('a __bases__ item causes an inheritance cycle');
   }
   const old = t.bases;
-  for (const b of old) { const i = b.subclasses.indexOf(t); if (i >= 0) b.subclasses.splice(i, 1); }
+  for (const b of old) b.removeSubclass(t);
   t.bases = v.a.slice();
   try { recomputeSubtree(t); } catch (e) {
     t.bases = old;
-    for (const b of old) b.subclasses.push(t);
+    for (const b of old) b.addSubclass(t);
     recomputeSubtree(t);
     throw e;
   }
-  for (const b of t.bases) b.subclasses.push(t);
+  for (const b of t.bases) b.addSubclass(t);
   bumpTypeVersion();
 });
 tprop('__flags__', (t) => {

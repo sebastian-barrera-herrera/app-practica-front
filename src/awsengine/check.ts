@@ -60,6 +60,11 @@ export function awsCheck(check: AwsCheckSpec, term: Terminal): CheckResult {
       Object.keys(r.dms?.instances ?? {}).length ||
       Object.keys(r.cfn?.stacks ?? {}).length ||
       Object.keys(r.cicd?.pipelines ?? {}).length ||
+      Object.keys(r.ecs?.services ?? {}).length ||
+      Object.keys(r.eks?.clusters ?? {}).length ||
+      Object.keys(r.apprunner?.services ?? {}).length ||
+      Object.keys(r.aas?.targets ?? {}).length ||
+      Object.values(r.ecr?.repos ?? {}).some((x) => x.lifecycle) ||
       Object.keys(r.cicd?.builds ?? {}).length ||
       Object.keys(r.rds?.proxies ?? {}).length ||
       Object.values(r.ddb ?? {}).some((t) => t.ttl?.Enabled) ||
