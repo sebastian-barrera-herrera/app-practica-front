@@ -1,3 +1,4 @@
+import type { KmsState } from './types-sec';
 import type { AasState, ArState, DockerState, EcrState, EcsState, EksState } from './types-containers';
 import type { ConfigState, CtState, CwState, LogQuery, MetricFilter, SsmAssociation, SsmAutomation, SsmBaseline, SsmDocument, SsmParam, SsmPatchState, SsmWindow, XrayState } from './types-ops';
 /** Modelo de la cuenta de AWS simulada (todo es JSON plano: se puede clonar con structuredClone). */
@@ -143,6 +144,8 @@ export interface S3Version {
   storageClass: string;
   body: string;
   sse?: string;
+  /** ARN de la clave de KMS con la que está cifrado (si `sse` es `aws:kms`). */
+  ssekmsKeyId?: string;
   contentType: string;
   tags: Tag[];
   metadata: Record<string, string>;
@@ -267,6 +270,8 @@ export interface Ec2Volume {
   state: 'creating' | 'available' | 'in-use' | 'deleting';
   Iops?: number;
   Encrypted: boolean;
+  /** ARN de la clave de KMS que cifra el volumen. */
+  KmsKeyId?: string;
   attachment?: { InstanceId: string; Device: string; AttachTime: string; DeleteOnTermination: boolean };
   SnapshotId?: string;
   Tags: Tag[];
@@ -279,6 +284,7 @@ export interface Ec2Snapshot {
   StartTime: string;
   Description: string;
   Encrypted: boolean;
+  KmsKeyId?: string;
   Tags: Tag[];
 }
 
@@ -383,6 +389,8 @@ export interface NetworkAcl {
 }
 
 export interface Ec2Region {
+  /** Cifrado de EBS por defecto en la región (y la clave que se usa; sin ella, `aws/ebs`). */
+  ebsDefault?: { enabled: boolean; keyId?: string };
   vpcs: Record<string, Vpc>;
   subnets: Record<string, Subnet>;
   instances: Record<string, Ec2Instance>;
@@ -1041,10 +1049,15 @@ export interface Secret {
   Description: string;
   created: number;
   /** Versiones: la más reciente es AWSCURRENT y la anterior AWSPREVIOUS. */
-  versions: { id: string; value: string; binary?: boolean; created: number; stages: string[] }[];
+  versions: { id: string; value: string; binary?: boolean; created: number; stages: string[]; /** reservada para una rotación, aún sin valor */ empty?: boolean }[];
   deletedAt?: number;
   recoveryDays?: number;
   Tags: Tag[];
+  /** Clave de KMS (ARN) que cifra el secreto; sin ella, la administrada `aws/secretsmanager`. */
+  KmsKeyId?: string;
+  /** Política de recurso (JSON). */
+  policy?: string;
+  rotation?: { lambda: string; days: number; enabled: boolean; last?: number; next?: number };
 }
 
 export interface RegionalState {
@@ -1079,6 +1092,7 @@ export interface RegionalState {
   cw?: CwState;
   config?: ConfigState;
   xray?: XrayState;
+  kms?: KmsState;
   /** Plantillas de lanzamiento de EC2. */
   launchTemplates?: Record<string, LaunchTemplate>;
 }

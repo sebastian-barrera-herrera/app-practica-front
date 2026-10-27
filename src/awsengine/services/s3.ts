@@ -1,6 +1,7 @@
 /** Amazon S3 (API completa: `aws s3api …`) y las funciones de datos que comparten los comandos de alto nivel. */
 import { md5, utf8Bytes } from '../../engine/commands/hash';
 import { evaluate, validatePolicy, type Context, type PolicySource } from '../policy';
+import { kmsHooks } from './kmshooks';
 import { AwsError, op, type OpCtx } from '../registry';
 import type { Account, LifecycleRule, PolicyDoc, PublicAccessBlock, S3Bucket, S3Version, Tag } from '../types';
 import { isRegion } from '../catalog';
@@ -48,6 +49,8 @@ export interface PutOpts {
   contentType?: string;
   storageClass?: string;
   sse?: string;
+  /** Clave de KMS (ARN) del cifrado SSE-KMS. */
+  kmsKeyId?: string;
   tags?: Tag[];
   metadata?: Record<string, string>;
   size?: number;
@@ -71,6 +74,7 @@ export function s3Put(a: Account, bucket: S3Bucket, key: string, body: string, o
     storageClass: o.storageClass ?? 'STANDARD',
     body,
     sse: o.sse ?? bucket.encryption.SSEAlgorithm,
+    ...(o.kmsKeyId ? { ssekmsKeyId: o.kmsKeyId } : {}),
     contentType: o.contentType ?? guessType(key),
     tags: o.tags ?? [],
     metadata: o.metadata ?? {},
@@ -200,6 +204,25 @@ function putObjectCore(c: OpCtx, bucket: S3Bucket, key: string, body: string, ex
   return v;
 }
 
+/**
+ * Cifrado al escribir: AES256 o SSE-KMS (con la clave que se pida, la del bucket o la administrada `aws/s3`).
+ * Con SSE-KMS, quien escribe necesita `kms:GenerateDataKey` sobre la clave.
+ */
+export function s3Sse(c: OpCtx, b: S3Bucket, o: { sse?: string; keyId?: string; objectArn: string }): { sse: string; kmsKeyId?: string } {
+  const sse = o.sse ?? b.encryption.SSEAlgorithm;
+  if (sse !== 'aws:kms' && sse !== 'aws:kms:dsse') {
+    if (o.keyId) throw new AwsError('InvalidArgument', 'x-amz-server-side-encryption-aws-kms-key-id header is only supported when x-amz-server-side-encryption is aws:kms.', 400);
+    return { sse };
+  }
+  const ref = o.keyId ?? b.encryption.KMSMasterKeyID;
+  return { sse, kmsKeyId: kmsHooks.s3Write ? kmsHooks.s3Write(c, ref, b.region, o.objectArn) : ref };
+}
+
+/** Al leer un objeto cifrado con KMS hace falta `kms:Decrypt` sobre su clave. */
+export function s3SseRead(c: OpCtx, v: S3Version, objectArn: string): void {
+  if ((v.sse === 'aws:kms' || v.sse === 'aws:kms:dsse') && v.ssekmsKeyId) kmsHooks.s3Read?.(c, v.ssekmsKeyId, objectArn);
+}
+
 // ───────────────────────── buckets ─────────────────────────
 
 op('s3api', 'list-buckets', '', 'Lista los buckets de la cuenta.', { action: 's3:ListAllMyBuckets', paginate: 'Buckets' }, (c) => ({
@@ -245,12 +268,12 @@ op('s3api', 'put-object', 'bucket:s! key:s! body:s acl:s content-type:s storage-
     body = t;
     size = c.io.size(path) ?? undefined;
   }
-  const v = putObjectCore(c, b, c.p.Key, body, { size, contentType: c.p.ContentType ?? 'binary/octet-stream' });
-  const kms = c.p.ServerSideEncryption === 'aws:kms';
+  const enc = s3Sse(c, b, { sse: c.p.ServerSideEncryption, keyId: c.p.SsekmsKeyId, objectArn: arnO(c.p.Bucket, c.p.Key) });
+  const v = putObjectCore(c, b, c.p.Key, body, { size, contentType: c.p.ContentType ?? 'binary/octet-stream', sse: enc.sse, kmsKeyId: enc.kmsKeyId });
   return {
     ETag: quotedEtag(v),
-    ServerSideEncryption: c.p.ServerSideEncryption ?? b.encryption.SSEAlgorithm,
-    ...(kms ? { SSEKMSKeyId: c.p.SsekmsKeyId ?? 'arn:aws:kms:' + b.region + ':' + c.acct.id + ':alias/aws/s3' } : {}),
+    ServerSideEncryption: enc.sse,
+    ...(enc.kmsKeyId ? { SSEKMSKeyId: enc.kmsKeyId } : {}),
     ...(v.versionId !== 'null' ? { VersionId: v.versionId } : {}),
   };
 });
@@ -272,6 +295,7 @@ op('s3api', 'get-object', 'bucket:s! key:s! outfile:s! version-id:s range:s', 'D
     if (!v) throw new AwsError('NoSuchKey', 'The specified key does not exist.', 404);
   }
   if (v.storageClass === 'GLACIER' || v.storageClass === 'DEEP_ARCHIVE') throw new AwsError('InvalidObjectState', 'The operation is not valid for the object\'s storage class', 403);
+  s3SseRead(c, v, arnO(c.p.Bucket, key));
   const meta = {
     AcceptRanges: 'bytes',
     LastModified: v.lastModified,
@@ -280,6 +304,7 @@ op('s3api', 'get-object', 'bucket:s! key:s! outfile:s! version-id:s range:s', 'D
     ...(v.versionId !== 'null' ? { VersionId: v.versionId } : {}),
     ContentType: v.contentType || 'binary/octet-stream',
     ServerSideEncryption: v.sse ?? 'AES256',
+    ...(v.ssekmsKeyId ? { SSEKMSKeyId: v.ssekmsKeyId } : {}),
     Metadata: v.metadata,
   };
   const out = c.p.Outfile as string;
@@ -292,6 +317,7 @@ op('s3api', 'head-object', 'bucket:s! key:s! version-id:s', 'Metadatos de un obj
   const b = bucketOf(c);
   const v = c.p.VersionId ? b.objects[c.p.Key]?.find((x) => x.versionId === c.p.VersionId) : s3Current(b, c.p.Key);
   if (!v || v.deleteMarker) throw new AwsError('404', 'Not Found', 404);
+  s3SseRead(c, v, arnO(c.p.Bucket, c.p.Key));
   return {
     AcceptRanges: 'bytes',
     LastModified: v.lastModified,
@@ -300,6 +326,7 @@ op('s3api', 'head-object', 'bucket:s! key:s! version-id:s', 'Metadatos de un obj
     ...(v.versionId !== 'null' ? { VersionId: v.versionId } : {}),
     ContentType: v.contentType || 'binary/octet-stream',
     ServerSideEncryption: v.sse ?? 'AES256',
+    ...(v.ssekmsKeyId ? { SSEKMSKeyId: v.ssekmsKeyId } : {}),
     Metadata: v.metadata,
     ...(v.storageClass !== 'STANDARD' ? { StorageClass: v.storageClass } : {}),
   };
@@ -326,7 +353,7 @@ op('s3api', 'delete-objects', 'bucket:s! delete:j!', 'Borra hasta 1000 objetos d
   return c.p.Delete?.Quiet === 'true' || c.p.Delete?.Quiet === true ? {} : { Deleted: out };
 });
 
-op('s3api', 'copy-object', 'bucket:s! key:s! copy-source:s! storage-class:s server-side-encryption:s acl:s', 'Copia un objeto dentro de S3.', {
+op('s3api', 'copy-object', 'bucket:s! key:s! copy-source:s! storage-class:s server-side-encryption:s ssekms-key-id:s acl:s', 'Copia un objeto dentro de S3.', {
   res: (c) => arnO(c.p.Bucket, c.p.Key),
   action: 's3:PutObject',
 }, (c) => {
@@ -337,7 +364,10 @@ op('s3api', 'copy-object', 'bucket:s! key:s! copy-source:s! storage-class:s serv
   const sk = decodeURIComponent(src.slice(i + 1).split('?')[0]);
   const v = s3Current(sb, sk);
   if (!v) throw new AwsError('NoSuchKey', 'The specified key does not exist.', 404);
-  const nv = putObjectCore(c, bucketOf(c), c.p.Key, v.body, { size: v.size, contentType: v.contentType, metadata: v.metadata, tags: v.tags, event: 'ObjectCreated:Copy' });
+  s3SseRead(c, v, arnO(sb.name, sk));
+  const db = bucketOf(c);
+  const enc = s3Sse(c, db, { sse: c.p.ServerSideEncryption, keyId: c.p.SsekmsKeyId, objectArn: arnO(c.p.Bucket, c.p.Key) });
+  const nv = putObjectCore(c, db, c.p.Key, v.body, { size: v.size, contentType: v.contentType, metadata: v.metadata, tags: v.tags, event: 'ObjectCreated:Copy', sse: enc.sse, kmsKeyId: enc.kmsKeyId });
   return { CopyObjectResult: { ETag: quotedEtag(nv), LastModified: nv.lastModified } };
 });
 
@@ -478,6 +508,7 @@ op('s3api', 'put-bucket-encryption', 'bucket:s! server-side-encryption-configura
   const rule = c.p.ServerSideEncryptionConfiguration?.Rules?.[0];
   const d = rule?.ApplyServerSideEncryptionByDefault;
   if (!d?.SSEAlgorithm || !['AES256', 'aws:kms', 'aws:kms:dsse'].includes(d.SSEAlgorithm)) throw new AwsError('MalformedXML', 'The XML you provided was not well-formed or did not validate against our published schema', 400);
+  if (d.SSEAlgorithm !== 'AES256' && d.KMSMasterKeyID && kmsHooks.resolve && !kmsHooks.resolve(c.acct, b.region, d.KMSMasterKeyID)) throw new AwsError('KMS.NotFoundException', `Invalid keyId '${d.KMSMasterKeyID}'. The key does not exist or is not enabled.`, 400);
   b.encryption = { SSEAlgorithm: d.SSEAlgorithm, KMSMasterKeyID: d.KMSMasterKeyID, BucketKeyEnabled: rule.BucketKeyEnabled === true || rule.BucketKeyEnabled === 'true' };
   return undefined;
 });

@@ -11,6 +11,10 @@ export interface KmsHooks {
   requireDecrypt?: (c: OpCtx, keyId: string, context?: Record<string, string>) => void;
   /** Exige `kms:GenerateDataKey`/`kms:Encrypt` para escribir con la clave. */
   requireEncrypt?: (c: OpCtx, keyId: string, context?: Record<string, string>) => void;
+  /** S3 escribe un objeto con SSE-KMS: devuelve el ARN de la clave usada (la administrada `aws/s3` si no se indica ninguna). */
+  s3Write?: (c: OpCtx, keyId: string | undefined, bucketRegion: string, objectArn: string) => string;
+  /** S3 lee un objeto cifrado con KMS: exige `kms:Decrypt` sobre su clave. */
+  s3Read?: (c: OpCtx, keyArn: string, objectArn: string) => void;
 }
 
 export const kmsHooks: KmsHooks = {};

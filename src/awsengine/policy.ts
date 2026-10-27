@@ -222,6 +222,24 @@ interface Hit {
   principal?: 'direct' | 'account';
 }
 
+/**
+ * Qué concede una política de recurso (p. ej. la de una clave de KMS) a este principal: `direct` si lo nombra, `account` si delega en
+ * IAM por la cuenta (`...:root`) y `false` si no le concede nada. Los `Deny` los decide `evaluate`.
+ */
+export function resourcePolicyGrant(doc: PolicyDoc, req: { action: string; resource: string; principalArn: string; principalAccount: string; context?: Context }): false | 'direct' | 'account' {
+  const ctx: Context = {};
+  for (const [k, v] of Object.entries(req.context ?? {})) ctx[k.toLowerCase()] = v;
+  let best: false | 'direct' | 'account' = false;
+  for (const st of statements(doc)) {
+    if (st.Effect !== 'Allow' || !actionMatches(st, req.action) || !resourceMatches(st, req.resource, ctx, true)) continue;
+    const pm = principalMatch(st, req.principalArn, req.principalAccount);
+    if (!pm || !conditionsHold(st, ctx, [])) continue;
+    if (pm === 'direct') return 'direct';
+    best = 'account';
+  }
+  return best;
+}
+
 /** Evalúa una petición. */
 export function evaluate(req: EvalRequest): EvalResult {
   const ctx: Context = {};

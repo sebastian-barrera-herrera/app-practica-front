@@ -205,6 +205,7 @@ export const SERVICE_SUMMARY: Record<string, string> = {
   cloudtrail: 'AWS CloudTrail (quién hizo qué en tu cuenta)',
   configservice: 'AWS Config (historial de configuración y cumplimiento)',
   xray: 'AWS X-Ray (trazas de peticiones)',
+  kms: 'AWS Key Management Service (claves y cifrado)',
   lambda: 'AWS Lambda',
   sqs: 'Amazon Simple Queue Service',
   events: 'Amazon EventBridge',

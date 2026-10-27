@@ -39,6 +39,9 @@ function bucketPolicy(acct: Account, resource: string): PolicySource[] {
   return b?.policy ? [{ name: 'bucket-policy', kind: 'resource', doc: b.policy }] : [];
 }
 
+/** Quién aporta la política de recurso de un ARN (S3 y, cada uno por su lado, los demás servicios: secretos, claves…). */
+export const resourcePolicyProviders: ((acct: Account, resource: string) => PolicySource[])[] = [bucketPolicy];
+
 /** Comprueba los permisos del que llama. Lanza AwsError como lo haría el servicio si se deniega. */
 export function authorize(c: Pick<OpCtx, 'acct' | 'caller' | 'region' | 'service'>, targets: AuthzTarget[], api?: string): void {
   void api;
@@ -48,7 +51,7 @@ export function authorize(c: Pick<OpCtx, 'acct' | 'caller' | 'region' | 'service
   const own = pp?.policies ?? [];
   for (const t of targets) {
     const ctx = { ...baseContext(acct, caller, c.region), ...(t.context ?? {}) };
-    const r = evaluate({ action: t.action, resource: t.resource, principalArn: caller.arn, principalAccount: caller.account, context: ctx, policies: [...own, ...bucketPolicy(acct, t.resource)], root });
+    const r = evaluate({ action: t.action, resource: t.resource, principalArn: caller.arn, principalAccount: caller.account, context: ctx, policies: [...own, ...resourcePolicyProviders.flatMap((p) => p(acct, t.resource))], root });
     if (r.decision === 'allowed') continue;
     const reason = denialReason(r, caller.arn, t.action, t.resource);
     if (c.service === 'ec2') throw new AwsError('UnauthorizedOperation', `You are not authorized to perform this operation. User: ${reason.slice(6)}. Encoded authorization failure message: ${encodeAuth(caller.arn, t, r.decision)}`, 403);

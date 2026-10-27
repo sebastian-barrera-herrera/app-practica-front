@@ -59,3 +59,4 @@ import './eks';
 import './cloudtrail';
 import './config';
 import './xray';
+import './kms';

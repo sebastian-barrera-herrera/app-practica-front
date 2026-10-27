@@ -3,7 +3,7 @@ import { sha256 } from '../../engine/commands/hash';
 import { authorize } from '../authz';
 import { AwsError, Raw, op, type AuthzTarget, type OpCtx } from '../registry';
 import { iso, s3Date, secretFor, wildcard } from '../util';
-import { arnB, arnO, getBucket, guessType, s3Current, s3Delete, s3Keys, s3MakeBucket, s3Put } from './s3';
+import { arnB, arnO, getBucket, guessType, s3Current, s3Delete, s3Keys, s3MakeBucket, s3Put, s3Sse, s3SseRead } from './s3';
 
 const URI = /^s3:\/\/([^/]+)(?:\/(.*))?$/s;
 
@@ -221,12 +221,14 @@ function transferOne(c: OpCtx, it: Item, verb: string, out: Out): void {
       allow(c, [{ action: 's3:PutObject', resource: arnO(it.to.bucket, it.to.key!), context: { ...(c.p.Sse ? { 's3:x-amz-server-side-encryption': c.p.Sse } : {}), ...(c.p.StorageClass ? { 's3:x-amz-storage-class': c.p.StorageClass } : {}) } }]);
       const b = getBucket(c.acct, it.to.bucket);
       if (c.p.Acl) throw new AwsError('AccessControlListNotSupported', 'The bucket does not allow ACLs', 400);
-      if (!c.p.Dryrun) s3Put(c.acct, b, it.to.key!, body, { size: c.io.size(path) ?? undefined, contentType: c.p.ContentType ?? guessType(it.to.key!), storageClass: c.p.StorageClass, sse: c.p.Sse === 'aws:kms' ? 'aws:kms' : c.p.Sse, metadata: c.p.Metadata });
+      const enc = s3Sse(c, b, { sse: c.p.Sse, keyId: c.p.SseKmsKeyId, objectArn: arnO(it.to.bucket, it.to.key!) });
+      if (!c.p.Dryrun) s3Put(c.acct, b, it.to.key!, body, { size: c.io.size(path) ?? undefined, contentType: c.p.ContentType ?? guessType(it.to.key!), storageClass: c.p.StorageClass, sse: enc.sse, kmsKeyId: enc.kmsKeyId, metadata: c.p.Metadata });
     } else if (it.from.bucket !== undefined && it.to.local !== undefined) {
       // bajar
       allow(c, [{ action: 's3:GetObject', resource: arnO(it.from.bucket, it.from.key!) }]);
       const v = s3Current(getBucket(c.acct, it.from.bucket), it.from.key!);
       if (!v) throw new AwsError('404', `Key "${it.from.key}" does not exist`, 404);
+      s3SseRead(c, v, arnO(it.from.bucket, it.from.key!));
       if (GLACIER.includes(v.storageClass)) {
         out.errors.push(`warning: Skipping file s3://${it.from.bucket}/${it.from.key}. Object is of storage class ${v.storageClass}. Unable to perform download operations on ${v.storageClass} objects. You must restore the object to be able to perform the operation. See aws s3 download help for additional parameter options to ignore or force these transfers.`);
         out.code = Math.max(out.code, 2);
@@ -249,8 +251,10 @@ function transferOne(c: OpCtx, it: Item, verb: string, out: Out): void {
         out.code = Math.max(out.code, 2);
         return;
       }
+      s3SseRead(c, v, arnO(it.from.bucket, it.from.key!));
       const dst = getBucket(c.acct, it.to.bucket);
-      if (!c.p.Dryrun) s3Put(c.acct, dst, it.to.key!, v.body, { size: v.size, contentType: v.contentType, storageClass: c.p.StorageClass ?? undefined, metadata: v.metadata, tags: v.tags, event: 'ObjectCreated:Copy' });
+      const enc = s3Sse(c, dst, { sse: c.p.Sse, keyId: c.p.SseKmsKeyId, objectArn: arnO(it.to.bucket, it.to.key!) });
+      if (!c.p.Dryrun) s3Put(c.acct, dst, it.to.key!, v.body, { size: v.size, contentType: v.contentType, storageClass: c.p.StorageClass ?? undefined, metadata: v.metadata, tags: v.tags, event: 'ObjectCreated:Copy', sse: enc.sse, kmsKeyId: enc.kmsKeyId });
     }
     out.lines.push(label);
   } catch (e) {

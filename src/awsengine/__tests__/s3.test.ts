@@ -251,7 +251,7 @@ describe('S3: s3api', () => {
     expect(r.stderr).toContain('AccessControlListNotSupported');
     const kms = await e.json('s3api put-object --bucket acl-1 --key k --body f --server-side-encryption aws:kms');
     expect(kms.ServerSideEncryption).toBe('aws:kms');
-    expect(kms.SSEKMSKeyId).toContain('alias/aws/s3');
+    expect(kms.SSEKMSKeyId).toMatch(/:key\//); // la clave administrada por AWS (alias/aws/s3)
   });
 });
 

@@ -2,6 +2,7 @@
 import { md5 } from '../../engine/commands/hash';
 import { azName, regional } from '../account';
 import { IMAGES, INSTANCE_TYPES, REGIONS, findImage, imageId, instanceType, isRegion, regionInfo } from '../catalog';
+import { kmsHooks } from './kmshooks';
 import { AwsError, op, type AuthzTarget, type OpCtx } from '../registry';
 import type { Account, Ec2Address, Ec2Instance, Ec2Region, Ec2Snapshot, Ec2Volume, IpPermission, SecurityGroup, Subnet, Tag } from '../types';
 import { cidrContainsIp, ec2Id, intToIp, iso, mergeTags, parseCidr, stableId, wildcard } from '../util';
@@ -198,10 +199,11 @@ const volumeView = (v: Ec2Volume) => ({
   CreateTime: v.CreateTime,
   Attachments: v.attachment ? [{ DeleteOnTermination: v.attachment.DeleteOnTermination, VolumeId: v.VolumeId, InstanceId: v.attachment.InstanceId, Device: v.attachment.Device, State: 'attached', AttachTime: v.attachment.AttachTime }] : [],
   Encrypted: v.Encrypted,
+  ...(v.KmsKeyId ? { KmsKeyId: v.KmsKeyId } : {}),
   Tags: v.Tags,
 });
 
-const snapView = (a: Account, s: Ec2Snapshot) => ({ Tags: s.Tags, StorageTier: 'standard', TransferType: undefined, OwnerId: a.id, SnapshotId: s.SnapshotId, VolumeId: s.VolumeId, State: 'completed', VolumeSize: s.VolumeSize, StartTime: s.StartTime, Progress: '100%', Description: s.Description, Encrypted: s.Encrypted });
+const snapView = (a: Account, s: Ec2Snapshot) => ({ Tags: s.Tags, StorageTier: 'standard', TransferType: undefined, OwnerId: a.id, SnapshotId: s.SnapshotId, VolumeId: s.VolumeId, State: 'completed', VolumeSize: s.VolumeSize, StartTime: s.StartTime, Progress: '100%', Description: s.Description, Encrypted: s.Encrypted, ...(s.KmsKeyId ? { KmsKeyId: s.KmsKeyId } : {}) });
 
 function ruleView(sg: SecurityGroup, egress: boolean, p: IpPermission) {
   const out: Record<string, unknown>[] = [];
@@ -293,7 +295,8 @@ export function ec2Launch(a: Account, region: string, o: LaunchOpts = {}): Ec2In
     AvailabilityZone: sn.AvailabilityZone,
     CreateTime: iso(a.clock),
     state: 'in-use',
-    Encrypted: o.encrypted ?? false,
+    Encrypted: o.encrypted ?? r.ebsDefault?.enabled ?? false,
+    ...((o.encrypted ?? r.ebsDefault?.enabled) && r.ebsDefault?.keyId ? { KmsKeyId: r.ebsDefault.keyId } : {}),
     attachment: { InstanceId: id, Device: findImage(region, ami)?.rootDevice ?? '/dev/xvda', AttachTime: iso(a.clock), DeleteOnTermination: true },
     Tags: [],
   };
@@ -993,7 +996,7 @@ op('ec2', 'describe-tags', 'filters:f dry-run:b', 'Lista las etiquetas de todos 
 
 const VOL_TYPES = ['gp2', 'gp3', 'io1', 'io2', 'st1', 'sc1', 'standard'];
 
-op('ec2', 'create-volume', 'availability-zone:s! size:i volume-type:s iops:i encrypted:b snapshot-id:s tag-specifications:f dry-run:b', 'Crea un volumen EBS (un disco) en una zona de disponibilidad.', { dryRun: true, res: (c) => `arn:aws:ec2:${c.region}:${c.acct.id}:volume/*` }, (c) => {
+op('ec2', 'create-volume', 'availability-zone:s! size:i volume-type:s iops:i encrypted:b kms-key-id:s snapshot-id:s tag-specifications:f dry-run:b', 'Crea un volumen EBS (un disco) en una zona de disponibilidad.', { dryRun: true, res: (c) => `arn:aws:ec2:${c.region}:${c.acct.id}:volume/*` }, (c) => {
   const r = refreshEc2(c.acct, c.region);
   const az = c.p.AvailabilityZone as string;
   if (!c.region || !az.startsWith(c.region)) throw new AwsError('InvalidParameterValue', `Value (${az}) for parameter availabilityZone is invalid. Subnets can currently only be created in the following availability zones: ${(regionInfo(c.region)?.azs ?? []).map((l) => c.region + l).join(', ')}.`);
@@ -1007,7 +1010,18 @@ op('ec2', 'create-volume', 'availability-zone:s! size:i volume-type:s iops:i enc
   if (size < lim[vt][0] || size > lim[vt][1]) throw new AwsError('InvalidParameterValue', `Volume of ${size}GiB is too ${size < lim[vt][0] ? 'small' : 'large'} for volume type ${vt}; the minimum is ${lim[vt][0]}GiB and the maximum is ${lim[vt][1]}GiB`);
   if ((vt === 'io1' || vt === 'io2') && !c.p.Iops) throw new AwsError('MissingParameter', 'The request must contain the parameter iops');
   const id = ec2Id(c.acct, 'vol');
-  const v: Ec2Volume = { VolumeId: id, Size: size, VolumeType: vt, AvailabilityZone: az, CreateTime: iso(c.acct.clock), state: 'creating', Iops: c.p.Iops, Encrypted: !!c.p.Encrypted || !!snap?.Encrypted, SnapshotId: c.p.SnapshotId, Tags: tagsFor(c.p.TagSpecifications, 'volume') };
+  const encrypted = !!c.p.Encrypted || !!snap?.Encrypted || !!r.ebsDefault?.enabled || !!c.p.KmsKeyId;
+  if (c.p.KmsKeyId && c.p.Encrypted === false) throw new AwsError('InvalidParameterDependency', 'The parameter KmsKeyId requires the parameter Encrypted to be set.');
+  let kms: string | undefined = snap?.KmsKeyId;
+  if (encrypted) {
+    const ref = (c.p.KmsKeyId as string | undefined) ?? (snap?.KmsKeyId ? undefined : r.ebsDefault?.keyId);
+    if (ref) {
+      if (kmsHooks.resolve && !kmsHooks.resolve(c.acct, c.region, ref)) throw new AwsError('InvalidKeyId.NotFound', `The KMS key ${ref} does not exist, is not enabled or you do not have permissions to access it.`);
+      kmsHooks.requireEncrypt?.(c, ref);
+      kms = kmsHooks.resolve?.(c.acct, c.region, ref) ?? ref;
+    }
+  }
+  const v: Ec2Volume = { VolumeId: id, Size: size, VolumeType: vt, AvailabilityZone: az, CreateTime: iso(c.acct.clock), state: 'creating', Iops: c.p.Iops, Encrypted: encrypted, ...(kms ? { KmsKeyId: kms } : {}), SnapshotId: c.p.SnapshotId, Tags: tagsFor(c.p.TagSpecifications, 'volume') };
   r.volumes[id] = v;
   return { ...volumeView(v), State: 'creating' };
 });
@@ -1088,7 +1102,7 @@ op('ec2', 'create-snapshot', 'volume-id:s! description:s tag-specifications:f dr
   const r = refreshEc2(c.acct, c.region);
   const v = volFor(r, c.p.VolumeId);
   const id = ec2Id(c.acct, 'snap');
-  const s: Ec2Snapshot = { SnapshotId: id, VolumeId: v.VolumeId, VolumeSize: v.Size, StartTime: iso(c.acct.clock), Description: c.p.Description ?? '', Encrypted: v.Encrypted, Tags: tagsFor(c.p.TagSpecifications, 'snapshot') };
+  const s: Ec2Snapshot = { SnapshotId: id, VolumeId: v.VolumeId, VolumeSize: v.Size, StartTime: iso(c.acct.clock), Description: c.p.Description ?? '', Encrypted: v.Encrypted, ...(v.KmsKeyId ? { KmsKeyId: v.KmsKeyId } : {}), Tags: tagsFor(c.p.TagSpecifications, 'snapshot') };
   r.snapshots[id] = s;
   return { ...snapView(c.acct, s), State: 'pending', Progress: '' };
 });
@@ -1180,3 +1194,35 @@ op('ec2', 'wait', 'waiter:s! instance-ids:l volume-ids:l snapshot-ids:l nat-gate
 });
 
 export { azName, cidrContainsIp };
+
+// ───────────────────────── cifrado de EBS por defecto ─────────────────────────
+
+op('ec2', 'enable-ebs-encryption-by-default', 'dry-run:b', 'Hace que todos los volúmenes y snapshots nuevos de la región se cifren (no cambia los que ya existen).', { dryRun: true, res: () => '*' }, (c) => {
+  const r = refreshEc2(c.acct, c.region);
+  r.ebsDefault = { ...(r.ebsDefault ?? {}), enabled: true };
+  return { EbsEncryptionByDefault: true };
+});
+
+op('ec2', 'disable-ebs-encryption-by-default', 'dry-run:b', 'Desactiva el cifrado por defecto de EBS en la región.', { dryRun: true, res: () => '*' }, (c) => {
+  const r = refreshEc2(c.acct, c.region);
+  r.ebsDefault = { ...(r.ebsDefault ?? {}), enabled: false };
+  return { EbsEncryptionByDefault: false };
+});
+
+op('ec2', 'get-ebs-encryption-by-default', 'dry-run:b', 'Dice si el cifrado de EBS por defecto está activo en la región.', { dryRun: true, res: () => '*' }, (c) => ({ EbsEncryptionByDefault: !!refreshEc2(c.acct, c.region).ebsDefault?.enabled }));
+
+op('ec2', 'modify-ebs-default-kms-key-id', 'kms-key-id:s! dry-run:b', 'Cambia la clave de KMS con la que se cifran por defecto los volúmenes nuevos.', { dryRun: true, res: () => '*' }, (c) => {
+  const arn = kmsHooks.resolve?.(c.acct, c.region, String(c.p.KmsKeyId));
+  if (kmsHooks.resolve && !arn) throw new AwsError('InvalidKeyId.NotFound', `The KMS key ${c.p.KmsKeyId} does not exist, is not enabled or you do not have permissions to access it.`);
+  const r = refreshEc2(c.acct, c.region);
+  r.ebsDefault = { enabled: !!r.ebsDefault?.enabled, keyId: arn ?? String(c.p.KmsKeyId) };
+  return { KmsKeyId: r.ebsDefault.keyId };
+});
+
+op('ec2', 'get-ebs-default-kms-key-id', 'dry-run:b', 'Clave de KMS con la que se cifran por defecto los volúmenes nuevos (`alias/aws/ebs` si no has elegido otra).', { dryRun: true, res: () => '*' }, (c) => ({ KmsKeyId: refreshEc2(c.acct, c.region).ebsDefault?.keyId ?? 'alias/aws/ebs' }));
+
+op('ec2', 'reset-ebs-default-kms-key-id', 'dry-run:b', 'Vuelve a la clave administrada por AWS (`aws/ebs`) para el cifrado por defecto.', { dryRun: true, res: () => '*' }, (c) => {
+  const r = refreshEc2(c.acct, c.region);
+  r.ebsDefault = { enabled: !!r.ebsDefault?.enabled };
+  return { KmsKeyId: 'alias/aws/ebs' };
+});
