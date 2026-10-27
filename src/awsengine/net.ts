@@ -18,7 +18,7 @@ export interface Trace {
   reachable: boolean;
   hops: Hop[];
   /** Elemento que corta el paso (si no llega). */
-  blocker?: 'instance' | 'address' | 'igw' | 'route' | 'nacl' | 'sg' | 'nat';
+  blocker?: 'instance' | 'address' | 'igw' | 'route' | 'nacl' | 'sg' | 'nat' | 'peering' | 'tgw' | 'endpoint' | 'vpn';
   /** Una frase con la causa y la manera de arreglarlo. */
   why?: string;
 }
@@ -44,6 +44,10 @@ export function routeState(r: Ec2Region, rt: RouteTable, route: Route): 'active'
     const n = r.natGateways[t];
     return n && n.state !== 'deleted' && n.state !== 'deleting' ? 'active' : 'blackhole';
   }
+  if (t.startsWith('pcx-')) return r.peerings?.[t]?.Status === 'active' ? 'active' : 'blackhole';
+  if (t.startsWith('vpce-')) return r.endpoints?.[t] && r.endpoints[t].State !== 'deleted' ? 'active' : 'blackhole';
+  if (t.startsWith('vgw-')) return r.vgws?.[t]?.VpcId === rt.VpcId ? 'active' : 'blackhole';
+  if (t.startsWith('eigw-')) return r.eigws?.[t]?.VpcId === rt.VpcId ? 'active' : 'blackhole';
   return 'active';
 }
 

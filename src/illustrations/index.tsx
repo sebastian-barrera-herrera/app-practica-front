@@ -5,6 +5,7 @@ import { Ec2Lifecycle, EbsVsStore, PurchaseModels } from './AwsCompute';
 import { PolicyEval, StsAssume } from './AwsIam';
 import { DbChooser, DdbPartition, MultiAz } from './AwsData';
 import { OrgTree, PriceCalc, SupportPlans } from './AwsCosts';
+import { EndpointPaths, FlowReach, HybridChooser, PeeringTgw, SsmAccess } from './AwsConnect';
 import { AsgScale, CloudfrontFlow, ElbFlow, R53Policies, Spof } from './AwsHa';
 import { CidrCalc, DnsFlow, PacketTrace, SgVsNacl, VpcLayout } from './AwsNetwork';
 import { S3Classes, S3Security } from './AwsStorage';
@@ -111,6 +112,11 @@ const MAP: Partial<Record<IllustrationId, React.ComponentType>> = {
   'aws-spof': Spof,
   'aws-r53-policies': R53Policies,
   'aws-cloudfront-flow': CloudfrontFlow,
+  'aws-peering-tgw': PeeringTgw,
+  'aws-endpoint-paths': EndpointPaths,
+  'aws-hybrid-chooser': HybridChooser,
+  'aws-flow-reach': FlowReach,
+  'aws-ssm-access': SsmAccess,
 };
 
 export function Illustration({ id }: { id: IllustrationId }) {

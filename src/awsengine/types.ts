@@ -279,6 +279,7 @@ export interface KeyPair {
 }
 
 export interface Subnet {
+  Ipv6CidrBlock?: string;
   SubnetId: string;
   VpcId: string;
   CidrBlock: string;
@@ -289,6 +290,10 @@ export interface Subnet {
 }
 
 export interface Vpc {
+  /** Bloque IPv6 asociado (si lo hay). */
+  Ipv6CidrBlock?: string;
+  /** CIDR adicionales (IPv4) asociados. */
+  ExtraCidrBlocks?: string[];
   VpcId: string;
   CidrBlock: string;
   IsDefault: boolean;
@@ -306,9 +311,12 @@ export interface InternetGateway {
 
 /** Destino de una ruta: `local`, `igw-…`, `nat-…`, `pcx-…`, `vgw-…`, `tgw-…`… */
 export interface Route {
+  /** IPv4. Vacío en las rutas IPv6 y en las de listas de prefijos. */
   DestinationCidrBlock: string;
+  DestinationIpv6CidrBlock?: string;
+  DestinationPrefixListId?: string;
   target: string;
-  Origin: 'CreateRouteTable' | 'CreateRoute';
+  Origin: 'CreateRouteTable' | 'CreateRoute' | 'EnableVgwRoutePropagation';
 }
 
 export interface RouteTable {
@@ -367,9 +375,120 @@ export interface Ec2Region {
   routeTables: Record<string, RouteTable>;
   natGateways: Record<string, NatGateway>;
   networkAcls: Record<string, NetworkAcl>;
+  peerings?: Record<string, PeeringConn>;
+  endpoints?: Record<string, VpcEndpoint>;
+  endpointServices?: Record<string, EndpointService>;
+  eigws?: Record<string, { EgressOnlyInternetGatewayId: string; VpcId: string; Tags: Tag[] }>;
+  cgws?: Record<string, CustomerGateway>;
+  vgws?: Record<string, VpnGateway>;
+  vpns?: Record<string, VpnConnection>;
+  flowLogs?: Record<string, FlowLog>;
+  insightsPaths?: Record<string, InsightsPath>;
+  insightsAnalyses?: Record<string, InsightsAnalysis>;
 }
 
 // ───────────── otros servicios sencillos ─────────────
+
+export interface PeeringConn {
+  VpcPeeringConnectionId: string;
+  RequesterVpcId: string;
+  AccepterVpcId: string;
+  Status: 'pending-acceptance' | 'active' | 'rejected' | 'deleted' | 'failed';
+  createdAt: number;
+  Tags: Tag[];
+}
+
+export interface VpcEndpoint {
+  VpcEndpointId: string;
+  VpcId: string;
+  ServiceName: string;
+  VpcEndpointType: 'Gateway' | 'Interface' | 'GatewayLoadBalancer';
+  State: 'pending' | 'pendingAcceptance' | 'available' | 'deleted';
+  RouteTableIds: string[];
+  SubnetIds: string[];
+  SecurityGroupIds: string[];
+  PrivateDnsEnabled: boolean;
+  PolicyDocument?: PolicyDoc;
+  PrefixListId?: string;
+  /** Una IP privada por subred (solo en los de tipo Interface). */
+  ips: Record<string, string>;
+  createdAt: number;
+  Tags: Tag[];
+}
+
+export interface EndpointService {
+  ServiceId: string;
+  ServiceName: string;
+  NetworkLoadBalancerArns: string[];
+  AcceptanceRequired: boolean;
+  AllowedPrincipals: string[];
+  Tags: Tag[];
+}
+
+export interface CustomerGateway {
+  CustomerGatewayId: string;
+  BgpAsn: number;
+  IpAddress: string;
+  Type: string;
+  Tags: Tag[];
+}
+
+export interface VpnGateway {
+  VpnGatewayId: string;
+  Type: string;
+  AmazonSideAsn: number;
+  VpcId?: string;
+  /** Tablas de rutas con propagación activada. */
+  propagating: string[];
+  Tags: Tag[];
+}
+
+export interface VpnConnection {
+  VpnConnectionId: string;
+  CustomerGatewayId: string;
+  VpnGatewayId?: string;
+  TransitGatewayId?: string;
+  Type: string;
+  StaticRoutesOnly: boolean;
+  routes: string[];
+  createdAt: number;
+  deleted?: boolean;
+  Tags: Tag[];
+}
+
+export interface FlowLog {
+  FlowLogId: string;
+  ResourceId: string;
+  TrafficType: 'ACCEPT' | 'REJECT' | 'ALL';
+  LogDestinationType: 'cloud-watch-logs' | 's3';
+  LogGroupName?: string;
+  LogDestination?: string;
+  DeliverLogsPermissionArn?: string;
+  LogFormat: string;
+  MaxAggregationInterval: number;
+  CreationTime: string;
+  Tags: Tag[];
+}
+
+export interface InsightsPath {
+  NetworkInsightsPathId: string;
+  Source: string;
+  Destination?: string;
+  DestinationIp?: string;
+  Protocol: string;
+  DestinationPort?: number;
+  CreatedDate: string;
+  Tags: Tag[];
+}
+
+export interface InsightsAnalysis {
+  NetworkInsightsAnalysisId: string;
+  NetworkInsightsPathId: string;
+  StartDate: string;
+  NetworkPathFound: boolean;
+  forward: string[];
+  explanations: { code: string; component?: string; detail: string }[];
+}
 
 export interface Budget {
   BudgetName: string;
@@ -526,6 +645,9 @@ export interface RegionalState {
   rds?: RdsState;
   elb?: ElbState;
   asg?: AsgState;
+  tgw?: TgwState;
+  logs?: LogsState;
+  ssm?: SsmState;
   /** Plantillas de lanzamiento de EC2. */
   launchTemplates?: Record<string, LaunchTemplate>;
 }
@@ -620,6 +742,108 @@ export interface TargetGroup {
 export interface ElbState {
   lbs: Record<string, LoadBalancer>;
   tgs: Record<string, TargetGroup>;
+}
+
+// ───────────── Transit Gateway ─────────────
+
+export interface Tgw {
+  TransitGatewayId: string;
+  Description: string;
+  AmazonSideAsn: number;
+  DefaultRouteTableId: string;
+  DefaultRouteTableAssociation: boolean;
+  DefaultRouteTablePropagation: boolean;
+  createdAt: number;
+  deleted?: boolean;
+  Tags: Tag[];
+}
+
+export interface TgwAttachment {
+  TransitGatewayAttachmentId: string;
+  TransitGatewayId: string;
+  ResourceType: 'vpc' | 'vpn';
+  ResourceId: string;
+  SubnetIds: string[];
+  createdAt: number;
+  deleted?: boolean;
+  Tags: Tag[];
+}
+
+export interface TgwRoute {
+  DestinationCidrBlock: string;
+  Type: 'static' | 'propagated';
+  Blackhole: boolean;
+  TransitGatewayAttachmentId?: string;
+}
+
+export interface TgwRouteTable {
+  TransitGatewayRouteTableId: string;
+  TransitGatewayId: string;
+  Default: boolean;
+  routes: TgwRoute[];
+  /** Adjuntos asociados (los que consultan esta tabla) y adjuntos que propagan sus rutas a ella. */
+  associations: string[];
+  propagations: string[];
+  Tags: Tag[];
+}
+
+export interface TgwState {
+  gateways: Record<string, Tgw>;
+  attachments: Record<string, TgwAttachment>;
+  routeTables: Record<string, TgwRouteTable>;
+}
+
+// ───────────── CloudWatch Logs ─────────────
+
+export interface LogEvent {
+  timestamp: number;
+  message: string;
+  ingestionTime: number;
+}
+
+export interface LogStream {
+  logStreamName: string;
+  creationTime: number;
+  events: LogEvent[];
+}
+
+export interface LogGroup {
+  logGroupName: string;
+  creationTime: number;
+  retentionInDays?: number;
+  streams: Record<string, LogStream>;
+  tags: Record<string, string>;
+}
+
+export interface LogsState {
+  groups: Record<string, LogGroup>;
+}
+
+// ───────────── Systems Manager ─────────────
+
+export interface SsmCommand {
+  CommandId: string;
+  InstanceId: string;
+  DocumentName: string;
+  commands: string[];
+  RequestedDateTime: number;
+  Status: 'Success' | 'Failed' | 'Pending' | 'InProgress';
+  StandardOutputContent: string;
+  StandardErrorContent: string;
+  ResponseCode: number;
+}
+
+export interface SsmSession {
+  SessionId: string;
+  Target: string;
+  Owner: string;
+  StartDate: number;
+  Status: 'Connected' | 'Terminated';
+}
+
+export interface SsmState {
+  commands: Record<string, SsmCommand>;
+  sessions: Record<string, SsmSession>;
 }
 
 // ───────────── Auto Scaling ─────────────
@@ -877,6 +1101,13 @@ export interface Account {
   cloudfront?: CloudFrontState;
   /** Global Accelerator (servicio global). */
   accelerators?: Record<string, Accelerator>;
+  /** Direct Connect. */
+  dx?: DxState;
+}
+
+export interface DxState {
+  conns: Record<string, { connectionId: string; connectionName: string; location: string; bandwidth: string; createdAt: number }>;
+  gws: Record<string, { directConnectGatewayId: string; directConnectGatewayName: string; amazonSideAsn: number }>;
 }
 
 // ───────────── CloudFront y Global Accelerator ─────────────

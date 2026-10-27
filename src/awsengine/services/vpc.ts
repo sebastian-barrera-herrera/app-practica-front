@@ -5,6 +5,7 @@ import { AwsError, op, type OpCtx } from '../registry';
 import type { Account, Ec2Region, NaclEntry, NatGateway, NetworkAcl, RouteTable, Subnet, Tag, Vpc } from '../types';
 import { cidrCanonical, cidrOverlap, cidrWithin, ec2Id, iso, parseCidr, stableId } from '../util';
 import { filterOk, refreshEc2, subnetView, tagGetter, tagsFor } from './ec2';
+import { routeState } from '../net';
 
 // ───────────────────────── errores ─────────────────────────
 
@@ -33,8 +34,8 @@ const dopt = (region: string) => 'dopt-' + stableId(`dopt:${region}`, '', 8);
 const vpcView = (c: OpCtx, v: Vpc, state = 'available') => ({
   OwnerId: c.acct.id,
   InstanceTenancy: 'default',
-  Ipv6CidrBlockAssociationSet: [] as unknown[],
-  CidrBlockAssociationSet: [{ AssociationId: stableId(`vpcassoc:${v.VpcId}`, 'vpc-cidr-assoc-', 8), CidrBlock: v.CidrBlock, CidrBlockState: { State: 'associated' } }],
+  Ipv6CidrBlockAssociationSet: (v.Ipv6CidrBlock ? [{ AssociationId: stableId(`vpc-ipv6:${v.VpcId}`, 'vpc-cidr-assoc-', 17), Ipv6CidrBlock: v.Ipv6CidrBlock, Ipv6CidrBlockState: { State: 'associated' }, NetworkBorderGroup: c.region, Ipv6Pool: 'Amazon' }] : []) as unknown[],
+  CidrBlockAssociationSet: [{ AssociationId: stableId(`vpcassoc:${v.VpcId}`, 'vpc-cidr-assoc-', 8), CidrBlock: v.CidrBlock, CidrBlockState: { State: 'associated' } }, ...(v.ExtraCidrBlocks ?? []).map((x) => ({ AssociationId: stableId(`vpcassoc:${v.VpcId}:${x}`, 'vpc-cidr-assoc-', 8), CidrBlock: x, CidrBlockState: { State: 'associated' } }))],
   IsDefault: v.IsDefault,
   Tags: v.Tags,
   VpcId: v.VpcId,
@@ -234,15 +235,15 @@ op('ec2', 'delete-internet-gateway', 'internet-gateway-id:s! dry-run:b', 'Borra 
 
 const rtbView = (c: OpCtx, r: Ec2Region, t: RouteTable) => ({
   Associations: t.associations.map((x) => ({ Main: x.Main, RouteTableAssociationId: x.RouteTableAssociationId, RouteTableId: t.RouteTableId, ...(x.SubnetId ? { SubnetId: x.SubnetId } : {}), AssociationState: { State: 'associated' } })),
-  PropagatingVgws: [] as unknown[],
+  PropagatingVgws: Object.values(r.vgws ?? {}).filter((g) => g.propagating.includes(t.RouteTableId)).map((g) => ({ GatewayId: g.VpnGatewayId })),
   RouteTableId: t.RouteTableId,
   Routes: t.routes.map((x) => {
-    const active = x.target === 'local' || (x.target.startsWith('igw-') ? r.internetGateways[x.target]?.VpcId === t.VpcId : x.target.startsWith('nat-') ? !!r.natGateways[x.target] && !['deleted', 'deleting'].includes(r.natGateways[x.target].state) : true);
+    const dest = x.DestinationPrefixListId ? { DestinationPrefixListId: x.DestinationPrefixListId } : x.DestinationIpv6CidrBlock ? { DestinationIpv6CidrBlock: x.DestinationIpv6CidrBlock } : { DestinationCidrBlock: x.DestinationCidrBlock };
     return {
-      DestinationCidrBlock: x.DestinationCidrBlock,
-      ...(x.target.startsWith('nat-') ? { NatGatewayId: x.target } : x.target.startsWith('pcx-') ? { VpcPeeringConnectionId: x.target } : x.target.startsWith('tgw-') ? { TransitGatewayId: x.target } : { GatewayId: x.target }),
+      ...dest,
+      ...(x.target.startsWith('nat-') ? { NatGatewayId: x.target } : x.target.startsWith('pcx-') ? { VpcPeeringConnectionId: x.target } : x.target.startsWith('tgw-') ? { TransitGatewayId: x.target } : x.target.startsWith('eigw-') ? { EgressOnlyInternetGatewayId: x.target } : { GatewayId: x.target }),
       Origin: x.Origin,
-      State: active ? 'active' : 'blackhole',
+      State: routeState(r, t, x),
     };
   }),
   Tags: t.Tags,
@@ -293,10 +294,16 @@ op('ec2', 'delete-route-table', 'route-table-id:s! dry-run:b', 'Borra una tabla 
   return undefined;
 });
 
-/** Destino de una ruta a partir de los parámetros (`--gateway-id`, `--nat-gateway-id`…). */
+/** Destino de una ruta a partir de los parámetros (`--gateway-id`, `--nat-gateway-id`, `--vpc-peering-connection-id`…). */
 function routeTarget(c: OpCtx, r: Ec2Region, t: RouteTable): string {
   const gw = c.p.GatewayId as string | undefined;
   const nat = c.p.NatGatewayId as string | undefined;
+  const pcx = c.p.VpcPeeringConnectionId as string | undefined;
+  const tgw = c.p.TransitGatewayId as string | undefined;
+  const eigw = c.p.EgressOnlyInternetGatewayId as string | undefined;
+  const vpce = c.p.VpcEndpointId as string | undefined;
+  const given = [gw, nat, pcx, tgw, eigw, vpce].filter(Boolean).length;
+  if (given > 1) throw new AwsError('InvalidParameterCombination', 'The request must contain exactly one of the parameters: gatewayId, natGatewayId, vpcPeeringConnectionId, transitGatewayId, instanceId, networkInterfaceId');
   if (gw) {
     if (gw.startsWith('igw-')) {
       const g = r.internetGateways[gw];
@@ -304,50 +311,114 @@ function routeTarget(c: OpCtx, r: Ec2Region, t: RouteTable): string {
       if (g.VpcId !== t.VpcId) throw new AwsError('InvalidParameterValue', `route table ${t.RouteTableId} and network gateway ${gw} belong to different networks`);
       return gw;
     }
+    if (gw.startsWith('vgw-')) {
+      const g = r.vgws?.[gw];
+      if (!g) throw new AwsError('InvalidVpnGatewayID.NotFound', `The vpnGateway ID '${gw}' does not exist`);
+      if (g.VpcId !== t.VpcId) throw new AwsError('InvalidParameterValue', `route table ${t.RouteTableId} and network gateway ${gw} belong to different networks`);
+      return gw;
+    }
+    if (gw.startsWith('vpce-')) return vpceTarget(r, t, gw);
     throw new AwsError('InvalidGatewayID.NotFound', `The gateway ID '${gw}' does not exist`);
   }
+  if (vpce) return vpceTarget(r, t, vpce);
   if (nat) {
     const n = r.natGateways[nat];
     if (!n || n.state === 'deleted') throw new AwsError('InvalidNatGatewayID.NotFound', `The natGateway ID '${nat}' does not exist`);
     if (n.VpcId !== t.VpcId) throw new AwsError('InvalidParameterValue', `route table ${t.RouteTableId} and network gateway ${nat} belong to different networks`);
     return nat;
   }
+  if (pcx) {
+    const p = r.peerings?.[pcx];
+    if (!p || p.Status === 'deleted') throw new AwsError('InvalidVpcPeeringConnectionID.NotFound', `The vpcPeeringConnection ID '${pcx}' does not exist`);
+    if (p.RequesterVpcId !== t.VpcId && p.AccepterVpcId !== t.VpcId) throw new AwsError('InvalidParameterValue', `The route table ${t.RouteTableId} does not belong to either side of the peering connection ${pcx}.`);
+    if (p.Status !== 'active') throw new AwsError('InvalidStateTransition', `The peering connection ${pcx} is not active (status: ${p.Status}). Accept it first.`);
+    return pcx;
+  }
+  if (tgw) {
+    const g = regional(c.acct, c.region).tgw?.gateways[tgw];
+    if (!g || g.deleted) throw new AwsError('InvalidTransitGatewayID.NotFound', `The transit gateway ID '${tgw}' does not exist`);
+    const att = Object.values(regional(c.acct, c.region).tgw?.attachments ?? {}).find((x) => x.TransitGatewayId === tgw && x.ResourceId === t.VpcId && !x.deleted);
+    if (!att) throw new AwsError('InvalidParameterValue', `Transit gateway ${tgw} has no attachment for VPC ${t.VpcId}. Create a VPC attachment first.`);
+    return tgw;
+  }
+  if (eigw) {
+    const e = r.eigws?.[eigw];
+    if (!e) throw new AwsError('InvalidGatewayID.NotFound', `The gateway ID '${eigw}' does not exist`);
+    if (e.VpcId !== t.VpcId) throw new AwsError('InvalidParameterValue', `route table ${t.RouteTableId} and network gateway ${eigw} belong to different networks`);
+    return eigw;
+  }
   throw new AwsError('MissingParameter', 'The request must contain exactly one of the parameters: gatewayId, natGatewayId, vpcPeeringConnectionId, transitGatewayId, instanceId, networkInterfaceId');
 }
 
-const ROUTE_PARAMS = 'route-table-id:s! destination-cidr-block:s! gateway-id:s nat-gateway-id:s dry-run:b';
+function vpceTarget(r: Ec2Region, t: RouteTable, id: string): string {
+  const e = r.endpoints?.[id];
+  if (!e || e.State === 'deleted') throw new AwsError('InvalidVpcEndpointId.NotFound', `The VpcEndpoint Id '${id}' does not exist`);
+  if (e.VpcEndpointType !== 'Gateway') throw new AwsError('InvalidParameterValue', 'Only gateway endpoints can be a route target');
+  if (e.VpcId !== t.VpcId) throw new AwsError('InvalidParameterValue', `route table ${t.RouteTableId} and endpoint ${id} belong to different networks`);
+  return id;
+}
+
+const ROUTE_PARAMS = 'route-table-id:s! destination-cidr-block:s destination-ipv6-cidr-block:s destination-prefix-list-id:s gateway-id:s nat-gateway-id:s vpc-peering-connection-id:s transit-gateway-id:s egress-only-internet-gateway-id:s vpc-endpoint-id:s dry-run:b';
 
 function checkDest(cidr: string): void {
   if (!parseCidr(cidr) || !cidr.includes('/') || !cidrCanonical(cidr)) throw new AwsError('InvalidParameterValue', `Value (${cidr}) for parameter destinationCidrBlock is invalid. This is not a valid CIDR block.`);
 }
 
-op('ec2', 'create-route', ROUTE_PARAMS, 'Añade una ruta: el tráfico hacia un CIDR irá por una gateway (internet, NAT…).', { dryRun: true, res: (c) => arn(c, 'route-table', c.p.RouteTableId) }, (c) => {
+type Dest = { key: string; route: Pick<RouteTable['routes'][number], 'DestinationCidrBlock' | 'DestinationIpv6CidrBlock' | 'DestinationPrefixListId'> };
+
+/** El destino de la ruta según los parámetros (IPv4, IPv6 o lista de prefijos); exige exactamente uno. */
+function destOf(c: OpCtx): Dest {
+  const v4 = c.p.DestinationCidrBlock as string | undefined;
+  const v6 = c.p.DestinationIpv6CidrBlock as string | undefined;
+  const pl = c.p.DestinationPrefixListId as string | undefined;
+  if ([v4, v6, pl].filter(Boolean).length !== 1) throw new AwsError('MissingParameter', 'The request must contain exactly one of the parameters: destinationCidrBlock, destinationIpv6CidrBlock, destinationPrefixListId');
+  if (v4) {
+    checkDest(v4);
+    return { key: v4, route: { DestinationCidrBlock: v4 } };
+  }
+  if (v6) return { key: v6, route: { DestinationCidrBlock: '', DestinationIpv6CidrBlock: v6 } };
+  return { key: pl!, route: { DestinationCidrBlock: '', DestinationPrefixListId: pl } };
+}
+
+/** La puerta solo-IPv6 no sirve para IPv4, y un NAT gateway (IPv4) no lleva destinos IPv6. */
+function checkTargetDest(target: string, d: Dest): void {
+  const v6 = !!d.route.DestinationIpv6CidrBlock;
+  if (target.startsWith('eigw-') && !v6) throw new AwsError('InvalidParameterValue', 'An egress-only internet gateway can only be the target of an IPv6 route (--destination-ipv6-cidr-block ::/0).');
+  if (target.startsWith('nat-') && v6) throw new AwsError('InvalidParameterValue', 'A NAT gateway cannot be the target of an IPv6 route. For outbound-only IPv6 use an egress-only internet gateway.');
+}
+
+const sameDest = (x: RouteTable['routes'][number], d: Dest) => (d.route.DestinationPrefixListId ? x.DestinationPrefixListId === d.key : d.route.DestinationIpv6CidrBlock ? x.DestinationIpv6CidrBlock === d.key : !x.DestinationPrefixListId && !x.DestinationIpv6CidrBlock && x.DestinationCidrBlock === d.key);
+
+op('ec2', 'create-route', ROUTE_PARAMS, 'Añade una ruta: el tráfico hacia un CIDR irá por una gateway (internet, NAT, peering, Transit Gateway, endpoint…).', { dryRun: true, res: (c) => arn(c, 'route-table', c.p.RouteTableId) }, (c) => {
   const r = refreshEc2(c.acct, c.region);
   const t = rtbOf(r, c.p.RouteTableId);
-  const dst = c.p.DestinationCidrBlock as string;
-  checkDest(dst);
-  if (t.routes.some((x) => x.DestinationCidrBlock === dst)) throw new AwsError('RouteAlreadyExists', `The route identified by ${dst} already exists.`);
-  t.routes.push({ DestinationCidrBlock: dst, target: routeTarget(c, r, t), Origin: 'CreateRoute' });
+  const d = destOf(c);
+  if (t.routes.some((x) => sameDest(x, d))) throw new AwsError('RouteAlreadyExists', `The route identified by ${d.key} already exists.`);
+  const target = routeTarget(c, r, t);
+  checkTargetDest(target, d);
+  t.routes.push({ ...d.route, target, Origin: 'CreateRoute' });
   return { Return: true };
 });
 
 op('ec2', 'replace-route', ROUTE_PARAMS, 'Cambia el destino de una ruta existente.', { dryRun: true, res: (c) => arn(c, 'route-table', c.p.RouteTableId) }, (c) => {
   const r = refreshEc2(c.acct, c.region);
   const t = rtbOf(r, c.p.RouteTableId);
-  const dst = c.p.DestinationCidrBlock as string;
-  const cur = t.routes.find((x) => x.DestinationCidrBlock === dst);
-  if (!cur) throw new AwsError('InvalidParameterValue', `no route with destination-cidr-block ${dst} exists in ${t.RouteTableId}`);
+  const d = destOf(c);
+  const cur = t.routes.find((x) => sameDest(x, d));
+  if (!cur) throw new AwsError('InvalidParameterValue', `no route with destination-cidr-block ${d.key} exists in ${t.RouteTableId}`);
   if (cur.target === 'local') throw new AwsError('InvalidParameterValue', 'cannot replace the local route');
-  cur.target = routeTarget(c, r, t);
+  const target = routeTarget(c, r, t);
+  checkTargetDest(target, d);
+  cur.target = target;
   return undefined;
 });
 
-op('ec2', 'delete-route', 'route-table-id:s! destination-cidr-block:s! dry-run:b', 'Borra una ruta (la «local» no se puede borrar).', { dryRun: true, res: (c) => arn(c, 'route-table', c.p.RouteTableId) }, (c) => {
+op('ec2', 'delete-route', 'route-table-id:s! destination-cidr-block:s destination-ipv6-cidr-block:s destination-prefix-list-id:s dry-run:b', 'Borra una ruta (la «local» no se puede borrar).', { dryRun: true, res: (c) => arn(c, 'route-table', c.p.RouteTableId) }, (c) => {
   const r = refreshEc2(c.acct, c.region);
   const t = rtbOf(r, c.p.RouteTableId);
-  const dst = c.p.DestinationCidrBlock as string;
-  const cur = t.routes.find((x) => x.DestinationCidrBlock === dst);
-  if (!cur) throw new AwsError('InvalidRoute.NotFound', `no route with destination-cidr-block ${dst} in route table ${t.RouteTableId}`);
+  const d = destOf(c);
+  const cur = t.routes.find((x) => sameDest(x, d));
+  if (!cur) throw new AwsError('InvalidRoute.NotFound', `no route with destination-cidr-block ${d.key} in route table ${t.RouteTableId}`);
   if (cur.target === 'local') throw new AwsError('InvalidParameterValue', 'cannot remove local route');
   t.routes.splice(t.routes.indexOf(cur), 1);
   return undefined;

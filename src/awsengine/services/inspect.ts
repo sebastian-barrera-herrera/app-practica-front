@@ -1,8 +1,11 @@
 /** Herramientas internas del corrector (solo funcionan en modo «dios»; no aparecen en la CLI del alumno). */
 import { AwsError, op } from '../registry';
-import { traceBetween, traceFromInternet, traceToInternet, type Proto } from '../net';
+import { type Proto } from '../net';
+import { ON_PREM_CIDR } from '../onprem';
+import { pathBetween, pathFromInstance, pathFromOnPrem, pathInternet, pathToEndpoint, type PathResult } from '../netpath';
 import type { Account, Ec2Instance, Ec2Region } from '../types';
 import { refreshEc2 } from './ec2';
+import { ssmStatus } from './ssm';
 import { fetchFromInternet } from '../web';
 import { healthDescription } from './elb';
 import { r53Lookup } from './route53';
@@ -16,23 +19,49 @@ function findInstance(a: Account, ref: string): { inst: Ec2Instance; r: Ec2Regio
   throw new AwsError('InvalidInstanceID.NotFound', `La instancia «${ref}» no existe`);
 }
 
-/** `_check trace --from internet --to web --port 80`: ¿llega el paquete? Devuelve Reachable, Blocker y los saltos. */
-op('_check', 'trace', 'from:s! to:s! port:i protocol:s', 'Traza un paquete entre «internet» y una instancia (por nombre o id) o entre dos instancias.', { global: true, authz: false, anon: true }, (c) => {
+/**
+ * `_check trace --from internet --to web --port 80`: ¿llega el paquete? Devuelve Reachable, Blocker, Code y los saltos.
+ * Orígenes y destinos: «internet» (o `internet:IP`), una instancia (nombre o id), `onprem` (la oficina, por VPN),
+ * `ip:10.1.2.3` (una IP privada de otra red) y, como destino, `vpce:s3` (un endpoint de ese servicio en la VPC del origen).
+ */
+op('_check', 'trace', 'from:s! to:s! port:i protocol:s', 'Traza un paquete entre «internet», la oficina (onprem) o instancias (por nombre o id).', { global: true, authz: false, anon: true }, (c) => {
   const proto = (c.p.Protocol ?? 'tcp') as Proto;
   const port = c.p.Port ?? 80;
   const from = String(c.p.From);
   const to = String(c.p.To);
   const net = (s: string) => s === 'internet' || s.startsWith('internet:');
-  const ip = (s: string) => (s.includes(':') ? s.split(':')[1] : undefined);
-  const out = (t: ReturnType<typeof traceFromInternet>) => ({ Reachable: t.reachable, Blocker: t.blocker ?? null, Why: t.why ?? null, Hops: t.hops.map((h) => `${h.ok ? 'ok' : 'FALLA'} · ${h.step}: ${h.detail}`) });
+  const ip = (s: string) => (s.includes(':') ? s.slice(s.indexOf(':') + 1) : undefined);
+  const out = (t: PathResult) => ({ Reachable: t.reachable, Blocker: t.blocker ?? null, Code: t.code ?? null, Why: t.why ?? null, Hops: t.hops.map((h) => `${h.ok ? 'ok' : 'FALLA'} · ${h.step}: ${h.detail}`) });
+  const regionOf = (r: Ec2Region) => Object.keys(c.acct.regions).find((k) => c.acct.regions[k].ec2 === r) ?? c.region;
   if (net(from)) {
     const { inst, r } = findInstance(c.acct, to);
-    return out(traceFromInternet(c.acct, r, inst, proto, port, ip(from)));
+    return out(pathInternet(c.acct, regionOf(r), inst, 'in', proto, port, ip(from)));
+  }
+  if (from === 'onprem') {
+    const { inst, r } = findInstance(c.acct, to);
+    return out(pathFromOnPrem(c.acct, regionOf(r), inst, proto, port));
   }
   const src = findInstance(c.acct, from);
-  if (net(to)) return out(traceToInternet(c.acct, src.r, src.inst, proto, port, ip(to)));
+  const region = regionOf(src.r);
+  if (net(to)) return out(pathInternet(c.acct, region, src.inst, 'out', proto, port, ip(to)));
+  if (to === 'onprem') return out(pathFromInstance(c.acct, region, src.inst, ON_PREM_CIDR.replace(/\.0\.0\/16$/, '.1.10'), null, proto, port));
+  if (to.startsWith('ip:')) return out(pathFromInstance(c.acct, region, src.inst, ip(to)!, null, proto, port));
+  if (to.startsWith('vpce:')) {
+    const svc = `com.amazonaws.${region}.${to.slice(5)}`;
+    const e = Object.values(src.r.endpoints ?? {}).find((x) => x.VpcId === src.inst.VpcId && x.ServiceName === svc && x.State !== 'deleted');
+    if (!e) return out({ reachable: false, hops: [{ step: 'Endpoint', ok: false, detail: `No hay ningún endpoint de ${svc} en ${src.inst.VpcId}.` }], blocker: 'endpoint', why: 'Crea el endpoint de ese servicio en la VPC.', path: [], code: 'VPC_ENDPOINT_NOT_REACHABLE' });
+    return out(pathToEndpoint(c.acct, region, src.inst, e.VpcEndpointId, port === 80 ? 443 : port));
+  }
   const dst = findInstance(c.acct, to);
-  return out(traceBetween(c.acct, src.r, src.inst, dst.inst, proto, port));
+  return out(pathBetween(c.acct, region, src.inst, dst.inst, proto, port));
+});
+
+/** `_check ssm --instance web`: ¿está la instancia administrada por Systems Manager? (`Online` y, si no, el motivo). */
+op('_check', 'ssm', 'instance:s!', 'Estado de una instancia en Systems Manager (Online o el motivo).', { global: true, authz: false, anon: true }, (c) => {
+  const { inst } = findInstance(c.acct, String(c.p.Instance));
+  const region = inst.AvailabilityZone.slice(0, -1);
+  const s = ssmStatus(c.acct, region, inst, { settled: true });
+  return { Online: s.online, Reason: s.reason };
 });
 
 /** `_check dns --name www.ejemplo.com --type A`: lo que respondería Route 53 (para comprobar registros sin conocer el id de la zona). */

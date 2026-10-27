@@ -45,7 +45,8 @@ export function awsCheck(check: AwsCheckSpec, term: Terminal): CheckResult {
   settleEc2(acct);
   settleRds(acct);
   // balanceadores, grupos de Auto Scaling y comprobaciones de salud tardan minutos en asentarse
-  if (Object.values(acct.regions).some((r) => Object.keys(r.elb?.lbs ?? {}).length || Object.keys(r.asg?.groups ?? {}).length) || Object.keys(acct.route53?.healthChecks ?? {}).length || Object.keys(acct.cloudfront?.distributions ?? {}).length) {
+  const settles = Object.values(acct.regions).some((r) => Object.keys(r.elb?.lbs ?? {}).length || Object.keys(r.asg?.groups ?? {}).length || Object.keys(r.tgw?.gateways ?? {}).length || Object.keys(r.ec2.vpns ?? {}).length || Object.keys(r.ec2.endpoints ?? {}).length);
+  if (settles || Object.keys(acct.route53?.healthChecks ?? {}).length || Object.keys(acct.cloudfront?.distributions ?? {}).length) {
     for (let k = 0; k < 8; k++) {
       acct.clock += 60000;
       tick(acct);

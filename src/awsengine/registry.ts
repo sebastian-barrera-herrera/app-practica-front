@@ -168,11 +168,13 @@ export const SERVICE_SUMMARY: Record<string, string> = {
   budgets: 'AWS Budgets',
   cloudwatch: 'Amazon CloudWatch',
   sns: 'Amazon Simple Notification Service',
-  ssm: 'AWS Systems Manager (parámetros públicos)',
+  ssm: 'AWS Systems Manager (parámetros, Run Command y Session Manager)',
   elbv2: 'Elastic Load Balancing (ALB, NLB y GWLB)',
   autoscaling: 'Amazon EC2 Auto Scaling',
   cloudfront: 'Amazon CloudFront (CDN)',
   globalaccelerator: 'AWS Global Accelerator',
+  directconnect: 'AWS Direct Connect',
+  logs: 'Amazon CloudWatch Logs',
   configure: 'Configura la CLI (credenciales, región, formato)',
 };
 

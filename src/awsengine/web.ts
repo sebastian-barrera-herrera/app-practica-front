@@ -11,6 +11,7 @@ import { signUrl } from './services/s3cmd';
 import type { Account, LoadBalancer, S3Bucket } from './types';
 import { instancePage } from './hosting';
 import { traceFromInternet } from './net';
+import { emitFlow } from './services/flowlogs';
 import { clientGeo, r53Address, r53Lookup } from './services/route53';
 import { cfByDomain, cfServe, gas, gaServe } from './services/edge';
 import { elb, healthyTargets, lbByDns, lbFromInternet, lbHandle, lbState } from './services/elb';
@@ -129,13 +130,16 @@ function ec2Request(a: Account, host: string, port: number, scheme: string, path
   if (m) ip = `${m[1]}.${m[2]}.${m[3]}.${m[4]}`;
   else if (/^\d+\.\d+\.\d+\.\d+$/.test(host)) ip = host;
   if (!ip) return null;
-  for (const reg of Object.values(a.regions)) {
+  for (const [region, reg] of Object.entries(a.regions)) {
     for (const i of Object.values(reg.ec2.instances)) {
       if (i.PublicIpAddress !== ip) continue;
       const timeout: Fetched = { ok: false, curlCode: 28, error: `Failed to connect to ${host} port ${port} after 130312 ms: Couldn't connect to server` };
       if (i.state !== 'running') return timeout;
       // el paquete tiene que atravesar IGW, tabla de rutas, NACL y grupo de seguridad (si algo lo corta, curl se queda esperando)
-      if (!traceFromInternet(a, reg.ec2, i, 'tcp', port).reachable) return timeout;
+      const t = traceFromInternet(a, reg.ec2, i, 'tcp', port);
+      // el flow log anota lo que llega a la interfaz de red: lo que acepta o rechaza el security group o la NACL
+      if (t.reachable || t.blocker === 'sg' || t.blocker === 'nacl') emitFlow(a, region, { inst: i, srcIp: a.sourceIp, dstIp: i.PrivateIpAddress, srcPort: 40000 + (a.clock % 20000), dstPort: port, proto: 6, accepted: t.reachable, direction: 'ingress' });
+      if (!t.reachable) return timeout;
       const page = instancePage(i, path);
       if (!page || (scheme === 'https' && port === 443) || port !== 80) return { ok: false, curlCode: 7, error: `Failed to connect to ${host} port ${port} after 38 ms: Couldn't connect to server` };
       return { ok: true, status: page.status, type: page.type, body: page.body, ip, headers: page.headers };

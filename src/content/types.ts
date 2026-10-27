@@ -92,7 +92,12 @@ export type IllustrationId =
   | 'aws-asg-scale'
   | 'aws-spof'
   | 'aws-r53-policies'
-  | 'aws-cloudfront-flow';
+  | 'aws-cloudfront-flow'
+  | 'aws-peering-tgw'
+  | 'aws-endpoint-paths'
+  | 'aws-hybrid-chooser'
+  | 'aws-flow-reach'
+  | 'aws-ssm-access';
 
 // ───────────────────────── preguntas ─────────────────────────
 
