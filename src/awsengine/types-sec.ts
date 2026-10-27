@@ -243,8 +243,9 @@ export interface InspState {
   enabled: { EC2: boolean; ECR: boolean; LAMBDA: boolean };
   since: number;
   filters: Record<string, InspFilter>;
-  /** Cuándo vio por primera vez cada hallazgo (clave estable → instante). */
-  seen: Record<string, number>;
+  /** Cuándo vio por primera vez cada hallazgo (clave estable) y cuándo dejó de verse (se cerró). */
+  seen: Record<string, { first: number; last: number; closed?: number; /** Última copia del hallazgo, para mostrarlo como CLOSED cuando desaparece. */ snap?: Record<string, any> }>;
+  lastScan: number;
 }
 
 // ───────────────────────── Macie ─────────────────────────
@@ -295,6 +296,7 @@ export interface MacieState {
   jobs: Record<string, MacieJob>;
   findings: Record<string, MacieFinding>;
   customIds: Record<string, MacieCustomId>;
+  filters: Record<string, { id: string; name: string; action: 'ARCHIVE' | 'NOOP'; position: number; description: string; criteria: Record<string, any> }>;
 }
 
 // ───────────────────────── Security Hub ─────────────────────────

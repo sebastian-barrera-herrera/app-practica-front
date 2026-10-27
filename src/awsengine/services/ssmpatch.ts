@@ -115,6 +115,13 @@ function patchRows(a: Account, region: string, inst: Ec2Instance) {
   });
 }
 
+/** Parches de seguridad con vulnerabilidades conocidas (CVE) que aún no están instalados en la instancia (los que Inspector marca). */
+export function unpatchedCves(a: Account, region: string, inst: Ec2Instance): { id: string; title: string; severity: string; cves: string[] }[] {
+  if (osOf(inst) !== 'AMAZON_LINUX_2023') return [];
+  const st = stateOf(a, region, inst);
+  return PATCHES.filter((p) => p.classification === 'Security' && p.cves.length && !st?.installed.includes(p.id)).map((p) => ({ id: p.id, title: p.title, severity: p.severity, cves: p.cves }));
+}
+
 // ───────────────────────── AWS-RunPatchBaseline ─────────────────────────
 
 commandDocs['AWS-RunPatchBaseline'] = (a, region, inst, params) => {

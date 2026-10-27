@@ -64,3 +64,5 @@ import './acm';
 import './waf';
 import './shield';
 import './guardduty';
+import './inspector';
+import './macie';
