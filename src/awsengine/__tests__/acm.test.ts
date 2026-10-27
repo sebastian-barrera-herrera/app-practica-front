@@ -135,3 +135,29 @@ describe('ACM: HTTPS en el balanceador', () => {
     expect((await status(e, arn)).Status).toBe('EXPIRED');
   });
 });
+
+describe('ACM: esperas y búsqueda de zonas por nombre', () => {
+  test('`acm wait certificate-validated` espera a que exista el CNAME y falla si nunca llega', async () => {
+    const { e, arn, validate } = await setup();
+    const w = await e.run(`acm wait certificate-validated --certificate-arn ${arn}`);
+    expect(w.stderr).toContain('Max attempts exceeded');
+    await validate();
+    expect((await e.run(`acm wait certificate-validated --certificate-arn ${arn}`)).stderr).toBe('');
+    expect((await status(e, arn)).Status).toBe('ISSUED');
+    expect((await e.run(`acm wait otra --certificate-arn ${arn}`)).stderr).toContain('InvalidWaiter');
+  });
+
+  test('`route53 list-hosted-zones-by-name` ordena por nombre y filtra desde --dns-name', async () => {
+    const e = mkEnv();
+    for (const n of ['b.test', 'a.test', 'c.test']) await e.run(`route53 create-hosted-zone --name ${n} --caller-reference ${n}`);
+    const all = await e.json('route53 list-hosted-zones-by-name');
+    expect(all.HostedZones.map((z: { Name: string }) => z.Name)).toEqual(['a.test.', 'b.test.', 'c.test.']);
+    const from = await e.json('route53 list-hosted-zones-by-name --dns-name b.test');
+    expect(from.HostedZones.map((z: { Name: string }) => z.Name)).toEqual(['b.test.', 'c.test.']);
+    expect(from.DNSName).toBe('b.test.');
+    const one = await e.json('route53 list-hosted-zones-by-name --dns-name a.test --max-items 1');
+    expect(one.HostedZones).toHaveLength(1);
+    expect(one.NextToken).toBeTruthy();
+  });
+});
+

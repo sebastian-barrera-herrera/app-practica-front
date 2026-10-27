@@ -4,7 +4,7 @@
  */
 import { regional } from '../account';
 import { AwsError, op } from '../registry';
-import { tickers } from '../tick';
+import { tick, tickers } from '../tick';
 import type { Account } from '../types';
 import type { AcmCert, AcmState } from '../types-sec';
 import { iso, mkArn, newId, stableId, toArr, wildcard } from '../util';
@@ -170,6 +170,20 @@ op('acm', 'update-certificate-options', 'certificate-arn:s! options:f!', 'Cambia
   const opt = Object.assign({}, ...toArr<Record<string, string>>(c.p.Options)) as { CertificateTransparencyLoggingPreference?: string };
   if (opt.CertificateTransparencyLoggingPreference) cert.transparency = opt.CertificateTransparencyLoggingPreference === 'DISABLED' ? 'DISABLED' : 'ENABLED';
   return {};
+});
+
+op('acm', 'wait', 'waiter:s! certificate-arn:s!', 'Espera a que un certificado esté emitido (`certificate-validated`).', { positional: ['waiter'], res: () => '*', authz: false }, (c) => {
+  const w = c.p.Waiter as string;
+  if (w !== 'certificate-validated') throw new AwsError('InvalidWaiter', `Invalid choice: '${w}', valid choices are: certificate-validated`);
+  for (let k = 0; k < 40; k++) {
+    const cert = findCert(c.acct, c.region, String(c.p.CertificateArn));
+    settle(c.acct, c.region, cert);
+    if (cert.Status === 'ISSUED') return undefined;
+    if (cert.Status !== 'PENDING_VALIDATION') throw new AwsError('WaiterError', `Waiter CertificateValidated failed: Waiter encountered a terminal failure state: certificate status is ${cert.Status}`, 255);
+    c.acct.clock += 60000;
+    tick(c.acct);
+  }
+  throw new AwsError('WaiterError', 'Waiter CertificateValidated failed: Max attempts exceeded', 255);
 });
 
 // ───────────────────────── el tiempo ─────────────────────────

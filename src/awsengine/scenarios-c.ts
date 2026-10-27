@@ -42,7 +42,7 @@ interface HaOpts {
 }
 
 /** VPC `tienda` (o la por defecto) con dos subredes públicas, grupos de seguridad y, según se pida, servidores, balanceador y Auto Scaling. */
-function haWorld(a: Account, o: HaOpts) {
+export function haWorld(a: Account, o: HaOpts) {
   let vpcId: string;
   let subA: string;
   let subB: string;

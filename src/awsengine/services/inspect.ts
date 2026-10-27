@@ -139,7 +139,7 @@ op('_check', 'http', 'url:s! method:s body:s header:l bearer-of:s from-ip:s coun
       tally(r);
     }
   }
-  const burst = n > 1 ? { Sent: n, Statuses: statuses } : {};
+  const burst = n > 1 ? { Sent: n, Statuses: statuses, Blocked: (statuses['403'] ?? 0) + (statuses['429'] ?? 0) } : {};
   if (!r.ok) return { Status: 0, Error: r.error ?? `curl ${r.curlCode}`, CurlCode: r.curlCode ?? 0, ...burst };
   return { Status: r.status ?? 0, Body: (r.body ?? '').trim(), Server: r.headers?.Server ?? null, Location: r.headers?.Location ?? null, XCache: r.headers?.['X-Cache'] ?? null, Region: r.headers?.['x-amz-ga-region'] ?? null, ...burst };
 });

@@ -189,3 +189,15 @@ describe('GuardDuty: exportación a S3', () => {
     expect(objs[0].Key).toContain('/GuardDuty/us-east-1/');
   });
 });
+
+describe('GuardDuty: resumen del corrector', () => {
+  test('`_check guardduty` dice los nombres de las instancias con hallazgos activos', async () => {
+    const e = mkEnv({ scenario: 'sec-gd-ruido' });
+    expect(await chk(e, 'guardduty --query ActiveNames')).toEqual(['bastion', 'web-1']);
+    const id = (await e.json('guardduty list-detectors')).DetectorIds[0] as string;
+    const bast = (await e.json('ec2 describe-instances --filters Name=tag:Name,Values=bastion --query Reservations[0].Instances[0].InstanceId')) as string;
+    await e.run(`guardduty create-filter --detector-id ${id} --name bastion-esperado --action ARCHIVE --finding-criteria '{"Criterion":{"resource.instanceDetails.instanceId":{"Eq":["${bast}"]}}}'`);
+    expect(await chk(e, 'guardduty --query ActiveNames')).toEqual(['web-1']);
+  });
+});
+

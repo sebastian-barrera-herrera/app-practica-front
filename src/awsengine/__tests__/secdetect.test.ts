@@ -94,7 +94,7 @@ describe('IAM Access Analyzer', () => {
 });
 
 describe('Security Hub', () => {
-  const failed = async (e: TestEnv) => (await chk(e, 'securityhub'))['us-east-1'].FailedControls as string[];
+  const failed = async (e: TestEnv) => (await chk(e, 'securityhub')).FailedControls as string[];
 
   test('sin AWS Config los estándares quedan INCOMPLETE y no hay hallazgos de control; al encenderlo, se evalúan', async () => {
     const e = mkEnv({ scenario: 's3demo' });

@@ -240,7 +240,7 @@ Una SCP funciona como una **barrera**. Por ejemplo, impedir usar regiones no aut
 `,
     whenUse: ['Guardarraíles de toda la organización (regiones, servicios prohibidos, protección de auditoría)'],
     whenNot: ['No sirve para dar permisos: IAM sigue haciendo falta'],
-    seeAlso: ['AWS Organizations', 'Política de IAM'],
+    seeAlso: ['AWS Organizations', 'Política de IAM', 'Evaluación de SCP: raíz, unidades y cuenta'],
   },
   {
     name: 'aws organizations create-organization',

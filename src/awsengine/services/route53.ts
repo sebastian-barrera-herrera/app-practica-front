@@ -354,6 +354,15 @@ op('route53', 'create-hosted-zone', 'name:s! caller-reference:s! hosted-zone-con
 
 op('route53', 'list-hosted-zones', 'max-items:i', 'Lista las zonas alojadas de la cuenta.', { global: true, paginate: 'HostedZones', res: () => '*' }, (c) => ({ HostedZones: Object.values(r53(c.acct).zones).map(zoneView) }));
 
+op('route53', 'list-hosted-zones-by-name', 'dns-name:s hosted-zone-id:s max-items:i', 'Lista las zonas ordenadas por nombre, empezando por `--dns-name` (sirve para encontrar el id de una zona por su nombre).', { global: true, paginate: 'HostedZones', res: () => '*' }, (c) => {
+  const from = c.p.DnsName ? dot(c.p.DnsName as string) : '';
+  const key = (n: string) => n.split('.').filter(Boolean).reverse().join('.');
+  const zones = Object.values(r53(c.acct).zones)
+    .filter((z) => !from || key(z.Name) >= key(from))
+    .sort((x, y) => (key(x.Name) < key(y.Name) ? -1 : 1));
+  return { HostedZones: zones.map(zoneView), ...(from ? { DNSName: from } : {}), IsTruncated: false, MaxItems: '100' };
+});
+
 op('route53', 'get-hosted-zone', 'id:s!', 'Datos de una zona y sus servidores de nombres.', { global: true, res: (c) => zoneArn(zoneId(c.p.Id)) }, (c) => {
   const z = getZone(c.acct, c.p.Id);
   return { HostedZone: zoneView(z), DelegationSet: { NameServers: nameServers(z).map(undot) } };

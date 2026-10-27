@@ -260,11 +260,29 @@ Errores típicos: olvidar el \`/*\` para los objetos, mezclar acciones de bucket
     kind: 'servicio',
     category: 'seguridad',
     level: 2,
-    summary: 'Detecta recursos compartidos con el exterior (buckets, roles, claves KMS…) y permisos sin usar, y genera políticas ajustadas a la actividad real.',
-    whenUse: ['Auditar accesos externos a S3, IAM, KMS…', 'Ajustar permisos de un rol a lo que realmente usa'],
+    summary: 'Detecta recursos compartidos con el exterior (buckets, roles, claves KMS…) y permisos sin usar, valida políticas antes de aplicarlas y genera políticas ajustadas a la actividad real.',
+    details: `
+Access Analyzer hace tres cosas distintas:
+
+1. **Acceso externo:** revisa las **políticas de recursos** (buckets de S3, relaciones de confianza de roles, claves de KMS, secretos, colas, temas, funciones Lambda) y abre un **hallazgo** por cada entidad de **fuera de tu cuenta (o de tu organización)** que puede usar el recurso: otra cuenta, \`Principal: "*"\` (público)… Cada hallazgo dice el recurso, el principal, las acciones y si es **público**. Se resuelve solo (\`RESOLVED\`) cuando corriges la política.
+2. **Validación de políticas** (\`validate-policy\`): errores, avisos de seguridad y sugerencias antes de aplicar una política.
+3. **Acceso sin usar** y **generación de políticas** a partir de la actividad de CloudTrail (de pago el primero).
+
+El **ámbito del analizador** (cuenta u organización) define qué es «externo». Una condición como \`aws:PrincipalOrgID\` en la política deja el acceso **dentro**. Para accesos esperados (un socio con acceso legítimo) se crean **reglas de archivo** que archivan solas los hallazgos que coinciden, sin tocar el acceso.
+
+No bloquea nada: informa. Arreglar es cosa tuya (o de una automatización con EventBridge).
+`,
+    whenUse: ['Auditar accesos externos a S3, IAM, KMS…', 'Ajustar permisos de un rol a lo que realmente usa', 'Validar políticas en la integración continua'],
     whenNot: ['No bloquea nada por sí solo: informa'],
     pricing: 'El análisis de acceso externo es gratuito; el análisis de acceso sin usar se cobra por identidad analizada.',
-    seeAlso: ['Mínimo privilegio'],
+    scenario: 'sec-analyzer',
+    examples: [
+      ['aws accessanalyzer create-analyzer --analyzer-name cuenta --type ACCOUNT --query arn --output text', 'Un analizador de cuenta (uno gratis por región)'],
+      ['AN=$(aws accessanalyzer list-analyzers --query "analyzers[0].arn" --output text)'],
+      ['aws accessanalyzer list-findings --analyzer-arn $AN --query "findings[].[resource,principal.AWS,isPublic]" --output text', 'Quién de fuera accede a qué'],
+      ['aws accessanalyzer list-analyzed-resources --analyzer-arn $AN --resource-type AWS::S3::Bucket --query "length(analyzedResources)"', 'Qué recursos revisa'],
+    ],
+    seeAlso: ['Mínimo privilegio', 'aws accessanalyzer validate-policy', 'AWS Security Hub', 'Qué servicio de seguridad usar'],
   },
   {
     name: 'IAM Identity Center',

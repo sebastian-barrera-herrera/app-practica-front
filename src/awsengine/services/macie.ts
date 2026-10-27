@@ -460,13 +460,10 @@ op('macie2', 'get-bucket-statistics', 'account-id:s', 'Cifras globales del inven
   };
 });
 
-/** `_check macie`: resumen para el corrector. */
-op('_check', 'macie', 'region:s', 'Resumen de Macie: sesión, trabajos y hallazgos abiertos por tipo.', { global: true, authz: false, anon: true }, (c) => {
-  const out: Record<string, unknown> = {};
-  for (const [region, rs] of Object.entries(c.acct.regions)) {
-    if (!rs.macie?.since || (c.p.Region && c.p.Region !== region)) continue;
-    const open = Object.values(rs.macie.findings).filter((f) => !f.archived);
-    out[region] = { Enabled: rs.macie.enabled, Jobs: Object.values(rs.macie.jobs).map((j) => ({ Name: j.name, Status: j.status, Buckets: j.buckets })), Open: open.length, Types: [...new Set(open.map((f) => f.type))].sort(), Objects: open.filter((f) => f.category === 'CLASSIFICATION').map((f) => `${f.bucket}/${f.key}`).sort() };
-  }
-  return out;
+/** `_check macie`: resumen para el corrector (la región de la llamada). */
+op('_check', 'macie', '', 'Resumen de Macie en la región: sesión, trabajos y hallazgos abiertos.', { global: true, authz: false, anon: true }, (c) => {
+  const st = macieOf(c.acct, c.region);
+  if (!st.since) return { Enabled: false, Jobs: [], Open: 0, Types: [], Objects: [] };
+  const open = Object.values(st.findings).filter((f) => !f.archived);
+  return { Enabled: st.enabled, Jobs: Object.values(st.jobs).map((j) => ({ Name: j.name, Status: j.status, Buckets: j.buckets })), Open: open.length, Types: [...new Set(open.map((f) => f.type))].sort(), Objects: open.filter((f) => f.category === 'CLASSIFICATION').map((f) => `${f.bucket}/${f.key}`).sort() };
 });

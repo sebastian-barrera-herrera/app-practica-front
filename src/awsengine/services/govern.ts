@@ -174,6 +174,24 @@ op('organizations', 'describe-policy', 'policy-id:s!', 'Contenido de una políti
   if (!p) throw new AwsError('PolicyNotFoundException', 'You specified a policy that doesn\'t exist.');
   return { Policy: { PolicySummary: pView(p), Content: p.Content } };
 });
+op('organizations', 'update-policy', 'policy-id:s! name:s description:s content:s', 'Cambia el nombre, la descripción o el contenido de una política (se aplica de inmediato a todo lo que la tenga).', { global: true, res: () => '*' }, (c) => {
+  const o = orgOf(c.acct);
+  const p = o.policies[c.p.PolicyId];
+  if (!p) throw new AwsError('PolicyNotFoundException', 'You specified a policy that doesn\'t exist.');
+  if (p.AwsManaged) throw new AwsError('ConstraintViolationException', 'You can\'t modify an AWS managed policy.');
+  if (c.p.Content !== undefined) {
+    try {
+      const j = JSON.parse(c.p.Content);
+      if (!j || typeof j !== 'object' || !j.Statement) throw new Error('x');
+    } catch {
+      throw new AwsError('MalformedPolicyDocumentException', 'The provided policy document does not meet the requirements of the specified policy type.');
+    }
+    p.Content = c.p.Content;
+  }
+  if (c.p.Name) p.Name = c.p.Name;
+  if (c.p.Description !== undefined) p.Description = c.p.Description;
+  return { Policy: { PolicySummary: pView(p), Content: p.Content } };
+});
 op('organizations', 'attach-policy', 'policy-id:s! target-id:s!', 'Aplica una política a la raíz, a una OU o a una cuenta.', { global: true, res: () => '*' }, (c) => {
   const o = orgOf(c.acct);
   const p = o.policies[c.p.PolicyId];

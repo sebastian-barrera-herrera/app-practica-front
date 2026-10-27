@@ -92,7 +92,7 @@ describe('Macie', () => {
     e.write('f.tmp', body);
     await e.run(`s3 cp f.tmp s3://${bucket}/${key}`);
   };
-  const open = async (e: TestEnv) => (await chk(e, 'macie'))['us-east-1'];
+  const open = async (e: TestEnv) => chk(e, 'macie');
 
   test('sin activar no hay sesión; un trabajo encuentra tarjetas, claves de AWS y DNI en los objetos de texto y los clasifica', async () => {
     const e = mkEnv({ scenario: 's3demo' });

@@ -681,15 +681,12 @@ op('_check', 'attack', 'kind:s! instance:s role:s user:s bucket:s from-ip:s', 'P
   }
 });
 
-/** `_check guardduty`: resumen de los detectores y de los hallazgos activos (para el corrector). */
-op('_check', 'guardduty', 'region:s', 'Resumen de GuardDuty: detectores, hallazgos activos, filtros y destinos.', { global: true, authz: false, anon: true }, (c) => {
-  const out: Record<string, unknown> = {};
-  for (const [region, rs] of Object.entries(c.acct.regions)) {
-    if (c.p.Region && c.p.Region !== region) continue;
-    for (const d of Object.values(rs.guardduty?.detectors ?? {})) {
-      const active = Object.values(d.findings).filter((f) => !f.Service.Archived);
-      out[region] = { Status: d.Status, Active: active.length, Archived: Object.values(d.findings).length - active.length, Types: [...new Set(active.map((f) => f.Type))].sort(), Filters: Object.keys(d.filters), Destinations: Object.keys(d.destinations).length, Frequency: d.Frequency };
-    }
-  }
-  return out;
+/** `_check guardduty`: resumen del detector de la región (para el corrector). */
+op('_check', 'guardduty', '', 'Resumen de GuardDuty en la región: detector, hallazgos activos (y los nombres de las instancias afectadas), filtros y destinos.', { global: true, authz: false, anon: true }, (c) => {
+  const d = Object.values(gdOf(c.acct, c.region).detectors)[0];
+  if (!d) return { Enabled: false, Active: 0, Types: [], ActiveItems: [], ActiveNames: [] };
+  const active = Object.values(d.findings).filter((f) => !f.Service.Archived);
+  const item = (f: GdFinding) => `${f.Type}|${f.Resource.InstanceDetails?.InstanceId ?? f.Resource.AccessKeyDetails?.UserName ?? f.Resource.S3BucketDetails?.[0]?.Name ?? ''}`;
+  const nameOf = (f: GdFinding) => (f.Resource.InstanceDetails?.Tags as { Key: string; Value: string }[] | undefined)?.find((t) => t.Key === 'Name')?.Value ?? '';
+  return { Enabled: d.Status === 'ENABLED', Active: active.length, Archived: Object.values(d.findings).length - active.length, Types: [...new Set(active.map((f) => f.Type))].sort(), ActiveItems: active.map(item).sort(), ActiveNames: active.map(nameOf).filter(Boolean).sort(), Filters: Object.keys(d.filters), Destinations: Object.keys(d.destinations).length, Frequency: d.Frequency };
 });

@@ -129,12 +129,19 @@ export function parseShorthand(src: string): Record<string, unknown> {
 
 // ───────────────────────── valores de parámetros ─────────────────────────
 
+/** Contenidos leídos con `fileb://` (bytes en bruto): los servicios que reciben base64 por defecto (KMS) los aceptan tal cual. */
+export const rawBlobs = new Set<string>();
+
 function paramFile(io: AwsIO, flag: string, v: string): string {
   const m = /^(file|fileb):\/\/(.*)$/.exec(v);
   if (!m) return v;
   const path = m[2];
   const text = io.readFile(io.abs(path));
   if (text === null) throw new UsageErr(`Error parsing parameter '--${flag}': Unable to load paramfile ${v}: [Errno 2] No such file or directory: '${path}'`, 252, false);
+  if (m[1] === 'fileb') {
+    if (rawBlobs.size > 64) rawBlobs.clear();
+    rawBlobs.add(text);
+  }
   return text;
 }
 

@@ -10,6 +10,7 @@ import { CachePatterns, DdbHotKey, DdbStreams, MigrationPaths, RdsProxyPool } fr
 import { CfnChange, CfnFlow, DeployShift, PipelineRun, SamCdk } from './AwsIac';
 import { ContainerLayers, ContainerScaling, EcsDeploy, EksArch, FargateCost } from './AwsContainers';
 import { AlarmEval, AuditTrail, LogFilter, SsmFleet, TraceMap } from './AwsOps';
+import { EnvelopeFlow, KmsAccess, ScpChain, SecMap, WafRules } from './AwsSec';
 import { ApiFlow, CognitoFlow, EventRouting, LambdaLifecycle, SqsVisibility } from './AwsServerless';
 import { AsgScale, CloudfrontFlow, ElbFlow, R53Policies, Spof } from './AwsHa';
 import { CidrCalc, DnsFlow, PacketTrace, SgVsNacl, VpcLayout } from './AwsNetwork';
@@ -147,6 +148,11 @@ const MAP: Partial<Record<IllustrationId, React.ComponentType>> = {
   'aws-audit-trail': AuditTrail,
   'aws-ssm-fleet': SsmFleet,
   'aws-trace-map': TraceMap,
+  'aws-envelope': EnvelopeFlow,
+  'aws-kms-access': KmsAccess,
+  'aws-waf-rules': WafRules,
+  'aws-sec-map': SecMap,
+  'aws-scp-chain': ScpChain,
 };
 
 export function Illustration({ id }: { id: IllustrationId }) {

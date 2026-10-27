@@ -4,9 +4,11 @@
  * contexto de cifrado, y las claves deshabilitadas o pendientes de borrado dejan de servir.
  */
 import { b64decode, b64encode, sha256, utf8Bytes } from '../../engine/commands/hash';
+import { rawBlobs } from '../args';
 import { regional } from '../account';
 import { baseContext } from '../authz';
 import { evaluate, principalPolicies, resourcePolicyGrant, validatePolicy, type Context } from '../policy';
+import { s3Current } from './s3';
 import { AwsError, op, SERVICE_PREFIX, UsageErr, type Caller, type OpCtx } from '../registry';
 import { tickers } from '../tick';
 import type { Account, PolicyDoc, Tag } from '../types';
@@ -228,7 +230,7 @@ function unseal(a: Account, o: Opened, enc: Record<string, string>): string {
 /** `--plaintext`: con `raw-in-base64-out` (o `fileb://`) es el texto; si no, base64. */
 function inText(c: OpCtx, v: unknown, flag: string): string {
   const s = String(v);
-  if (c.opts.binaryFormat === 'raw-in-base64-out') return s;
+  if (c.opts.binaryFormat === 'raw-in-base64-out' || rawBlobs.has(s)) return s;
   const d = /\s/.test(s) ? null : b64decode(s);
   if (d === null) throw new UsageErr(`Invalid base64: "${s}"`, 252, false);
   void flag;
@@ -699,3 +701,15 @@ kmsHooks.s3Read = (c, keyArn, objectArn) => {
     s3Fail(e);
   }
 };
+
+/** `_check kmsuse --bucket informes --key balance.csv`: con qué clave está cifrado un objeto de S3. */
+op('_check', 'kmsuse', 'bucket:s! key:s!', 'Con qué algoritmo y qué clave de KMS está cifrado un objeto de S3.', { global: true, authz: false, anon: true }, (c) => {
+  const b = c.acct.s3.buckets[String(c.p.Bucket)];
+  const v = b && s3Current(b, String(c.p.Key));
+  if (!b || !v) throw new AwsError('NoSuchKey', 'El objeto no existe', 404);
+  const id = v.ssekmsKeyId?.split('/').pop();
+  const st = kmsOf(c.acct, b.region);
+  const key = id ? st.keys[id] : undefined;
+  const alias = Object.entries(st.aliases).find(([, x]) => x.target === id)?.[0];
+  return { Algorithm: v.sse ?? 'AES256', KeyId: id ?? null, KeyAlias: alias ?? (key?.manager === 'AWS' ? 'alias/aws/s3' : null), KeyManager: key?.manager ?? null };
+});

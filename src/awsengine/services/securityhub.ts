@@ -407,15 +407,13 @@ op('securityhub', 'batch-update-findings', 'finding-identifiers:j! note:j severi
   return { ProcessedFindings: done, UnprocessedFindings: bad };
 });
 
-/** `_check securityhub`: resumen para el corrector. */
-op('_check', 'securityhub', 'region:s', 'Resumen de Security Hub: estado de los estándares, controles fallidos y hallazgos importados.', { global: true, authz: false, anon: true }, (c) => {
-  const out: Record<string, unknown> = {};
-  for (const [region, rs] of Object.entries(c.acct.regions)) {
-    const st = rs.securityhub;
-    if (!st?.enabled || (c.p.Region && c.p.Region !== region)) continue;
-    const list = hubFindings(c.acct, region);
-    const failed = list.filter((f) => f.Compliance?.Status === 'FAILED' && f.Workflow.Status !== 'SUPPRESSED');
-    out[region] = { Standards: Object.keys(st.standards), Ready: ready(c.acct, region), Failed: failed.length, FailedControls: [...new Set(failed.map((f) => f.ProductFields.ControlId))].sort(), Passed: list.filter((f) => f.Compliance?.Status === 'PASSED').length, Products: st.products, Imported: list.filter((f) => !f.Compliance && f.RecordState === 'ACTIVE').length, Suppressed: list.filter((f) => f.Workflow.Status === 'SUPPRESSED').length };
-  }
-  return out;
+/** `_check securityhub`: resumen para el corrector (la región de la llamada). */
+op('_check', 'securityhub', '', 'Resumen de Security Hub en la región: estándares, controles fallidos y hallazgos importados.', { global: true, authz: false, anon: true }, (c) => {
+  const st = hubOf(c.acct, c.region);
+  if (!st.enabled) return { Enabled: false, Failed: 0, FailedControls: [], FailedHigh: [] };
+  const list = hubFindings(c.acct, c.region);
+  const failed = list.filter((f) => f.Compliance?.Status === 'FAILED' && f.Workflow.Status !== 'SUPPRESSED');
+  const high = failed.filter((f) => f.Severity.Label === 'CRITICAL' || f.Severity.Label === 'HIGH');
+  const ids = (l: Asff[]) => [...new Set(l.map((f) => f.ProductFields.ControlId))].sort();
+  return { Enabled: true, Standards: Object.keys(st.standards), Ready: ready(c.acct, c.region), Failed: failed.length, FailedControls: ids(failed), FailedHigh: ids(high), Passed: list.filter((f) => f.Compliance?.Status === 'PASSED').length, Products: st.products, Imported: list.filter((f) => !f.Compliance && f.RecordState === 'ACTIVE').length, Suppressed: list.filter((f) => f.Workflow.Status === 'SUPPRESSED').length };
 });

@@ -122,7 +122,12 @@ export type IllustrationId =
   | 'aws-log-filter'
   | 'aws-audit-trail'
   | 'aws-ssm-fleet'
-  | 'aws-trace-map';
+  | 'aws-trace-map'
+  | 'aws-envelope'
+  | 'aws-kms-access'
+  | 'aws-waf-rules'
+  | 'aws-sec-map'
+  | 'aws-scp-chain';
 
 // ───────────────────────── preguntas ─────────────────────────
 

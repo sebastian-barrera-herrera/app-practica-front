@@ -337,7 +337,7 @@ Se configura el reparto con \`modify-db-proxy-target-group\` (\`MaxConnectionsPe
       [`aws secretsmanager put-secret-value --secret-id prod/api --secret-string '{"clave":"def"}' --query VersionStages`, 'Nueva versión'],
       ['aws secretsmanager get-secret-value --secret-id prod/api --version-stage AWSPREVIOUS --query SecretString --output text', 'La anterior sigue disponible'],
     ],
-    seeAlso: ['RDS Proxy', 'aws secretsmanager create-secret', 'aws secretsmanager get-secret-value'],
+    seeAlso: ['RDS Proxy', 'aws secretsmanager create-secret', 'aws secretsmanager get-secret-value', 'Rotación de secretos', 'Secrets Manager frente a Parameter Store'],
   },
 
   // ───────────────────────── caché ─────────────────────────
