@@ -206,6 +206,7 @@ export const SERVICE_SUMMARY: Record<string, string> = {
   configservice: 'AWS Config (historial de configuración y cumplimiento)',
   xray: 'AWS X-Ray (trazas de peticiones)',
   kms: 'AWS Key Management Service (claves y cifrado)',
+  acm: 'AWS Certificate Manager (certificados TLS)',
   lambda: 'AWS Lambda',
   sqs: 'Amazon Simple Queue Service',
   events: 'Amazon EventBridge',

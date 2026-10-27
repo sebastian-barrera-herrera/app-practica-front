@@ -4,6 +4,7 @@ import type { Fetched } from '../../engine/commands/internet';
 import { regional } from '../account';
 import { instancePage } from '../hosting';
 import { bestRoute, naclDecision, naclFor, routeTableFor, sgAllows } from '../net';
+import { acmHooks } from './acmhooks';
 import { AwsError, op, type OpCtx } from '../registry';
 import { tick, tickers } from '../tick';
 import type { Account, Ec2Instance, Ec2Region, ElbState, LbAction, LbCondition, LbListener, LbRule, LoadBalancer, TargetGroup, Tag, TgTarget } from '../types';
@@ -805,6 +806,7 @@ op('elbv2', 'create-listener', 'load-balancer-arn:s! protocol:s port:i ssl-polic
   if (!port || port < 1 || port > 65535) throw E.val(`Port '${port}' is not valid`);
   if (Object.values(lb.listeners).some((l) => l.Port === port)) throw new AwsError('DuplicateListener', 'A listener already exists on this port for this load balancer \'' + lb.LoadBalancerArn + '\'', 400);
   if ((protocol === 'HTTPS' || protocol === 'TLS') && !c.p.Certificates?.length) throw new AwsError('CertificateNotFound', 'A certificate must be specified for HTTPS listeners', 400);
+  for (const cert of toArr<{ CertificateArn: string }>(c.p.Certificates)) acmHooks.require?.(c.acct, c.region, cert.CertificateArn);
   const actions = normActions(c, lb, c.p.DefaultActions);
   const l = elbCreateListener(c.acct, c.region, lb, { port, protocol, actions, certs: c.p.Certificates });
   return { Listeners: [listenerView(l)] };
@@ -820,9 +822,34 @@ op('elbv2', 'modify-listener', 'listener-arn:s! port:i protocol:s ssl-policy:s c
   const { lb, l } = findListener(c.acct, c.region, c.p.ListenerArn);
   if (c.p.Port) l.Port = c.p.Port;
   if (c.p.Protocol) l.Protocol = String(c.p.Protocol).toUpperCase();
-  if (c.p.Certificates) l.Certificates = c.p.Certificates;
+  if (c.p.Certificates) {
+    for (const cert of toArr<{ CertificateArn: string }>(c.p.Certificates)) acmHooks.require?.(c.acct, c.region, cert.CertificateArn);
+    l.Certificates = c.p.Certificates;
+  }
   if (c.p.DefaultActions) l.rules.find((r) => r.IsDefault)!.Actions = normActions(c, lb, c.p.DefaultActions);
   return { Listeners: [listenerView(l)] };
+});
+
+op('elbv2', 'add-listener-certificates', 'listener-arn:s! certificates:f!', 'Añade certificados a un oyente HTTPS (el balanceador elige uno según el nombre que pide el cliente, SNI).', { res: (c) => c.p.ListenerArn }, (c) => {
+  const { l } = findListener(c.acct, c.region, c.p.ListenerArn);
+  if (l.Protocol !== 'HTTPS' && l.Protocol !== 'TLS') throw new AwsError('UnsupportedProtocol', 'Certificates can only be added to HTTPS or TLS listeners', 400);
+  const add = toArr<{ CertificateArn: string }>(c.p.Certificates);
+  for (const cert of add) acmHooks.require?.(c.acct, c.region, cert.CertificateArn);
+  l.Certificates = [...(l.Certificates ?? []), ...add.filter((x) => !(l.Certificates ?? []).some((y) => y.CertificateArn === x.CertificateArn))];
+  return { Certificates: add.map((x) => ({ CertificateArn: x.CertificateArn, IsDefault: false })) };
+});
+
+op('elbv2', 'remove-listener-certificates', 'listener-arn:s! certificates:f!', 'Quita certificados de un oyente (no se puede quitar el predeterminado).', { res: (c) => c.p.ListenerArn }, (c) => {
+  const { l } = findListener(c.acct, c.region, c.p.ListenerArn);
+  const del = new Set(toArr<{ CertificateArn: string }>(c.p.Certificates).map((x) => x.CertificateArn));
+  if ((l.Certificates ?? [])[0] && del.has(l.Certificates![0].CertificateArn)) throw new AwsError('OperationNotPermitted', 'Cannot remove the default certificate of a listener. Change the default first with modify-listener.', 400);
+  l.Certificates = (l.Certificates ?? []).filter((x) => !del.has(x.CertificateArn));
+  return {};
+});
+
+op('elbv2', 'describe-listener-certificates', 'listener-arn:s!', 'Lista los certificados de un oyente (el primero es el predeterminado).', { res: (c) => c.p.ListenerArn }, (c) => {
+  const { l } = findListener(c.acct, c.region, c.p.ListenerArn);
+  return { Certificates: (l.Certificates ?? []).map((x, i) => ({ CertificateArn: x.CertificateArn, IsDefault: i === 0 })) };
 });
 
 op('elbv2', 'delete-listener', 'listener-arn:s!', 'Borra un oyente y sus reglas.', { res: (c) => c.p.ListenerArn }, (c) => {

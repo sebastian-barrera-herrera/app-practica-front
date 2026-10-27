@@ -38,3 +38,27 @@ export interface KmsState {
   /** Nombre del alias (`alias/mi-clave`) → id de la clave. */
   aliases: Record<string, { target: string; created: number }>;
 }
+
+// ───────────────────────── ACM ─────────────────────────
+
+export interface AcmCert {
+  Arn: string;
+  Domain: string;
+  Sans: string[];
+  Validation: 'DNS' | 'EMAIL';
+  Status: 'PENDING_VALIDATION' | 'ISSUED' | 'INACTIVE' | 'EXPIRED' | 'VALIDATION_TIMED_OUT' | 'REVOKED' | 'FAILED';
+  Type: 'AMAZON_ISSUED' | 'IMPORTED';
+  created: number;
+  issued?: number;
+  notBefore?: number;
+  notAfter?: number;
+  renewal?: { status: 'PENDING_AUTO_RENEWAL' | 'PENDING_VALIDATION' | 'SUCCESS' | 'FAILED'; updated: number };
+  keyAlgorithm: string;
+  token?: string;
+  transparency: 'ENABLED' | 'DISABLED';
+  Tags: { Key: string; Value: string }[];
+}
+
+export interface AcmState {
+  certs: Record<string, AcmCert>;
+}

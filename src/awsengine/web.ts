@@ -5,6 +5,7 @@
 import { dnsResolvers, hostResolvers, httpHandlers, loadHandlers, type Fetched } from '../engine/commands/internet';
 import type { System } from '../engine/sys';
 import { evaluate, principalPolicies, type PolicySource } from './policy';
+import { acmHooks } from './services/acmhooks';
 import { awsAccountOf } from './state';
 import { anonymousAllowed, anonymousCanRead } from './services/s3';
 import { signUrl } from './services/s3cmd';
@@ -195,9 +196,14 @@ hostResolvers.push((sys: System, name: string) => {
 const timeoutFor = (host: string, port: number): Fetched => ({ ok: false, curlCode: 28, error: `Failed to connect to ${host} port ${port} after 130312 ms: Couldn't connect to server` });
 
 /** Una petición a un balanceador de carga (desde internet o desde CloudFront). */
-function lbRequest(a: Account, hit: { lb: LoadBalancer; region: string }, req: { host: string; port: number; scheme: string; method: string; path: string; query: string }, hostHeader: string, srcIp = a.sourceIp): Fetched {
+function lbRequest(a: Account, hit: { lb: LoadBalancer; region: string }, req: { host: string; port: number; scheme: string; method: string; path: string; query: string; insecure?: boolean }, hostHeader: string, srcIp = a.sourceIp): Fetched {
   if (lbState(a, hit.lb) !== 'active') return { ok: false, curlCode: 6, error: `Could not resolve host: ${req.host}` };
   if (!lbFromInternet(a, hit.region, hit.lb, req.port, srcIp).ok) return timeoutFor(req.host, req.port);
+  // TLS: el certificado del oyente tiene que cubrir el nombre al que se conecta el cliente (curl -k lo ignora)
+  if (req.scheme === 'https' && !req.insecure) {
+    const l = Object.values(hit.lb.listeners).find((x) => x.Port === req.port && (x.Protocol === 'HTTPS' || x.Protocol === 'TLS'));
+    if (l?.Certificates?.length && !l.Certificates.some((x) => acmHooks.covers?.(a, hit.region, x.CertificateArn, req.host))) return { ok: false, curlCode: 60, error: `SSL: no alternative certificate subject name matches target host name '${req.host}'` };
+  }
   return lbHandle(a, hit.region, hit.lb, { port: req.port, scheme: req.scheme, method: req.method, host: hostHeader, path: req.path, query: req.query, srcIp });
 }
 
@@ -231,6 +237,8 @@ function lbCapacity(a: Account, region: string, lbArn: string): number {
 }
 
 export interface WebReq {
+  /** `curl -k`: no comprobar el certificado. */
+  insecure?: boolean;
   host: string;
   port: number;
   scheme: string;
@@ -242,8 +250,13 @@ export interface WebReq {
 }
 
 /** Lo que responde «internet» (la cuenta de AWS) a una petición web, o null si el nombre no es de ella. */
-export function awsHttp(a: Account, req: WebReq): Fetched | null {
+export function awsHttp(a: Account, reqIn: WebReq): Fetched | null {
   tick(a);
+  // `curl -k` llega como una cabecera interna
+  const insecure = reqIn.headers?.['x-curl-insecure'] === '1';
+  const { 'x-curl-insecure': _k, ...rest } = reqIn.headers ?? {};
+  void _k;
+  const req: WebReq = { ...reqIn, headers: rest, insecure };
   const gw = apiRequest(a, req);
   if (gw) return gw;
   const ar = appRunnerRequest(a, req);

@@ -1,4 +1,4 @@
-import type { KmsState } from './types-sec';
+import type { AcmState, KmsState } from './types-sec';
 import type { AasState, ArState, DockerState, EcrState, EcsState, EksState } from './types-containers';
 import type { ConfigState, CtState, CwState, LogQuery, MetricFilter, SsmAssociation, SsmAutomation, SsmBaseline, SsmDocument, SsmParam, SsmPatchState, SsmWindow, XrayState } from './types-ops';
 /** Modelo de la cuenta de AWS simulada (todo es JSON plano: se puede clonar con structuredClone). */
@@ -1093,6 +1093,7 @@ export interface RegionalState {
   config?: ConfigState;
   xray?: XrayState;
   kms?: KmsState;
+  acm?: AcmState;
   /** Plantillas de lanzamiento de EC2. */
   launchTemplates?: Record<string, LaunchTemplate>;
 }

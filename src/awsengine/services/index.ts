@@ -60,3 +60,4 @@ import './cloudtrail';
 import './config';
 import './xray';
 import './kms';
+import './acm';

@@ -104,6 +104,7 @@ defineCommand('curl', {
     const i = h.indexOf(':');
     if (i > 0) reqHeaders[h.slice(0, i).trim().toLowerCase()] = h.slice(i + 1).trim();
   }
+  if (o.has('k')) reqHeaders['x-curl-insecure'] = '1';
   let hops = 0;
   let final: ReturnType<typeof httpFetch>;
   const verbose: string[] = [];
