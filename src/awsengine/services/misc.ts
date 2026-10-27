@@ -1,9 +1,8 @@
-/** Servicios pequeños: Budgets y los parámetros públicos de SSM (las alarmas de CloudWatch están en `cwalarms.ts`). */
-import { IMAGES, imageId, instanceType } from '../catalog';
+/** Servicios pequeños: Budgets (las alarmas de CloudWatch están en `cwalarms.ts`, los parámetros de SSM en `ssmparams.ts`). */
+import { instanceType } from '../catalog';
 import { AwsError, op } from '../registry';
 import type { Account, Budget } from '../types';
-import { iso, mkArn } from '../util';
-import { refreshEc2 } from './ec2';
+import { iso } from '../util';
 
 // ───────────────────────── coste estimado ─────────────────────────
 
@@ -68,14 +67,4 @@ op('budgets', 'describe-notifications-for-budget', 'account-id:s! budget-name:s!
   const b = c.acct.budgets[c.p.BudgetName];
   if (!b) throw new AwsError('NotFoundException', `Failed to call DescribeNotificationsForBudget for budget: ${c.p.BudgetName} - budget not found`, 404);
   return { Notifications: b.notifications.map((n: any) => n.Notification) };
-});
-
-// ───────────────────────── SSM (parámetros públicos de AMI) ─────────────────────────
-
-op('ssm', 'get-parameter', 'name:s! with-decryption:b', 'Lee un parámetro (aquí, los públicos de AWS con el último ID de AMI).', { res: (c) => mkArn('ssm', c.region, c.acct.id, `parameter${String(c.p.Name).startsWith('/') ? '' : '/'}${c.p.Name}`) }, (c) => {
-  const name = c.p.Name as string;
-  const img = IMAGES.find((i) => i.ssm === name);
-  if (!img) throw new AwsError('ParameterNotFound', '', 400);
-  refreshEc2(c.acct, c.region);
-  return { Parameter: { Name: name, Type: 'String', Value: imageId(c.region, img.key), Version: 12, LastModifiedDate: img.created, ARN: mkArn('ssm', c.region, '', `parameter${name}`), DataType: 'aws:ec2:image' } };
 });

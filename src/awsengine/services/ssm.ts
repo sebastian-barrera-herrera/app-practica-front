@@ -4,7 +4,7 @@ import { pathInternet, pathToEndpoint } from '../netpath';
 import { webFiles, privateDns, runsWebServer } from '../hosting';
 import { AwsError, op, type OpCtx } from '../registry';
 import type { Account, Ec2Instance, SsmCommand, SsmState } from '../types';
-import { iso, newId, mkArn } from '../util';
+import { iso, newId, mkArn, toArr } from '../util';
 import { refreshEc2 } from './ec2';
 import { roleCan } from './flowlogs';
 
@@ -95,6 +95,9 @@ function runLine(a: Account, region: string, inst: Ec2Instance, line: string): {
     if (sys[1] === 'is-active') return { out: up ? 'active\n' : 'inactive\n', err: '', code: up ? 0 : 3 };
     return { out: `● ${sys[2]}.service - The ${sys[2]} HTTP Server\n     Loaded: loaded (/usr/lib/systemd/system/${sys[2]}.service; enabled)\n     Active: ${up ? 'active (running)' : 'inactive (dead)'}\n`, err: '', code: up ? 0 : 3 };
   }
+  if (/^(yum|dnf)\s+(-y\s+)?(update|upgrade|install|remove|check-update)\b/.test(t)) return ok('Last metadata expiration check: 0:00:12 ago.\nDependencies resolved.\nNothing to do.\nComplete!');
+  if (/^sleep\s+\d+/.test(t) || /^(touch|mkdir|chmod|chown|systemctl\s+(start|stop|restart|enable|disable|daemon-reload))\b/.test(t)) return ok('');
+  if (/^ps\b/.test(t)) return ok('USER         PID %CPU %MEM COMMAND\nroot           1  0.0  0.4 /usr/lib/systemd/systemd\nroot         812  0.0  0.3 /usr/sbin/sshd -D\nssm-user    1420  0.0  0.5 /usr/bin/amazon-ssm-agent');
   const bin = t.split(/\s+/)[0];
   return { out: '', err: `/bin/sh: line 1: ${bin}: command not found\n`, code: 127 };
 }
@@ -119,42 +122,75 @@ const cmdView = (x: SsmCommand) => ({
   MaxErrors: '0',
 });
 
-op('ssm', 'send-command', 'document-name:s! instance-ids:l targets:f parameters:j comment:s timeout-seconds:i', 'Ejecuta órdenes en instancias administradas (documento `AWS-RunShellScript`, parámetro `commands`). Sin SSH ni puerto 22.', { action: 'ssm:SendCommand', res: (c) => (c.p.InstanceIds ?? []).map((i: string) => arn(c, 'instance', i)).concat(mkArn('ssm', c.region, '', `document/${c.p.DocumentName}`)) }, (c) => {
-  if (c.p.DocumentName !== 'AWS-RunShellScript') throw new AwsError('InvalidDocument', `Document ${c.p.DocumentName} is not available in this simulator (use AWS-RunShellScript).`, 400);
-  const raw = (c.p.Parameters as { commands?: string[] | string } | undefined)?.commands;
-  const lines = raw === undefined ? [] : Array.isArray(raw) ? raw : [raw];
-  if (!lines.length) throw new AwsError('InvalidParameters', 'Parameter commands is required for document AWS-RunShellScript.', 400);
-  const r = refreshEc2(c.acct, c.region);
-  let ids: string[] = c.p.InstanceIds ?? [];
-  if (c.p.Targets) {
-    for (const t of c.p.Targets as { Key: string; Values: string[] }[]) {
-      if (t.Key === 'InstanceIds') ids = ids.concat(t.Values);
-      else if (t.Key.startsWith('tag:')) ids = ids.concat(Object.values(r.instances).filter((i) => i.state === 'running' && i.Tags.some((x) => x.Key === t.Key.slice(4) && t.Values.includes(x.Value))).map((i) => i.InstanceId));
-    }
-  }
-  if (!ids.length) throw new AwsError('ValidationException', 'You must specify InstanceIds or Targets.', 400);
-  const s = ssmOf(c.acct, c.region);
-  const cid = newId(c.acct, 'ssmcmd', '', 36, 'hex').replace(/^(.{8})(.{4})(.{4})(.{4})(.{12}).*$/, '$1-$2-$3-$4-$5');
-  let last: SsmCommand | undefined;
-  for (const iid of [...new Set(ids)]) {
-    const inst = r.instances[iid];
-    if (!inst || inst.state === 'terminated') throw new AwsError('InvalidInstanceId', `Instances not in a valid state for account ${c.acct.id}`, 400);
-    const online = ssmStatus(c.acct, c.region, inst).online;
-    if (!online) throw new AwsError('InvalidInstanceId', `Instances [[${iid}]] not in a valid state for account ${c.acct.id}`, 400);
+export type CmdResult = { out: string; err: string; code: number };
+export type CmdRunner = (a: Account, region: string, inst: Ec2Instance, params: Record<string, string[]>) => CmdResult;
+
+/** Documentos de tipo Command que sabe ejecutar el simulador (los demás módulos añaden los suyos: parches, inventario…). */
+export const commandDocs: Record<string, CmdRunner> = {
+  'AWS-RunShellScript': (a, region, inst, params) => {
+    const lines = params.commands ?? [];
     let out = '';
     let err = '';
     let code = 0;
     for (const line of lines) {
-      const res = runLine(c.acct, c.region, inst, line);
+      const res = runLine(a, region, inst, line);
       out += res.out;
       err += res.err;
       code = res.code;
       if (res.code !== 0) break;
     }
-    last = { CommandId: cid, InstanceId: iid, DocumentName: c.p.DocumentName, commands: lines, RequestedDateTime: c.acct.clock, Status: code === 0 ? 'Success' : 'Failed', StandardOutputContent: out, StandardErrorContent: err, ResponseCode: code };
-    s.commands[`${cid}:${iid}`] = last;
+    return { out, err, code };
+  },
+};
+
+/** Documentos propios del alumno (los registra `ssmdocs.ts`). */
+export const customCommandDoc: { find?: (a: Account, region: string, name: string) => CmdRunner | undefined } = {};
+
+/** El shorthand de la CLI deja `Values=a` como texto suelto: lo normaliza a listas. */
+export const normTargets = (raw: unknown): { Key: string; Values: string[] }[] => toArr<{ Key: string; Values?: string | string[] }>(raw as never).map((t) => ({ Key: t.Key, Values: toArr<string>(t.Values as string | string[]) }));
+
+/** Expande una orden con `Targets` (`InstanceIds` o `tag:Nombre`) a los ids de instancia. */
+export function resolveTargets(a: Account, region: string, ids: string[], targets: { Key: string; Values: string[] | string }[] | undefined): string[] {
+  const r = refreshEc2(a, region);
+  let out = [...ids];
+  for (const t of normTargets(targets)) {
+    if (t.Key === 'InstanceIds') out = out.concat(t.Values);
+    else if (t.Key.startsWith('tag:')) out = out.concat(Object.values(r.instances).filter((i) => i.state === 'running' && i.Tags.some((x) => x.Key === t.Key.slice(4) && t.Values.includes(x.Value))).map((i) => i.InstanceId));
   }
-  return { Command: { ...cmdView(last!), InstanceIds: [...new Set(ids)], TargetCount: new Set(ids).size, Status: 'Pending', StatusDetails: 'Pending' } };
+  return [...new Set(out)];
+}
+
+const normParams = (raw: unknown): Record<string, string[]> =>
+  Object.fromEntries(Object.entries((raw ?? {}) as Record<string, unknown>).map(([k, v]) => [k, Array.isArray(v) ? v.map(String) : [String(v)]]));
+
+/** Ejecuta un documento de comandos en unas instancias (Run Command). Lo usan la CLI, las ventanas de mantenimiento y las asociaciones. */
+export function sendCommand(a: Account, region: string, docName: string, rawParams: unknown, ids: string[], o: { comment?: string } = {}): { commandId: string; list: SsmCommand[] } {
+  const runner = commandDocs[docName] ?? customCommandDoc.find?.(a, region, docName);
+  if (!runner) throw new AwsError('InvalidDocument', `Document ${docName} does not exist or is not a Command document.`, 400);
+  const params = normParams(rawParams);
+  if (docName === 'AWS-RunShellScript' && !(params.commands ?? []).length) throw new AwsError('InvalidParameters', 'Parameter commands is required for document AWS-RunShellScript.', 400);
+  const r = refreshEc2(a, region);
+  const s = ssmOf(a, region);
+  const cid = newId(a, 'ssmcmd', '', 36, 'hex').replace(/^(.{8})(.{4})(.{4})(.{4})(.{12}).*$/, '$1-$2-$3-$4-$5');
+  const list: SsmCommand[] = [];
+  for (const iid of ids) {
+    const inst = r.instances[iid];
+    if (!inst || inst.state === 'terminated') throw new AwsError('InvalidInstanceId', `Instances not in a valid state for account ${a.id}`, 400);
+    if (!ssmStatus(a, region, inst).online) throw new AwsError('InvalidInstanceId', `Instances [[${iid}]] not in a valid state for account ${a.id}`, 400);
+    const res = runner(a, region, inst, params);
+    const cmd: SsmCommand = { CommandId: cid, InstanceId: iid, DocumentName: docName, commands: params.commands ?? [], RequestedDateTime: a.clock, Status: res.code === 0 ? 'Success' : 'Failed', StandardOutputContent: res.out, StandardErrorContent: res.err, ResponseCode: res.code };
+    s.commands[`${cid}:${iid}`] = cmd;
+    list.push(cmd);
+  }
+  void o;
+  return { commandId: cid, list };
+}
+
+op('ssm', 'send-command', 'document-name:s! instance-ids:l targets:f parameters:j comment:s timeout-seconds:i', 'Ejecuta un documento (por defecto `AWS-RunShellScript` con el parámetro `commands`) en instancias administradas. Sin SSH ni puerto 22.', { action: 'ssm:SendCommand', res: (c) => ((c.p.InstanceIds as string[] | undefined) ?? []).map((i) => arn(c, 'instance', i)).concat(mkArn('ssm', c.region, '', `document/${c.p.DocumentName}`)) }, (c) => {
+  const ids = resolveTargets(c.acct, c.region, c.p.InstanceIds ?? [], c.p.Targets);
+  if (!ids.length) throw new AwsError('ValidationException', 'You must specify InstanceIds or Targets.', 400);
+  const { list } = sendCommand(c.acct, c.region, String(c.p.DocumentName), c.p.Parameters, ids, { comment: c.p.Comment });
+  return { Command: { ...cmdView(list[list.length - 1]), InstanceIds: ids, TargetCount: ids.length, Status: 'Pending', StatusDetails: 'Pending', Comment: c.p.Comment ?? '' } };
 });
 
 const inv = (x: SsmCommand) => ({

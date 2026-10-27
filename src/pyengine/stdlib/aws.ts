@@ -431,3 +431,153 @@ class LambdaContext:
         return max(0, int(self._deadline - _time.time() * 1000))
 `;
 registerPy('_lambda_rt', () => LAMBDA_RT);
+
+// ───────────────────────── AWS X-Ray SDK (versión mínima) ─────────────────────────
+
+/** Lo que registra el SDK dentro de la función: subsegmentos, anotaciones y metadatos. Lambda lo recoge al terminar cada invocación. */
+const XRAY_RT = `
+import time as _t
+
+patched = False
+_roots = []
+_stack = []
+_annotations = {}
+_metadata = {}
+
+
+def patch_all():
+    global patched
+    patched = True
+
+
+def patch(libraries=None, **kw):
+    global patched
+    patched = True
+
+
+class Subsegment:
+    def __init__(self, name, namespace='local'):
+        self.name = name
+        self.namespace = namespace
+        self.start_time = _t.time()
+        self.end_time = None
+        self.annotations = {}
+        self.metadata = {}
+        self.fault = False
+        self.error = False
+        self.cause = None
+        self.children = []
+
+    def put_annotation(self, key, value):
+        self.annotations[key] = value
+
+    def put_metadata(self, key, value, namespace='default'):
+        self.metadata.setdefault(namespace, {})[key] = value
+
+    def add_exception(self, exception, stack=None, remote=False):
+        self.fault = True
+        self.cause = str(exception)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, et, ev, tb):
+        if et is not None:
+            self.add_exception(ev)
+        xray_recorder.end_subsegment()
+        return False
+
+
+class _Segment:
+    def put_annotation(self, key, value):
+        _annotations[key] = value
+
+    def put_metadata(self, key, value, namespace='default'):
+        _metadata.setdefault(namespace, {})[key] = value
+
+
+class Recorder:
+    def begin_subsegment(self, name, namespace='local'):
+        s = Subsegment(name, namespace)
+        _stack.append(s)
+        return s
+
+    def end_subsegment(self, end_time=None):
+        if not _stack:
+            return
+        s = _stack.pop()
+        s.end_time = _t.time() if end_time is None else end_time
+        (_stack[-1].children if _stack else _roots).append(s)
+
+    def in_subsegment(self, name, **kw):
+        return self.begin_subsegment(name)
+
+    def capture(self, name=None):
+        def deco(fn):
+            label = name or fn.__name__
+
+            def wrapper(*a, **k):
+                s = self.begin_subsegment(label)
+                try:
+                    return fn(*a, **k)
+                except BaseException as e:
+                    s.add_exception(e)
+                    raise
+                finally:
+                    self.end_subsegment()
+
+            wrapper.__name__ = fn.__name__
+            return wrapper
+
+        return deco
+
+    def put_annotation(self, key, value):
+        if _stack:
+            _stack[-1].put_annotation(key, value)
+        else:
+            _annotations[key] = value
+
+    def put_metadata(self, key, value, namespace='default'):
+        if _stack:
+            _stack[-1].put_metadata(key, value, namespace)
+        else:
+            _metadata.setdefault(namespace, {})[key] = value
+
+    def current_subsegment(self):
+        return _stack[-1] if _stack else None
+
+    def current_segment(self):
+        return _Segment()
+
+
+xray_recorder = Recorder()
+
+
+def _ser(s):
+    out = {'name': s.name, 'start_time': s.start_time, 'end_time': s.end_time if s.end_time is not None else _t.time()}
+    if s.annotations:
+        out['annotations'] = s.annotations
+    if s.metadata:
+        out['metadata'] = s.metadata
+    if s.fault:
+        out['fault'] = True
+        out['cause'] = s.cause
+    if s.namespace != 'local':
+        out['namespace'] = s.namespace
+    if s.children:
+        out['subsegments'] = [_ser(c) for c in s.children]
+    return out
+
+
+def drain():
+    while _stack:
+        xray_recorder.end_subsegment()
+    out = {'patched': patched, 'annotations': dict(_annotations), 'metadata': dict(_metadata), 'subs': [_ser(s) for s in _roots]}
+    del _roots[:]
+    _annotations.clear()
+    _metadata.clear()
+    return out
+`;
+registerPy('_xray_rt', () => XRAY_RT);
+registerPy('aws_xray_sdk', () => '', true);
+registerPy('aws_xray_sdk.core', () => 'from _xray_rt import xray_recorder, patch_all, patch\n');

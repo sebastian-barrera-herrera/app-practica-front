@@ -9,6 +9,7 @@ import { isObj, iso, stableId, toArr } from '../util';
 import { parseTemplate, YamlError } from '../yaml';
 import { CfnFail, RESOURCE_TYPES, genName, makeCall, type RCtx, type RType } from './cfnres';
 import { expandSam, SAM_TRANSFORM } from './sam';
+import { paramsOf } from './ssmparams';
 
 export const STACK_TYPE = 'AWS::CloudFormation::Stack';
 
@@ -145,7 +146,37 @@ export interface Env {
 
 const AZ_SUFFIX = ['a', 'b', 'c'];
 
+/** Referencias dinámicas: `{{resolve:ssm:/ruta:versión}}`, `{{resolve:ssm-secure:…}}` y `{{resolve:secretsmanager:id:SecretString:clave}}`. */
+function dynamicRefs(s: string, env: Env): string {
+  return s.replace(/\{\{resolve:([a-z-]+):([^}]+)\}\}/g, (m, kind: string, body: string) => {
+    if (kind === 'ssm' || kind === 'ssm-secure') {
+      const [name, ver] = body.split(/:(?=\d+$)/);
+      const p = paramsOf(env.a, env.region)[name];
+      if (!p) throw new CfnFail(`Unable to fetch parameters [${name}] from parameter store for this account.`);
+      if (kind === 'ssm' && p.Type === 'SecureString') throw new CfnFail(`The parameter ${name} is a SecureString: use {{resolve:ssm-secure:${name}:VERSION}}.`);
+      if (kind === 'ssm-secure' && p.Type !== 'SecureString') throw new CfnFail(`The parameter ${name} is not a SecureString: use {{resolve:ssm:${name}}}.`);
+      const v = ver ? p.history.find((h) => h.Version === Number(ver)) : p.history[p.history.length - 1];
+      if (!v) throw new CfnFail(`Unable to fetch parameters [${name}:${ver}] from parameter store for this account.`);
+      return v.Value;
+    }
+    if (kind === 'secretsmanager') {
+      const [id, , key] = body.split(':');
+      const sec = Object.values(regional(env.a, env.region).secrets ?? {}).find((x) => x.Name === id || x.ARN === id);
+      if (!sec) throw new CfnFail(`Secrets Manager can't find the specified secret: ${id}.`);
+      const cur = (sec.versions.find((v) => v.stages.includes('AWSCURRENT')) ?? sec.versions[sec.versions.length - 1])?.value ?? '';
+      if (!key) return cur;
+      try {
+        return String((JSON.parse(cur) as Record<string, unknown>)[key]);
+      } catch {
+        throw new CfnFail(`The secret ${id} is not JSON: cannot read the key ${key}.`);
+      }
+    }
+    return m;
+  });
+}
+
 function resolve(v: unknown, env: Env): unknown {
+  if (typeof v === 'string' && v.includes('{{resolve:')) return dynamicRefs(v, env);
   if (Array.isArray(v)) return v.map((x) => resolve(x, env)).filter((x) => x !== NOVALUE);
   if (!isObj(v)) return v;
   const keys = Object.keys(v);

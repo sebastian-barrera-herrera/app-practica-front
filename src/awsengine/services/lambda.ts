@@ -94,6 +94,7 @@ const snapshot = (fn: LambdaFn, version: string): LambdaVersion => ({
   Environment: { ...fn.Environment },
   Role: fn.Role,
   LastModified: fn.LastModified,
+  TracingMode: fn.TracingMode,
 });
 
 // ───────────────────────── ejecución ─────────────────────────
@@ -118,6 +119,8 @@ export interface InvokeOutcome {
   initMs?: number;
   requestId: string;
   version: string;
+  /** Subsegmentos, anotaciones y metadatos que registró el SDK de X-Ray durante la invocación (JSON). */
+  xray?: string;
 }
 
 const pyLit = (s: string) => JSON.stringify(s);
@@ -176,6 +179,13 @@ try:
 except BaseException as _e:
     _st = [ln for ln in _tb.format_exc().splitlines() if ln.strip()]
     __err__ = _json.dumps({'errorMessage': str(_e), 'errorType': 'ClientError' if isinstance(_e, _CE) else type(_e).__name__, 'requestId': ${pyLit(ctx.requestId)}, 'stackTrace': _st})
+__xray__ = None
+try:
+    import sys as _sy
+    if '_xray_rt' in _sy.modules:
+        __xray__ = _json.dumps(_sy.modules['_xray_rt'].drain())
+except BaseException:
+    __xray__ = None
 `;
 }
 
@@ -443,9 +453,11 @@ function runFunctionOnce(a: Account, region: string, fn: LambdaFn, qualifier: st
     if (timedOut) warm.delete(key);
     else w!.lastUsed = a.clock + duration;
     fn.lastInvoked = a.clock;
+    const xr = I.mainGlobals!.get('__xray__');
     return {
       statusCode: 200,
       functionError,
+      xray: typeof xr === 'string' ? xr : undefined,
       payload,
       logs,
       durationMs: duration,
@@ -598,7 +610,7 @@ const configView = (a: Account, region: string, fn: LambdaFn, v: LambdaVersion =
   Version: v.Version,
   ...(Object.keys(v.Environment).length ? { Environment: { Variables: v.Environment } } : {}),
   ...(v.VpcConfig ? { VpcConfig: { SubnetIds: v.VpcConfig.SubnetIds, SecurityGroupIds: v.VpcConfig.SecurityGroupIds, VpcId: v.VpcConfig.VpcId, Ipv6AllowedForDualStack: false } } : {}),
-  TracingConfig: { Mode: 'PassThrough' },
+  TracingConfig: { Mode: v.TracingMode ?? 'PassThrough' },
   RevisionId: uuid(a, 'lrev' + fn.FunctionName + v.Version + v.CodeSha256),
   State: 'Active',
   LastUpdateStatus: 'Successful',
@@ -703,6 +715,12 @@ function checkConfig(c: OpCtx): void {
     );
 }
 
+function tracingMode(raw: unknown): 'Active' | 'PassThrough' {
+  const m = (raw as { Mode?: string })?.Mode ?? 'PassThrough';
+  if (m !== 'Active' && m !== 'PassThrough') throw new AwsError('InvalidParameterValueException', `1 validation error detected: Value '${m}' at 'tracingConfig.mode' failed to satisfy constraint: Member must satisfy enum value set: [PassThrough, Active]`, 400);
+  return m;
+}
+
 op(
   'lambda',
   'create-function',
@@ -761,6 +779,7 @@ op(
       tags: (c.p.Tags ?? {}) as Record<string, string>,
       deadLetter: (c.p.DeadLetterConfig as { TargetArn?: string } | undefined)?.TargetArn,
       ...(c.p.VpcConfig ? { VpcConfig: parseVpc(c, c.p.VpcConfig, String(c.p.Role)) } : {}),
+      ...(c.p.TracingConfig ? { TracingMode: tracingMode(c.p.TracingConfig) } : {}),
     };
     s.functions[name] = fn;
     if (c.p.Publish) {
@@ -808,7 +827,7 @@ op(
 op(
   'lambda',
   'update-function-configuration',
-  'function-name:s! role:s handler:s description:s timeout:i memory-size:i environment:j runtime:s dead-letter-config:j vpc-config:j',
+  'function-name:s! role:s handler:s description:s timeout:i memory-size:i environment:j runtime:s dead-letter-config:j vpc-config:j tracing-config:j',
   'Cambia la configuración: memoria, timeout, variables de entorno, rol, handler…',
   {
     res: (c) => fnArn(c.acct, c.region, String(c.p.FunctionName).split(':').pop() ?? ''),
@@ -828,6 +847,7 @@ op(
     if (c.p.Environment !== undefined) fn.Environment = envOf(c.p.Environment);
     if (c.p.DeadLetterConfig !== undefined) fn.deadLetter = (c.p.DeadLetterConfig as { TargetArn?: string }).TargetArn || undefined;
     if (c.p.VpcConfig !== undefined) fn.VpcConfig = parseVpc(c, c.p.VpcConfig, fn.Role);
+    if (c.p.TracingConfig !== undefined) fn.TracingMode = tracingMode(c.p.TracingConfig);
     fn.LastModified = c.acct.clock;
     fn.changedAt = c.acct.clock;
     return configView(c.acct, region, fn);

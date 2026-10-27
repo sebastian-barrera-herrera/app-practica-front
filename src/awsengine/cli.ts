@@ -5,7 +5,7 @@ import { parseOpParams, splitArgs, suggest } from './args';
 import { authenticate, CredError, resolveCredentials, resolveRegion, type Resolved } from './creds';
 import { JmesError, search } from './jmespath';
 import { OUTPUT_FORMATS, renderOutput, type OutputFormat } from './render';
-import { AwsError, OPS, Raw, SERVICE_SUMMARY, UsageErr, defaultTargets, opsOf, servicesList, type AwsIO, type Caller, type GlobalOpts, type OpCtx, type OpDef } from './registry';
+import { AwsError, OPS, Raw, SERVICE_SUMMARY, UsageErr, defaultTargets, opHooks, opsOf, servicesList, type AwsIO, type Caller, type GlobalOpts, type OpCtx, type OpDef, type OpOutcome } from './registry';
 import { assumeRoleCore } from './services/sts';
 import { tick } from './tick';
 import { pascal } from './util';
@@ -240,12 +240,34 @@ function execAws(argv: string[], io: AwsIO): AwsResult | Promise<AwsResult> {
     lastOpts = opts;
     const c: OpCtx = { acct, region: opts.region, io, caller: caller as Caller, p: params, opts, service, op: o };
 
-    if (caller && !io.god) {
-      authorize(c, defaultTargets(o, c));
-      if (o.dryRun && opts.dryRun) throw new AwsError('DryRunOperation', 'Request would have succeeded, but DryRun flag is set.', 412);
+    const audit = !!caller && !io.god && !o.anon && !service.startsWith('_');
+    const fire = (outcome: Omit<OpOutcome, 'via'>) => {
+      if (audit) for (const h of opHooks) h(c, { ...outcome, via: 'cli' });
+    };
+    let out: unknown;
+    try {
+      if (caller && !io.god) {
+        authorize(c, defaultTargets(o, c));
+        if (o.dryRun && opts.dryRun) throw new AwsError('DryRunOperation', 'Request would have succeeded, but DryRun flag is set.', 412);
+      }
+      out = o.handler(c);
+    } catch (e) {
+      if (e instanceof AwsError) fire({ error: e });
+      throw e;
     }
-    const out = o.handler(c);
-    if (out instanceof Promise) return out.then((r) => settle(r), onErr);
+    if (out instanceof Promise) {
+      return out.then(
+        (r) => {
+          fire({ out: r });
+          return settle(r);
+        },
+        (e) => {
+          if (e instanceof AwsError) fire({ error: e });
+          return onErr(e);
+        },
+      );
+    }
+    fire({ out });
     return settle(out);
   } catch (e) {
     return onErr(e);

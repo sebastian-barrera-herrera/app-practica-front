@@ -222,6 +222,8 @@ export interface ConfigState {
   evals: ConfigEvaluation[];
   history: ConfigItem[];
   remediations: Record<string, ConfigRemediation>;
+  /** Ejecuciones de remediación (automáticas o manuales). */
+  remExec: { rule: string; resourceType: string; resourceId: string; state: 'SUCCEEDED' | 'FAILED' | 'IN_PROGRESS'; at: number; automationId?: string; error?: string }[];
   /** Huella de la última instantánea (para detectar cambios). */
   last: Record<string, string>;
   checkedAt: number;

@@ -3,7 +3,7 @@
  * Pasa por la misma autorización que la CLI, con la identidad del rol, y no avanza el reloj (la CLI sí avanza 1,5 s por orden).
  */
 import { authorize } from './authz';
-import { AwsError, OPS, defaultTargets, type AwsIO, type Caller, type GlobalOpts, type OpCtx } from './registry';
+import { AwsError, OPS, defaultTargets, opHooks, type AwsIO, type Caller, type GlobalOpts, type OpCtx } from './registry';
 import type { Account } from './types';
 
 /** Nombre de servicio de `boto3` → servicio de la CLI. */
@@ -74,6 +74,7 @@ export function sdkCall(a: Account, region: string, caller: Caller | null, servi
     if (caller) authorize(c, defaultTargets(o, c));
     const out = o.handler(c);
     if (out instanceof Promise) throw new Error('operación asíncrona en una llamada de SDK');
+    if (caller) for (const h of opHooks) h(c, { out, via: 'sdk' });
     let data = (out ?? {}) as Record<string, unknown>;
     if (isGet) {
       const { __stdout, ...rest } = data as Record<string, unknown>;
@@ -87,7 +88,10 @@ export function sdkCall(a: Account, region: string, caller: Caller | null, servi
     }
     return { ok: true, data: JSON.parse(JSON.stringify(data)) as Record<string, unknown> };
   } catch (e) {
-    if (e instanceof AwsError) return { ok: false, error: { Code: e.code, Message: e.message, Status: e.status ?? 400 } };
+    if (e instanceof AwsError) {
+      if (caller) for (const h of opHooks) h(c, { error: e, via: 'sdk' });
+      return { ok: false, error: { Code: e.code, Message: e.message, Status: e.status ?? 400 } };
+    }
     throw e;
   }
 }

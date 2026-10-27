@@ -152,8 +152,19 @@ export interface OpDef {
   positional?: string[];
 }
 
+/** Resultado de una operación para quien la audita (CloudTrail): el error, o la respuesta. */
+export interface OpOutcome {
+  error?: AwsError;
+  out?: unknown;
+  /** De dónde viene la llamada: la CLI del alumno o el SDK de una función. */
+  via: 'cli' | 'sdk';
+}
+
+/** Se ejecutan tras cada operación hecha por una identidad (no en las comprobaciones del corrector). */
+export const opHooks: ((c: OpCtx, o: OpOutcome) => void)[] = [];
+
 export const OPS = new Map<string, OpDef>();
-export const SERVICE_PREFIX: Record<string, string> = { s3api: 's3', s3: 's3', cloudwatch: 'cloudwatch', budgets: 'budgets', elbv2: 'elasticloadbalancing', elb: 'elasticloadbalancing', stepfunctions: 'states', apigatewayv2: 'apigateway', dynamodbstreams: 'dynamodb', deploy: 'codedeploy' };
+export const SERVICE_PREFIX: Record<string, string> = { s3api: 's3', s3: 's3', cloudwatch: 'cloudwatch', budgets: 'budgets', elbv2: 'elasticloadbalancing', elb: 'elasticloadbalancing', stepfunctions: 'states', apigatewayv2: 'apigateway', dynamodbstreams: 'dynamodb', deploy: 'codedeploy', configservice: 'config' };
 export const SERVICE_SUMMARY: Record<string, string> = {
   sts: 'AWS Security Token Service',
   iam: 'AWS Identity and Access Management',
@@ -190,7 +201,10 @@ export const SERVICE_SUMMARY: Record<string, string> = {
   cloudfront: 'Amazon CloudFront (CDN)',
   globalaccelerator: 'AWS Global Accelerator',
   directconnect: 'AWS Direct Connect',
-  logs: 'Amazon CloudWatch Logs',
+  logs: 'Amazon CloudWatch Logs (grupos, filtros, Insights)',
+  cloudtrail: 'AWS CloudTrail (quién hizo qué en tu cuenta)',
+  configservice: 'AWS Config (historial de configuración y cumplimiento)',
+  xray: 'AWS X-Ray (trazas de peticiones)',
   lambda: 'AWS Lambda',
   sqs: 'Amazon Simple Queue Service',
   events: 'Amazon EventBridge',

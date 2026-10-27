@@ -585,6 +585,123 @@ const logGroup: RType = {
   delete: (r, id) => void r.call('logs', 'delete-log-group', { LogGroupName: id }),
 };
 
+// ───────────────────────── operaciones y observabilidad (Z14) ─────────────────────────
+
+const ssmParameter: RType = {
+  allowed: ['Name', 'Type', 'Value', 'Description', 'Tier', 'AllowedPattern', 'Tags', 'DataType'],
+  mutable: ['Value', 'Description', 'Tier', 'AllowedPattern', 'Tags'],
+  nameProp: 'Name',
+  secs: 2,
+  nameMax: 1011,
+  create(r, p, name) {
+    if (p.Type === 'SecureString') throw new CfnFail('Resource handler returned message: "Type SecureString is not supported by AWS::SSM::Parameter: create it with the CLI or use a dynamic reference to an existing secure parameter." (RequestToken: , HandlerErrorCode: InvalidRequest)');
+    if (!p.Type) throw new CfnFail('Property validation failure: [The property {/Type} is required]');
+    if (p.Value === undefined) throw new CfnFail('Property validation failure: [The property {/Value} is required]');
+    const full = name.includes('/') && !name.startsWith('/') ? '/' + name : name;
+    r.call('ssm', 'put-parameter', { Name: full, Type: p.Type, Value: String(p.Value), ...(p.Description ? { Description: p.Description } : {}), ...(p.Tier ? { Tier: p.Tier } : {}), ...(p.AllowedPattern ? { AllowedPattern: p.AllowedPattern } : {}) });
+    return { id: full, attrs: { Type: String(p.Type), Value: String(p.Value) } };
+  },
+  update(r, id, _old, next) {
+    r.call('ssm', 'put-parameter', { Name: id, Type: next.Type, Value: String(next.Value), Overwrite: true, ...(next.Description ? { Description: next.Description } : {}) });
+  },
+  delete: (r, id) => void r.call('ssm', 'delete-parameter', { Name: id }),
+};
+
+const cwAlarm: RType = {
+  allowed: ['AlarmName', 'AlarmDescription', 'Namespace', 'MetricName', 'Dimensions', 'Statistic', 'ExtendedStatistic', 'Period', 'EvaluationPeriods', 'DatapointsToAlarm', 'Threshold', 'ComparisonOperator', 'TreatMissingData', 'Unit', 'AlarmActions', 'OKActions', 'InsufficientDataActions', 'ActionsEnabled', 'Metrics', 'Tags'],
+  mutable: ['AlarmDescription', 'Threshold', 'EvaluationPeriods', 'DatapointsToAlarm', 'ComparisonOperator', 'TreatMissingData', 'AlarmActions', 'OKActions', 'InsufficientDataActions', 'ActionsEnabled', 'Period', 'Statistic', 'Dimensions', 'Metrics', 'Unit'],
+  nameProp: 'AlarmName',
+  secs: 2,
+  nameMax: 255,
+  create(r, p, name) {
+    r.call('cloudwatch', 'put-metric-alarm', alarmArgs(name, p));
+    return { id: name, attrs: { Arn: `arn:aws:cloudwatch:${r.region}:${accountOf(r)}:alarm:${name}` } };
+  },
+  update: (r, id, _old, next) => void r.call('cloudwatch', 'put-metric-alarm', alarmArgs(id, next)),
+  delete: (r, id) => void r.call('cloudwatch', 'delete-alarms', { AlarmNames: [id] }),
+};
+
+function alarmArgs(name: string, p: Rec): Rec {
+  return {
+    AlarmName: name,
+    ...(p.AlarmDescription ? { AlarmDescription: p.AlarmDescription } : {}),
+    ...(p.Namespace ? { Namespace: p.Namespace } : {}),
+    ...(p.MetricName ? { MetricName: p.MetricName } : {}),
+    ...(p.Dimensions ? { Dimensions: p.Dimensions } : {}),
+    ...(p.Statistic ? { Statistic: p.Statistic } : {}),
+    ...(p.ExtendedStatistic ? { ExtendedStatistic: p.ExtendedStatistic } : {}),
+    ...(p.Period !== undefined ? { Period: Number(p.Period) } : {}),
+    EvaluationPeriods: Number(p.EvaluationPeriods),
+    ...(p.DatapointsToAlarm !== undefined ? { DatapointsToAlarm: Number(p.DatapointsToAlarm) } : {}),
+    Threshold: Number(p.Threshold),
+    ComparisonOperator: p.ComparisonOperator,
+    ...(p.TreatMissingData ? { TreatMissingData: p.TreatMissingData } : {}),
+    ...(p.Unit ? { Unit: p.Unit } : {}),
+    ...(p.AlarmActions ? { AlarmActions: p.AlarmActions } : {}),
+    ...(p.OKActions ? { OkActions: p.OKActions } : {}),
+    ...(p.InsufficientDataActions ? { InsufficientDataActions: p.InsufficientDataActions } : {}),
+    ...(p.ActionsEnabled !== undefined ? { ActionsEnabled: p.ActionsEnabled === true || p.ActionsEnabled === 'true' } : {}),
+    ...(p.Metrics ? { Metrics: p.Metrics } : {}),
+  };
+}
+
+const metricFilter: RType = {
+  allowed: ['LogGroupName', 'FilterPattern', 'MetricTransformations', 'FilterName'],
+  mutable: ['FilterPattern', 'MetricTransformations'],
+  secs: 2,
+  create(r, p) {
+    const name = String(p.FilterName ?? `${r.stackName}-${r.logicalId}`);
+    const t = ((p.MetricTransformations as Rec[]) ?? [])[0] ?? {};
+    r.call('logs', 'put-metric-filter', { LogGroupName: p.LogGroupName, FilterName: name, FilterPattern: p.FilterPattern ?? '', MetricTransformations: [{ metricName: t.MetricName, metricNamespace: t.MetricNamespace, metricValue: String(t.MetricValue), ...(t.DefaultValue !== undefined ? { defaultValue: Number(t.DefaultValue) } : {}), ...(t.Unit ? { unit: t.Unit } : {}) }] });
+    return { id: name };
+  },
+  update(r, id, _old, next) {
+    const t = ((next.MetricTransformations as Rec[]) ?? [])[0] ?? {};
+    r.call('logs', 'put-metric-filter', { LogGroupName: next.LogGroupName, FilterName: id, FilterPattern: next.FilterPattern ?? '', MetricTransformations: [{ metricName: t.MetricName, metricNamespace: t.MetricNamespace, metricValue: String(t.MetricValue) }] });
+  },
+  delete: (r, id, p) => void r.call('logs', 'delete-metric-filter', { LogGroupName: p.LogGroupName, FilterName: id }),
+};
+
+const cwDashboard: RType = {
+  allowed: ['DashboardName', 'DashboardBody'],
+  mutable: ['DashboardBody'],
+  nameProp: 'DashboardName',
+  secs: 2,
+  nameMax: 255,
+  create(r, p, name) {
+    r.call('cloudwatch', 'put-dashboard', { DashboardName: name, DashboardBody: typeof p.DashboardBody === 'string' ? p.DashboardBody : JSON.stringify(p.DashboardBody) });
+    return { id: name };
+  },
+  update: (r, id, _old, next) => void r.call('cloudwatch', 'put-dashboard', { DashboardName: id, DashboardBody: typeof next.DashboardBody === 'string' ? next.DashboardBody : JSON.stringify(next.DashboardBody) }),
+  delete: (r, id) => void r.call('cloudwatch', 'delete-dashboards', { DashboardNames: [id] }),
+};
+
+const ctTrail: RType = {
+  allowed: ['TrailName', 'S3BucketName', 'S3KeyPrefix', 'IsLogging', 'IsMultiRegionTrail', 'EnableLogFileValidation', 'IncludeGlobalServiceEvents', 'CloudWatchLogsLogGroupArn', 'CloudWatchLogsRoleArn', 'KMSKeyId', 'EventSelectors', 'Tags'],
+  mutable: ['IsLogging', 'EventSelectors', 'Tags'],
+  nameProp: 'TrailName',
+  secs: 4,
+  nameMax: 128,
+  create(r, p, name) {
+    if (p.IsLogging === undefined) throw new CfnFail('Property validation failure: [The property {/IsLogging} is required]');
+    const out = r.call('cloudtrail', 'create-trail', {
+      Name: name,
+      S3BucketName: p.S3BucketName,
+      ...(p.S3KeyPrefix ? { S3KeyPrefix: p.S3KeyPrefix } : {}),
+      ...(p.IsMultiRegionTrail !== undefined ? { IsMultiRegionTrail: p.IsMultiRegionTrail === true || p.IsMultiRegionTrail === 'true' } : {}),
+      ...(p.EnableLogFileValidation !== undefined ? { EnableLogFileValidation: p.EnableLogFileValidation === true || p.EnableLogFileValidation === 'true' } : {}),
+      ...(p.CloudWatchLogsLogGroupArn ? { CloudWatchLogsLogGroupArn: p.CloudWatchLogsLogGroupArn, CloudWatchLogsRoleArn: p.CloudWatchLogsRoleArn } : {}),
+    });
+    if (p.EventSelectors) r.call('cloudtrail', 'put-event-selectors', { TrailName: name, EventSelectors: p.EventSelectors });
+    if (p.IsLogging === true || p.IsLogging === 'true') r.call('cloudtrail', 'start-logging', { Name: name });
+    return { id: name, attrs: { Arn: String(out.TrailARN) } };
+  },
+  update(r, id, _old, next) {
+    r.call('cloudtrail', next.IsLogging === true || next.IsLogging === 'true' ? 'start-logging' : 'stop-logging', { Name: id });
+  },
+  delete: (r, id) => void r.call('cloudtrail', 'delete-trail', { Name: id }),
+};
+
 const httpApi: RType = {
   allowed: ['Name', 'ProtocolType', 'Description', 'Target', 'CorsConfiguration', 'Tags'],
   mutable: ['Description', 'Tags', 'CorsConfiguration'],
@@ -665,6 +782,11 @@ export const RESOURCE_TYPES: Record<string, RType> = {
   'AWS::EC2::SecurityGroup': sg,
   'AWS::EC2::Instance': instance,
   'AWS::Logs::LogGroup': logGroup,
+  'AWS::Logs::MetricFilter': metricFilter,
+  'AWS::SSM::Parameter': ssmParameter,
+  'AWS::CloudWatch::Alarm': cwAlarm,
+  'AWS::CloudWatch::Dashboard': cwDashboard,
+  'AWS::CloudTrail::Trail': ctTrail,
   'AWS::ApiGatewayV2::Api': httpApi,
   'AWS::ApiGatewayV2::Integration': apiIntegration,
   'AWS::ApiGatewayV2::Route': apiRoute,

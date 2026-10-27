@@ -8,6 +8,7 @@ import { invokeAsync } from './lambda';
 import { findQueue, queueAllowsService, sqsSend } from './sqs';
 import { sfnStart } from './sfn';
 import { snsPublish, topicAllowsService } from './sns';
+import { logsPut, logsOf } from './logs';
 
 export const eventsOf = (a: Account, region: string): EventsState => {
   const r = regional(a, region);
@@ -99,13 +100,20 @@ function targetInput(t: EventTarget, event: Record<string, unknown>): unknown {
   return event;
 }
 
+/** Otros servicios (Systems Manager…) aportan sus tipos de destino: devuelven true si el ARN era suyo. */
+export const targetHooks: ((a: Account, region: string, t: EventTarget, input: unknown, ruleArn: string) => boolean)[] = [];
+
 /** Entrega el evento a los destinos de una regla. */
 function fire(a: Account, region: string, rule: EventRule, event: Record<string, unknown>): void {
   const arn = ruleArn(a, region, rule);
   for (const t of rule.targets) {
     const input = targetInput(t, event);
     try {
-      if (t.Arn.startsWith('arn:aws:lambda:')) invokeAsync(a, region, t.Arn, input, { service: 'events.amazonaws.com', sourceArn: arn });
+      if (targetHooks.some((h) => h(a, region, t, input, arn))) continue;
+      if (t.Arn.startsWith('arn:aws:logs:')) {
+        const g = /^arn:aws:logs:([^:]+):\d+:log-group:(.+?)(?::\*)?$/.exec(t.Arn);
+        if (g && logsOf(a, g[1]).groups[g[2]]) logsPut(a, g[1], g[2], `${new Date(a.clock).toISOString().slice(0, 10).replace(/-/g, '/')}/[$LATEST]${t.Id}`, typeof input === 'string' ? input : JSON.stringify(input));
+      } else if (t.Arn.startsWith('arn:aws:lambda:')) invokeAsync(a, region, t.Arn, input, { service: 'events.amazonaws.com', sourceArn: arn });
       else if (t.Arn.startsWith('arn:aws:sqs:')) {
         const { q } = findQueue(a, region, t.Arn);
         if (queueAllowsService(q, 'events.amazonaws.com', arn)) sqsSend(a, q, typeof input === 'string' ? input : JSON.stringify(input), { group: q.name.endsWith('.fifo') ? 'eventbridge' : undefined, dedup: q.name.endsWith('.fifo') ? String(event.id) : undefined });
@@ -148,7 +156,7 @@ export function putEvent(a: Account, region: string, bus: string, o: { source: s
 
 // ───────────────────────── programaciones ─────────────────────────
 
-function parseRate(expr: string): number | null {
+export function parseRate(expr: string): number | null {
   const m = /^rate\((\d+) (minute|minutes|hour|hours|day|days)\)$/.exec(expr);
   if (!m) return null;
   const n = Number(m[1]);
@@ -166,7 +174,7 @@ const cronField = (f: string, v: number): boolean => {
   });
 };
 
-function cronMatches(expr: string, ms: number): boolean {
+export function cronMatches(expr: string, ms: number): boolean {
   const m = /^cron\((.+)\)$/.exec(expr);
   if (!m) return false;
   const [min, hour, dom, mon, dow] = m[1].trim().split(/\s+/);
@@ -179,7 +187,7 @@ function cronMatches(expr: string, ms: number): boolean {
   return cronField(min, d.getUTCMinutes()) && cronField(hour, d.getUTCHours()) && cronField(dom, d.getUTCDate()) && cronField(mon, d.getUTCMonth() + 1) && (dowOk || rangeOk);
 }
 
-function validSchedule(expr: string): boolean {
+export function validSchedule(expr: string): boolean {
   if (/^rate\(/.test(expr)) {
     const m = /^rate\((\d+) (minute|minutes|hour|hours|day|days)\)$/.exec(expr);
     if (!m) return false;

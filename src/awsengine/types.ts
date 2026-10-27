@@ -611,6 +611,8 @@ export interface LambdaVersion {
   Environment: Record<string, string>;
   Role: string;
   LastModified: number;
+  /** `Active`: la función envía trazas a X-Ray. */
+  TracingMode?: 'Active' | 'PassThrough';
   /** Función conectada a una VPC: sus entornos usan interfaces de red en esas subredes. */
   VpcConfig?: { SubnetIds: string[]; SecurityGroupIds: string[]; VpcId: string };
 }
@@ -1624,6 +1626,7 @@ export interface EventTarget {
   InputPath?: string;
   InputTransformer?: { InputPathsMap?: Record<string, string>; InputTemplate: string };
   RoleArn?: string;
+  RunCommandParameters?: { RunCommandTargets: { Key: string; Values: string[] }[] };
 }
 
 export interface EventRule {
