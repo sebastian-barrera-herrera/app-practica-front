@@ -174,6 +174,8 @@ export const SERVICE_SUMMARY: Record<string, string> = {
   ecr: 'Amazon Elastic Container Registry',
   ecs: 'Amazon Elastic Container Service',
   'application-autoscaling': 'Application Auto Scaling',
+  apprunner: 'AWS App Runner',
+  eks: 'Amazon Elastic Kubernetes Service',
   ce: 'AWS Cost Explorer',
   organizations: 'AWS Organizations',
   resourcegroupstaggingapi: 'AWS Resource Groups Tagging API',

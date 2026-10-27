@@ -348,3 +348,235 @@ export interface AasTarget {
 export interface AasState {
   targets: Record<string, AasTarget>;
 }
+
+// ───────────────────────── App Runner ─────────────────────────
+
+export interface ArAutoScaling {
+  name: string;
+  arn: string;
+  revision: number;
+  latest: boolean;
+  maxConcurrency: number;
+  minSize: number;
+  maxSize: number;
+  created: number;
+  active: boolean;
+}
+
+export interface ArOperation {
+  Id: string;
+  Type: 'CREATE_SERVICE' | 'UPDATE_SERVICE' | 'START_DEPLOYMENT' | 'PAUSE_SERVICE' | 'RESUME_SERVICE' | 'DELETE_SERVICE';
+  Status: 'IN_PROGRESS' | 'SUCCEEDED' | 'FAILED';
+  TargetArn: string;
+  StartedAt: number;
+  EndedAt?: number;
+}
+
+export interface ArService {
+  name: string;
+  id: string;
+  arn: string;
+  url: string;
+  status: 'OPERATION_IN_PROGRESS' | 'RUNNING' | 'PAUSED' | 'CREATE_FAILED' | 'DELETED' | 'DELETE_FAILED';
+  created: number;
+  updated: number;
+  deleted?: number;
+  /** Imagen (`repo:tag`) y cómo se identifica. */
+  image: string;
+  imageType: 'ECR' | 'ECR_PUBLIC';
+  accessRoleArn?: string;
+  instanceRoleArn?: string;
+  autoDeploy: boolean;
+  port: string;
+  startCommand?: string;
+  env: Record<string, string>;
+  secretsMap?: Record<string, string>;
+  cpu: string;
+  memory: string;
+  health: { Protocol: 'TCP' | 'HTTP'; Path: string; Interval: number; Timeout: number; HealthyThreshold: number; UnhealthyThreshold: number };
+  scalingArn: string;
+  /** Lo que está sirviendo ahora (la versión anterior sigue en pie mientras se despliega otra). */
+  live?: { img: ImageData; digest: string; since: number; env: Record<string, string>; args: string[] | null; role?: string; server: { port: number; bindAll: boolean; kind: 'flask' | 'gunicorn' | 'nginx' } };
+  operations: ArOperation[];
+  /** Lo que ocurrirá y cuándo: la operación en curso termina en `settleAt` con ese resultado. */
+  pending?: { op: string; settleAt: number; ok: boolean; reason?: string; next?: ArService['live']; nextStatus: ArService['status'] };
+  pendingLogs: { ts: number; msg: string; stream: 'service' | 'application' }[];
+  tags: { Key: string; Value: string }[];
+}
+
+export interface ArState {
+  services: Record<string, ArService>;
+  scaling: Record<string, ArAutoScaling>;
+  counter: number;
+}
+
+// ───────────────────────── EKS y Kubernetes ─────────────────────────
+
+export interface EksNodegroup {
+  name: string;
+  arn: string;
+  status: 'CREATING' | 'ACTIVE' | 'DELETING' | 'CREATE_FAILED' | 'UPDATING';
+  instanceTypes: string[];
+  amiType: string;
+  capacityType: 'ON_DEMAND' | 'SPOT';
+  diskSize: number;
+  min: number;
+  max: number;
+  desired: number;
+  subnets: string[];
+  nodeRole: string;
+  labels: Record<string, string>;
+  created: number;
+  activeAt: number;
+  /** Si los nodos llegan a unirse al clúster y, si no, por qué. */
+  joinFail?: { Code: string; Message: string };
+  failedIds?: string[];
+  deleteAt?: number;
+  instanceIds: string[];
+  version: string;
+  tags: { Key: string; Value: string }[];
+}
+
+export interface EksFargateProfile {
+  name: string;
+  arn: string;
+  podExecutionRoleArn: string;
+  subnets: string[];
+  selectors: { namespace: string; labels?: Record<string, string> }[];
+  created: number;
+  activeAt: number;
+  deleting?: number;
+  tags: { Key: string; Value: string }[];
+}
+
+export interface EksAccessEntry {
+  principalArn: string;
+  arn: string;
+  type: string;
+  kubernetesGroups: string[];
+  policies: { policyArn: string; accessScope: { type: 'cluster' | 'namespace'; namespaces?: string[] } }[];
+  created: number;
+}
+
+export interface K8sContainer {
+  name: string;
+  image: string;
+  command?: string[];
+  args?: string[];
+  env: { name: string; value: string }[];
+  ports: number[];
+  /** Milicores y MiB pedidos. */
+  cpu: number;
+  mem: number;
+  memLimit?: number;
+}
+
+export interface K8sDeployment {
+  name: string;
+  ns: string;
+  labels: Record<string, string>;
+  selector: Record<string, string>;
+  replicas: number;
+  containers: K8sContainer[];
+  /** Resumen de la plantilla de pods (cambia cuando cambia la imagen o la configuración). */
+  hash: string;
+  revision: number;
+  history: { revision: number; hash: string; containers: K8sContainer[] }[];
+  created: number;
+  generation: number;
+  simAt: number;
+  maxSurge: number;
+  maxUnavailable: number;
+  system?: boolean;
+  restartNonce?: string;
+}
+
+export interface K8sPod {
+  name: string;
+  ns: string;
+  labels: Record<string, string>;
+  owner?: string;
+  hash: string;
+  containers: K8sContainer[];
+  node?: string;
+  nodeInstance?: string;
+  fargate?: boolean;
+  ip?: string;
+  subnetId?: string;
+  created: number;
+  scheduledAt?: number;
+  pullDoneAt?: number;
+  startedAt?: number;
+  /** Horas de los fallos del contenedor (el primero y los reinicios). */
+  crashAt?: number[];
+  failure?: { kind: 'Unschedulable' | 'ImagePull' | 'Crash'; reason: string; message: string; code?: number };
+  terminatingAt?: number;
+  deletedAt?: number;
+  img?: ImageData;
+  server?: { port: number; bindAll: boolean; kind: 'flask' | 'gunicorn' | 'nginx' };
+  lines: string[];
+  events: { t: number; type: 'Normal' | 'Warning'; reason: string; message: string }[];
+  /** Cuándo vuelve a intentar descargar la imagen (tras un fallo). */
+  retryAt?: number;
+  uid: string;
+  /** Pods del propio EKS (aws-node, kube-proxy, coredns). */
+  system?: boolean;
+  ownerRef?: string;
+}
+
+export interface K8sService {
+  name: string;
+  ns: string;
+  type: 'ClusterIP' | 'NodePort' | 'LoadBalancer';
+  selector: Record<string, string>;
+  ports: { port: number; targetPort: number; nodePort?: number }[];
+  clusterIp: string;
+  created: number;
+  annotations: Record<string, string>;
+  lb?: { arn: string; dns: string; tgArn: string; readyAt: number };
+  /** Por qué no se pudo crear el balanceador (si no pudo). */
+  lbError?: string;
+  events: { t: number; type: 'Normal' | 'Warning'; reason: string; message: string }[];
+}
+
+export interface K8sState {
+  namespaces: string[];
+  deployments: Record<string, K8sDeployment>;
+  pods: Record<string, K8sPod>;
+  services: Record<string, K8sService>;
+  counter: number;
+  simAt: number;
+}
+
+export interface EksCluster {
+  name: string;
+  arn: string;
+  version: string;
+  roleArn: string;
+  status: 'CREATING' | 'ACTIVE' | 'DELETING' | 'FAILED';
+  created: number;
+  activeAt: number;
+  endpoint: string;
+  ca: string;
+  vpcId: string;
+  subnetIds: string[];
+  securityGroupIds: string[];
+  clusterSg: string;
+  publicAccess: boolean;
+  privateAccess: boolean;
+  failure?: { Code: string; Message: string };
+  deleteAt?: number;
+  /** Quién creó el clúster: administrador implícito. */
+  creator: string;
+  accessEntries: Record<string, EksAccessEntry>;
+  nodegroups: Record<string, EksNodegroup>;
+  fargateProfiles: Record<string, EksFargateProfile>;
+  logging: string[];
+  tags: { Key: string; Value: string }[];
+  k8s: K8sState;
+}
+
+export interface EksState {
+  clusters: Record<string, EksCluster>;
+  counter: number;
+}

@@ -1,4 +1,4 @@
-import type { AasState, DockerState, EcrState, EcsState } from './types-containers';
+import type { AasState, ArState, DockerState, EcrState, EcsState, EksState } from './types-containers';
 /** Modelo de la cuenta de AWS simulada (todo es JSON plano: se puede clonar con structuredClone). */
 
 export type Json = null | boolean | number | string | Json[] | { [k: string]: Json };
@@ -1057,6 +1057,8 @@ export interface RegionalState {
   ecr?: EcrState;
   ecs?: EcsState;
   aas?: AasState;
+  apprunner?: ArState;
+  eks?: EksState;
   /** Plantillas de lanzamiento de EC2. */
   launchTemplates?: Record<string, LaunchTemplate>;
 }

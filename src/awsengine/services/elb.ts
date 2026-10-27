@@ -126,7 +126,18 @@ export interface IpTargetInfo {
   /** Atiende una petición HTTP en ese puerto del contenedor. `refused`: nadie escucha (o solo en 127.0.0.1). */
   http: (port: number, method: string, path: string, probe?: boolean) => { refused?: boolean; status?: number; type?: string; body?: string; headers?: Record<string, string> };
 }
-export const ipTargets: { resolve?: (a: Account, region: string, ip: string) => IpTargetInfo | undefined } = {};
+type IpResolver = (a: Account, region: string, ip: string) => IpTargetInfo | undefined;
+/** Quién sabe qué hay detrás de una IP usada como destino (tareas de ECS, pods de EKS…). */
+export const ipTargets: { resolvers: IpResolver[]; resolve: IpResolver } = {
+  resolvers: [],
+  resolve: (a, region, ip) => {
+    for (const f of ipTargets.resolvers) {
+      const r = f(a, region, ip);
+      if (r) return r;
+    }
+    return undefined;
+  },
+};
 const isIpId = (id: string) => /^\d{1,3}(\.\d{1,3}){3}$/.test(id);
 
 /** Estados que no dependen de las comprobaciones (el destino no está en uso, se está retirando, la instancia no corre…). */
@@ -136,7 +147,7 @@ function directState(a: Account, region: string, tg: TargetGroup, t: { Id: strin
   const lbs = lbsUsing(a, region, tg.TargetGroupArn);
   if (!lbs.length) return { state: 'unused', reason: 'Target.NotInUse', description: 'Target group is not configured to receive traffic from the load balancer' };
   if (isIpId(t.Id)) {
-    const ip = ipTargets.resolve?.(a, region, t.Id);
+    const ip = ipTargets.resolve(a, region, t.Id);
     if (!ip) return { state: 'unused', reason: 'Target.InvalidState', description: 'Target is in the stopped state' };
     if (!ip.up) return { state: ip.state === 'STOPPED' || ip.state === 'DEPROVISIONING' ? 'unused' : 'initial', reason: ip.state === 'STOPPED' || ip.state === 'DEPROVISIONING' ? 'Target.InvalidState' : 'Elb.RegistrationInProgress', description: ip.state === 'STOPPED' || ip.state === 'DEPROVISIONING' ? 'Target is in the stopped state' : 'Target registration is in progress' };
     if (!lbs[0].subnetIds.map((id) => r.subnets[id]?.AvailabilityZone).includes(ip.az)) return { state: 'unused', reason: 'Target.NotInUse', description: 'Target is in an Availability Zone that is not enabled for the load balancer' };
@@ -191,7 +202,7 @@ export function targetHealth(a: Account, region: string, tg: TargetGroup, t: TgT
   const inst = regional(a, region).ec2.instances[t.Id];
   const probe = probeTarget(a, region, tg, t);
   const interval = tg.HealthCheckIntervalSeconds * 1000;
-  const since0 = isIpId(t.Id) ? Math.max(t.registeredAt, ipTargets.resolve?.(a, region, t.Id)?.since ?? 0) : Math.max(t.registeredAt, upSince(inst));
+  const since0 = isIpId(t.Id) ? Math.max(t.registeredAt, ipTargets.resolve(a, region, t.Id)?.since ?? 0) : Math.max(t.registeredAt, upSince(inst));
   const hs = (t.hs ??= { ok: probe.ok, since: since0, state: 'initial', lastEval: a.clock });
   if (hs.ok !== probe.ok) {
     hs.ok = probe.ok;
@@ -328,7 +339,7 @@ function forward(a: Account, region: string, lb: LoadBalancer, act: LbAction, q:
   if (!pool.length) return errPage(503, 'Service Temporarily Unavailable');
   const t = pool[lb.served % pool.length];
   if (isIpId(t.Id)) {
-    const ip = ipTargets.resolve?.(a, region, t.Id);
+    const ip = ipTargets.resolve(a, region, t.Id);
     if (!ip || !ip.up) return errPage(502, 'Bad Gateway');
     if (!nodeReachesEni(r, lb, ip.sgIds, ip.subnetId, t.Port)) return errPage(504, 'Gateway Time-out');
     const res = ip.http(t.Port, q.method, q.path + (q.query ? '?' + q.query : ''));

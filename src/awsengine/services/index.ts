@@ -46,3 +46,5 @@ import './ecr';
 import './ecs';
 import './ecsops';
 import './aas';
+import './apprunner';
+import './eks';

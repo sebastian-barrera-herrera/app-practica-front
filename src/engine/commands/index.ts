@@ -14,5 +14,6 @@ import './archive';
 import './fun';
 import '../../awsengine/command';
 import '../../awsengine/docker';
+import '../../awsengine/kubectl';
 
 export { REGISTRY } from '../registry';

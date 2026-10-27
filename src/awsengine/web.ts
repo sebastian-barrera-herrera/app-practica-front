@@ -12,6 +12,7 @@ import type { Account, LoadBalancer, S3Bucket } from './types';
 import { instancePage } from './hosting';
 import { traceFromInternet } from './net';
 import { apiRequest } from './services/apigw';
+import { appRunnerRequest } from './services/apprunner';
 import { emitFlow } from './services/flowlogs';
 import { clientGeo, r53Address, r53Lookup } from './services/route53';
 import { cfByDomain, cfServe, gas, gaServe } from './services/edge';
@@ -245,6 +246,8 @@ export function awsHttp(a: Account, req: WebReq): Fetched | null {
   tick(a);
   const gw = apiRequest(a, req);
   if (gw) return gw;
+  const ar = appRunnerRequest(a, req);
+  if (ar) return ar;
   const lbDirect = lbByDns(a, req.host);
   if (lbDirect) return lbRequest(a, lbDirect, req, req.host);
   const dist = cfByDomain(a, req.host);

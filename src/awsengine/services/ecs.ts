@@ -94,10 +94,10 @@ export const fargateValid = (cpu: number, mem: number) => (FARGATE_MEM[cpu] ?? [
 const VPC_OF = (r: Ec2Region, subnetId: string) => r.subnets[subnetId]?.VpcId ?? '';
 
 /** Siguiente IP libre de una subred (se evitan las cuatro primeras, las de los balanceadores y las que ya se usan). */
-function allocIp(a: Account, region: string, subnetId: string): string {
+export function allocIp(a: Account, region: string, subnetId: string, extraUsed: Set<string> = new Set()): string {
   const r = regional(a, region).ec2;
   const c = parseCidr(r.subnets[subnetId]?.CidrBlock ?? '10.0.0.0/24')!;
-  const used = new Set<string>();
+  const used = new Set<string>(extraUsed);
   for (const i of Object.values(r.instances)) if (i.SubnetId === subnetId) used.add(i.PrivateIpAddress);
   for (const e of Object.values(r.endpoints ?? {})) for (const [sub, ip] of Object.entries(e.ips)) if (sub === subnetId) used.add(ip);
   for (const e of Object.values(ecsOf(a, region).enis)) if (e.subnetId === subnetId) used.add(e.privateIp);
@@ -152,7 +152,7 @@ const PULL_FAIL_MS = 6000;
 const NET_FAIL_MS = 100000;
 
 /** Memoria que necesita el programa del contenedor (MiB): lo que ocupa el intérprete y los paquetes más pesados. */
-function memoryNeed(img: ImageData): number {
+export function memoryNeed(img: ImageData): number {
   let m = img.runtime === 'nginx' ? 12 : 38;
   for (const p of img.pkgs) m += p.name === 'numpy' ? 60 : p.name === 'pandas' ? 110 : p.name === 'boto3' || p.name === 'botocore' ? 12 : p.name === 'flask' ? 6 : 1;
   return m;
@@ -437,7 +437,7 @@ export function taskHttp(a: Account, region: string, task: EcsTask, port: number
 }
 
 /** Un destino `ip` de un balanceador: la tarea de ECS que tiene esa IP. */
-ipTargets.resolve = (a, region, ip) => {
+ipTargets.resolvers.push((a, region, ip) => {
   const st = regional(a, region).ecs;
   if (!st) return undefined;
   const eni = Object.values(st.enis).find((e) => e.privateIp === ip);
@@ -453,7 +453,7 @@ ipTargets.resolve = (a, region, ip) => {
     since: task.runningAt ?? task.createdAt,
     http: (port, method, path, probe) => taskHttp(a, region, task, port, method, path, { probe }),
   };
-};
+});
 
 // ───────────────────────── planificador de servicios ─────────────────────────
 
