@@ -34,6 +34,8 @@ export function orgAddAccount(a: Account, name: string, email: string, parent?: 
   const id = String(100000000000 + (parseInt(stableId(`orgacct:${name}`, '', 7), 16) % 899999999999)).slice(0, 12);
   const acc: OrgAccount = { Id: id, Name: name, Email: email, Status: 'ACTIVE', JoinedMethod: 'CREATED', JoinedTimestamp: iso(a.clock), ParentId: parent ?? o.rootId };
   o.accounts[id] = acc;
+  // como en AWS, toda cuenta nueva nace con la SCP FullAWSAccess aplicada
+  o.policies[FULL_ACCESS.Id]?.targets.push(id);
   return acc;
 }
 
@@ -69,6 +71,8 @@ op('organizations', 'create-organizational-unit', 'parent-id:s! name:s!', 'Crea 
   if (Object.values(o.units).some((u) => u.ParentId === c.p.ParentId && u.Name === c.p.Name)) throw new AwsError('DuplicateOrganizationalUnitException', 'An OrganizationalUnit with the same name already exists.');
   const id = `ou-${o.rootId.slice(2)}-${newId(c.acct, 'orgou', '', 8, 'hex')}`;
   o.units[id] = { Id: id, Name: c.p.Name, ParentId: c.p.ParentId };
+  // y toda unidad organizativa nueva también
+  o.policies[FULL_ACCESS.Id]?.targets.push(id);
   return { OrganizationalUnit: ouView(c.acct, o, o.units[id]) };
 });
 op('organizations', 'list-organizational-units-for-parent', 'parent-id:s!', 'OU que cuelgan de un padre.', { global: true, res: () => '*', paginate: 'OrganizationalUnits' }, (c) => {

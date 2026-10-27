@@ -66,3 +66,6 @@ import './shield';
 import './guardduty';
 import './inspector';
 import './macie';
+import './analyzer';
+import './securityhub';
+import './scp';

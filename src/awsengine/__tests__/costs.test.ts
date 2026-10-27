@@ -116,7 +116,9 @@ describe('Organizations', () => {
     const acct = (await e.json('organizations list-accounts --query "Accounts[?Name==`desarrollo`].Id | [0]"'));
     await e.run(`organizations attach-policy --policy-id ${p} --target-id ${acct}`);
     expect((await e.run(`organizations attach-policy --policy-id ${p} --target-id ${acct}`)).stderr).toContain('DuplicatePolicyAttachmentException');
-    expect(await e.json(`organizations list-policies-for-target --target-id ${acct} --filter SERVICE_CONTROL_POLICY --query "Policies[].Name"`)).toEqual(['sin-ec2']);
+    // toda cuenta nueva nace con FullAWSAccess; la SCP nueva se suma a ella
+    expect(await e.json(`organizations list-policies-for-target --target-id ${acct} --filter SERVICE_CONTROL_POLICY --query "Policies[].Name"`)).toEqual(['FullAWSAccess', 'sin-ec2']);
+    await e.run(`organizations detach-policy --policy-id p-FullAWSAccess --target-id ${acct}`);
     expect((await e.run(`organizations detach-policy --policy-id ${p} --target-id ${acct}`)).stderr).toContain('last service control policy');
     expect((await e.run(`organizations delete-policy --policy-id ${p}`)).stderr).toContain('PolicyInUseException');
     expect(await e.json(`organizations list-policies-for-target --target-id ${root} --filter SERVICE_CONTROL_POLICY --query "Policies[].Name"`)).toEqual(['FullAWSAccess']);

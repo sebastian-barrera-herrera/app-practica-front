@@ -309,6 +309,9 @@ export interface HubState {
   standards: Record<string, { disabled: Record<string, string>; enabledAt: number }>;
   products: string[];
   workflow: Record<string, { Status: string; Note?: string; Severity?: string; UpdatedBy?: string; at: number }>;
+  /** Estado de cada hallazgo de control (clave estable → cuándo nació, cambió y si sigue vigente). */
+  controls: Record<string, { created: number; updated: number; status: 'PASSED' | 'FAILED'; seen: number }>;
+  lastEval: number;
 }
 
 // ───────────────────────── IAM Access Analyzer ─────────────────────────
