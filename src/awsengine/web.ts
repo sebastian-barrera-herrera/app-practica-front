@@ -16,7 +16,8 @@ import { apiRequest } from './services/apigw';
 import { appRunnerRequest } from './services/apprunner';
 import { emitFlow } from './services/flowlogs';
 import { clientGeo, r53Address, r53Lookup } from './services/route53';
-import { cfByDomain, cfServe, gas, gaServe } from './services/edge';
+import { cfByDomain, cfServe, cfStatus, gas, gaServe } from './services/edge';
+import { aclOfResource, blockPage, wafInspect } from './services/waf';
 import { ecsTaskCapacity, elb, healthyTargets, lbByDns, lbFromInternet, lbHandle, lbState } from './services/elb';
 import { instanceType } from './catalog';
 import { tick } from './tick';
@@ -196,7 +197,7 @@ hostResolvers.push((sys: System, name: string) => {
 const timeoutFor = (host: string, port: number): Fetched => ({ ok: false, curlCode: 28, error: `Failed to connect to ${host} port ${port} after 130312 ms: Couldn't connect to server` });
 
 /** Una petición a un balanceador de carga (desde internet o desde CloudFront). */
-function lbRequest(a: Account, hit: { lb: LoadBalancer; region: string }, req: { host: string; port: number; scheme: string; method: string; path: string; query: string; insecure?: boolean }, hostHeader: string, srcIp = a.sourceIp): Fetched {
+function lbRequest(a: Account, hit: { lb: LoadBalancer; region: string }, req: { host: string; port: number; scheme: string; method: string; path: string; query: string; insecure?: boolean; headers?: Record<string, string>; body?: string }, hostHeader: string, srcIp = a.sourceIp): Fetched {
   if (lbState(a, hit.lb) !== 'active') return { ok: false, curlCode: 6, error: `Could not resolve host: ${req.host}` };
   if (!lbFromInternet(a, hit.region, hit.lb, req.port, srcIp).ok) return timeoutFor(req.host, req.port);
   // TLS: el certificado del oyente tiene que cubrir el nombre al que se conecta el cliente (curl -k lo ignora)
@@ -204,12 +205,24 @@ function lbRequest(a: Account, hit: { lb: LoadBalancer; region: string }, req: {
     const l = Object.values(hit.lb.listeners).find((x) => x.Port === req.port && (x.Protocol === 'HTTPS' || x.Protocol === 'TLS'));
     if (l?.Certificates?.length && !l.Certificates.some((x) => acmHooks.covers?.(a, hit.region, x.CertificateArn, req.host))) return { ok: false, curlCode: 60, error: `SSL: no alternative certificate subject name matches target host name '${req.host}'` };
   }
+  // AWS WAF: la ACL asociada al balanceador decide antes de que la petición llegue a ningún destino
+  const waf = wafInspect(a, hit.region, aclOfResource(a, hit.region, hit.lb.LoadBalancerArn), { kind: 'ALB', id: `${a.id}-${hit.lb.LoadBalancerArn.split('loadbalancer/')[1]}` }, { method: req.method, path: req.path, query: req.query, headers: req.headers, body: req.body, srcIp, host: hostHeader });
+  if (waf?.action === 'BLOCK') return blockPage('ALB', waf);
   return lbHandle(a, hit.region, hit.lb, { port: req.port, scheme: req.scheme, method: req.method, host: hostHeader, path: req.path, query: req.query, srcIp });
 }
 
 /** CloudFront: la caché de borde delante de un bucket o de un balanceador. */
-function cloudfrontRequest(a: Account, d: NonNullable<ReturnType<typeof cfByDomain>>, req: { host: string; scheme: string; method: string; path: string; query: string; port: number }): Fetched {
-  const geo = clientGeo(a.sourceIp);
+function cloudfrontRequest(a: Account, d: NonNullable<ReturnType<typeof cfByDomain>>, req: { host: string; scheme: string; method: string; path: string; query: string; port: number; headers?: Record<string, string>; body?: string; srcIp?: string }): Fetched {
+  const src = req.srcIp ?? a.sourceIp;
+  const geo = clientGeo(src);
+  // AWS WAF en el borde: se evalúa antes de mirar la caché
+  if (d.WebACLId && cfStatus(a, d) === 'Deployed' && d.Enabled) {
+    const waf = wafInspect(a, 'us-east-1', d.WebACLId, { kind: 'CF', id: d.Id }, { method: req.method, path: req.path, query: req.query, headers: req.headers, body: req.body, srcIp: src, host: req.host });
+    if (waf?.action === 'BLOCK') {
+      const page = blockPage('CF', waf);
+      return { ...page, headers: { ...(page.headers ?? {}), Via: `1.1 ${d.Id.toLowerCase()}.cloudfront.net (CloudFront)`, 'X-Cache': 'Error from cloudfront' } };
+    }
+  }
   return cfServe(a, d, { scheme: req.scheme, method: req.method, path: req.path + (req.query ? '?' + req.query : ''), host: req.host }, {
     country: geo.country,
     publicRead: (b, key) => anonymousCanRead(b, key, anonCtx(a)),
@@ -239,6 +252,8 @@ function lbCapacity(a: Account, region: string, lbArn: string): number {
 export interface WebReq {
   /** `curl -k`: no comprobar el certificado. */
   insecure?: boolean;
+  /** Desde qué dirección llega (por defecto, la IP del alumno). */
+  srcIp?: string;
   host: string;
   port: number;
   scheme: string;
@@ -262,11 +277,11 @@ export function awsHttp(a: Account, reqIn: WebReq): Fetched | null {
   const ar = appRunnerRequest(a, req);
   if (ar) return ar;
   const lbDirect = lbByDns(a, req.host);
-  if (lbDirect) return lbRequest(a, lbDirect, req, req.host);
+  if (lbDirect) return lbRequest(a, lbDirect, req, req.host, req.srcIp);
   const dist = cfByDomain(a, req.host);
   if (dist && dist.DomainName === req.host.toLowerCase()) return cloudfrontRequest(a, dist, req);
   const acc = Object.values(gas(a)).find((x) => x.DnsName === req.host.toLowerCase() || x.IpSets.some((s) => s.IpAddresses.includes(req.host)));
-  if (acc) return gaServe(a, acc, { port: req.port, path: req.path, host: req.host, srcIp: a.sourceIp, geo: clientGeo(a.sourceIp) });
+  if (acc) return gaServe(a, acc, { port: req.port, path: req.path, host: req.host, srcIp: req.srcIp ?? a.sourceIp, geo: clientGeo(req.srcIp ?? a.sourceIp) });
   const w = S3_WEBSITE.exec(req.host);
   if (w) {
     if (req.scheme === 'https') return { ok: false, curlCode: 35, error: `OpenSSL SSL_connect: SSL_ERROR_SYSCALL in connection to ${req.host}:443` };
@@ -284,13 +299,13 @@ export function awsHttp(a: Account, reqIn: WebReq): Fetched | null {
   const dns = r53Address(a, req.host);
   if (dns?.lb) {
     const hit = lbByDns(a, dns.lb);
-    if (hit) return lbRequest(a, hit, req, req.host);
+    if (hit) return lbRequest(a, hit, req, req.host, req.srcIp);
   }
   if (dns?.edge) {
     const d = cfByDomain(a, dns.edge);
     if (d) return cloudfrontRequest(a, d, req);
     const ga = Object.values(gas(a)).find((x) => x.DnsName === dns.edge);
-    if (ga) return gaServe(a, ga, { port: req.port, path: req.path, host: req.host, srcIp: a.sourceIp, geo: clientGeo(a.sourceIp) });
+    if (ga) return gaServe(a, ga, { port: req.port, path: req.path, host: req.host, srcIp: req.srcIp ?? a.sourceIp, geo: clientGeo(req.srcIp ?? a.sourceIp) });
   }
   if (dns?.s3Website) {
     if (req.scheme === 'https') return { ok: false, curlCode: 35, error: `OpenSSL SSL_connect: SSL_ERROR_SYSCALL in connection to ${req.host}:443` };
@@ -308,11 +323,11 @@ httpHandlers.push((req) => {
 });
 
 /** Para el corrector: una petición `GET` a una URL desde fuera de AWS. */
-export function fetchFromInternet(a: Account, url: string, o: { method?: string; body?: string; headers?: Record<string, string> } = {}): Fetched {
+export function fetchFromInternet(a: Account, url: string, o: { method?: string; body?: string; headers?: Record<string, string>; srcIp?: string } = {}): Fetched {
   const m = /^(?:(https?):\/\/)?([^/:?#]+)(?::(\d+))?(\/[^?#]*)?(?:\?([^#]*))?/.exec(url);
   if (!m) return { ok: false, curlCode: 3, error: 'URL using bad/illegal format' };
   const scheme = m[1] ?? 'http';
-  return awsHttp(a, { host: m[2], port: m[3] ? Number(m[3]) : scheme === 'https' ? 443 : 80, scheme, path: m[4] ?? '/', query: m[5] ?? '', method: o.method ?? 'GET', body: o.body, headers: o.headers }) ?? { ok: false, curlCode: 6, error: `Could not resolve host: ${m[2]}` };
+  return awsHttp(a, { host: m[2], port: m[3] ? Number(m[3]) : scheme === 'https' ? 443 : 80, scheme, path: m[4] ?? '/', query: m[5] ?? '', method: o.method ?? 'GET', body: o.body, headers: o.headers, srcIp: o.srcIp }) ?? { ok: false, curlCode: 6, error: `Could not resolve host: ${m[2]}` };
 }
 
 /** `ab`: la carga se aplica al balanceador al que llegue el nombre. Las instancias que atienden son las que están sanas. */
@@ -335,6 +350,12 @@ loadHandlers.push((req) => {
   const rps = good ? Math.min(potential, cap) : potential;
   const completed = Math.max(1, Math.min(req.requests, req.seconds > 0 ? Math.round(rps * req.seconds) : req.requests));
   const duration = Math.max(0.05, completed / rps);
+  // con una ACL de WAF delante, cada petición de la ráfaga pasa por ella (las reglas por tasa se activan)
+  let blocked = 0;
+  const aclArn = aclOfResource(a, hit.region, hit.lb.LoadBalancerArn);
+  if (aclArn && good) {
+    for (let i = 1; i < Math.min(completed, 5000); i++) if (wafInspect(a, hit.region, aclArn, { kind: 'ALB', id: `${a.id}-${hit.lb.LoadBalancerArn.split('loadbalancer/')[1]}` }, { method: 'GET', path: req.path, query: '', srcIp: a.sourceIp, host: req.host })?.action === 'BLOCK') blocked++;
+  }
   a.loads = [...(a.loads ?? []).filter((l) => l.until > a.clock - 7200000), { lbArn: hit.lb.LoadBalancerArn, region: hit.region, rps: potential, from: a.clock, until: a.clock + Math.round(duration * 1000) }];
-  return { ok: true, status: first.status, server: first.headers?.Server, bodyLength: first.body?.length ?? 0, completed, failed: 0, non2xx: good ? 0 : completed, duration, rps };
+  return { ok: true, status: first.status, server: first.headers?.Server, bodyLength: first.body?.length ?? 0, completed, failed: 0, non2xx: good ? blocked : completed, duration, rps };
 });

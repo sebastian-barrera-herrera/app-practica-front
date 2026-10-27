@@ -107,7 +107,7 @@ op('_check', 'org', 'account:s!', 'Unidad organizativa (o Root) de una cuenta mi
 });
 
 /** `_check http --url http://www.tienda.test/`: lo que respondería la web (estado, cuerpo y cabeceras) a quien llega desde internet. */
-op('_check', 'http', 'url:s! method:s body:s header:l bearer-of:s', 'Pide una URL como lo haría `curl` desde fuera de AWS (con `--method`, `--body` y `--header "Nombre: valor"` si hace falta).', { global: true, authz: false, anon: true }, (c) => {
+op('_check', 'http', 'url:s! method:s body:s header:l bearer-of:s from-ip:s count:i', 'Pide una URL como lo haría `curl` desde fuera de AWS (con `--method`, `--body` y `--header "Nombre: valor"` si hace falta; `--from-ip` cambia el origen y `--count` repite la petición).', { global: true, authz: false, anon: true }, (c) => {
   // `http://lb:mi-alb/` = el balanceador con ese nombre; `http://cf:first/` = la primera distribución de CloudFront; `api:first/ruta` = la primera API HTTP
   const url = String(c.p.Url)
     .replace(/^((?:https?:\/\/)?)api:first/, (_m, pre: string) => (pre || 'https://') + (Object.entries(c.acct.regions).flatMap(([region, r]) => Object.values(r.apigw?.apis ?? {}).map((x) => apiHost(x.ApiId, region)))[0] ?? 'sin-api.execute-api.us-east-1.amazonaws.com'))
@@ -123,9 +123,25 @@ op('_check', 'http', 'url:s! method:s body:s header:l bearer-of:s', 'Pide una UR
     if (!tok) throw new AwsError('UserNotFoundException', `No hay un usuario confirmado «${c.p.BearerOf}» en Cognito`);
     headers.authorization = `Bearer ${tok}`;
   }
-  const r = fetchFromInternet(c.acct, url, { method: c.p.Method ?? (c.p.Body ? 'POST' : 'GET'), body: c.p.Body, headers });
-  if (!r.ok) return { Status: 0, Error: r.error ?? `curl ${r.curlCode}`, CurlCode: r.curlCode ?? 0 };
-  return { Status: r.status ?? 0, Body: (r.body ?? '').trim(), Server: r.headers?.Server ?? null, Location: r.headers?.Location ?? null, XCache: r.headers?.['X-Cache'] ?? null, Region: r.headers?.['x-amz-ga-region'] ?? null };
+  const once = () => fetchFromInternet(c.acct, url, { method: c.p.Method ?? (c.p.Body ? 'POST' : 'GET'), body: c.p.Body, headers, srcIp: c.p.FromIp });
+  let r = once();
+  // `--count 150`: ráfaga de peticiones iguales; devuelve cuántas respondieron cada estado
+  const n = Math.min(Number(c.p.Count ?? 1), 3000);
+  const statuses: Record<string, number> = {};
+  const tally = (x: typeof r) => {
+    const k = String(x.ok ? x.status ?? 0 : 0);
+    statuses[k] = (statuses[k] ?? 0) + 1;
+  };
+  if (n > 1) {
+    tally(r);
+    for (let i = 1; i < n; i++) {
+      r = once();
+      tally(r);
+    }
+  }
+  const burst = n > 1 ? { Sent: n, Statuses: statuses } : {};
+  if (!r.ok) return { Status: 0, Error: r.error ?? `curl ${r.curlCode}`, CurlCode: r.curlCode ?? 0, ...burst };
+  return { Status: r.status ?? 0, Body: (r.body ?? '').trim(), Server: r.headers?.Server ?? null, Location: r.headers?.Location ?? null, XCache: r.headers?.['X-Cache'] ?? null, Region: r.headers?.['x-amz-ga-region'] ?? null, ...burst };
 });
 
 /** `_check spof`: los puntos únicos de fallo que quedan (grupos de una sola zona o de una sola instancia, bases de datos sin Multi-AZ). */

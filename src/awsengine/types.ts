@@ -1,4 +1,4 @@
-import type { AcmState, KmsState } from './types-sec';
+import type { AcmState, KmsState, ShieldState, WafState } from './types-sec';
 import type { AasState, ArState, DockerState, EcrState, EcsState, EksState } from './types-containers';
 import type { ConfigState, CtState, CwState, LogQuery, MetricFilter, SsmAssociation, SsmAutomation, SsmBaseline, SsmDocument, SsmParam, SsmPatchState, SsmWindow, XrayState } from './types-ops';
 /** Modelo de la cuenta de AWS simulada (todo es JSON plano: se puede clonar con structuredClone). */
@@ -1094,6 +1094,7 @@ export interface RegionalState {
   xray?: XrayState;
   kms?: KmsState;
   acm?: AcmState;
+  wafv2?: WafState;
   /** Plantillas de lanzamiento de EC2. */
   launchTemplates?: Record<string, LaunchTemplate>;
 }
@@ -1549,6 +1550,8 @@ export interface Account {
   sessions: Record<string, AssumedSession>;
   /** Zonas de Route 53 (servicio global). */
   route53?: Route53State;
+  /** AWS Shield (servicio global). */
+  shield?: ShieldState;
   /** Historial de gasto (Cost Explorer). */
   billing?: BillingState;
   /** La organización de AWS Organizations (si existe). */
@@ -1600,6 +1603,8 @@ export interface CfDistribution {
   DefaultCacheBehavior: { TargetOriginId: string; ViewerProtocolPolicy: string; MinTTL: number; DefaultTTL: number; MaxTTL: number; Compress: boolean; AllowedMethods: string[] };
   PriceClass: string;
   Aliases: string[];
+  /** ARN de la ACL web (ámbito CLOUDFRONT) que protege la distribución. */
+  WebACLId?: string;
   ETag: string;
   Tags: Tag[];
   /** Caché de borde: ruta → copia guardada y el instante (ms) en que se guardó. */

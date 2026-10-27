@@ -54,6 +54,9 @@ export const SERVICE = {
   dynamo: 'Amazon DynamoDB',
   r53: 'Amazon Route 53',
   cw: 'AmazonCloudWatch',
+  kms: 'AWS Key Management Service',
+  waf: 'AWS WAF',
+  shield: 'AWS Shield',
 };
 
 /** Lo que cuestan al mes los recursos que existen ahora mismo en la cuenta. */
@@ -103,6 +106,8 @@ export function monthlyBurn(a: Account): BurnItem[] {
       if (!i.DBClusterIdentifier) add(SERVICE.rds, 'RDS:GP3-Storage', i.DBInstanceIdentifier, i.AllocatedStorage * PRICE.rdsStorageGbMonth * factor, region, tags, `${i.AllocatedStorage} GB de disco`);
     }
     for (const s of Object.values(rds?.snapshots ?? {})) if (s.SnapshotType === 'manual') add(SERVICE.rds, 'RDS:ChargedBackupUsage', s.DBSnapshotIdentifier, s.AllocatedStorage * PRICE.rdsSnapshotGbMonth, region, tagMap(s.Tags), `Copia manual de ${s.AllocatedStorage} GB`);
+    for (const k of Object.values(rs.kms?.keys ?? {})) if (k.manager === 'CUSTOMER' && k.State !== 'PendingDeletion') add(SERVICE.kms, 'KMS-Keys', k.KeyId, 1 + (k.rotation.versions - 1) * 1, region, tagMap(k.Tags), `Clave gestionada por el cliente: 1 $/mes${k.rotation.versions > 1 ? ' (más 1 $ por cada versión rotada)' : ''}`);
+    for (const w of Object.values(rs.wafv2?.acls ?? {})) add(SERVICE.waf, 'WAF-WebACL', w.Name, 5 + w.Rules.length, region, tagMap(w.Tags), `5 $ por ACL y 1 $ por regla (${w.Rules.length})`);
     for (const al of Object.values(rs.alarms)) add(SERVICE.cw, 'AlarmMonitorUsage', al.AlarmName, PRICE.alarmMonth, region, {}, 'Alarma estándar');
   }
   for (const b of Object.values(a.s3.buckets)) {
@@ -111,6 +116,7 @@ export function monthlyBurn(a: Account): BurnItem[] {
     for (const [cls, bytes] of Object.entries(by)) add(SERVICE.s3, `TimedStorage-${cls}`, b.name, (bytes / 1e9) * (PRICE.s3GbMonth[cls] ?? PRICE.s3GbMonth.STANDARD), b.region, tagMap(b.tags), `${(bytes / 1e9).toFixed(1)} GB en ${cls}`);
   }
   for (const z of Object.values(a.route53?.zones ?? {})) add(SERVICE.r53, 'HostedZone', z.Name.replace(/\.$/, ''), PRICE.route53ZoneMonth, 'global', {}, 'Zona alojada');
+  if (a.shield?.subscription) add(SERVICE.shield, 'Shield-Advanced', 'suscripción', 3000, 'global', {}, 'Shield Advanced: 3 000 $/mes con compromiso de un año');
   return out;
 }
 

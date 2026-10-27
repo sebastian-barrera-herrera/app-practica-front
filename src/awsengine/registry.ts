@@ -207,6 +207,8 @@ export const SERVICE_SUMMARY: Record<string, string> = {
   xray: 'AWS X-Ray (trazas de peticiones)',
   kms: 'AWS Key Management Service (claves y cifrado)',
   acm: 'AWS Certificate Manager (certificados TLS)',
+  wafv2: 'AWS WAF (cortafuegos de aplicaciones web)',
+  shield: 'AWS Shield (protección contra DDoS)',
   lambda: 'AWS Lambda',
   sqs: 'Amazon Simple Queue Service',
   events: 'Amazon EventBridge',

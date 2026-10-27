@@ -7,6 +7,7 @@ import { fakeIp, iso, newId, stableId, toArr, wildcard } from '../util';
 import { tick } from '../tick';
 import { elb, lbFromInternet, lbHandle, lbHasHealthy, lbState } from './elb';
 import { latencyMs } from './route53';
+import { wafOf } from './waf';
 
 export const cf = (a: Account): CloudFrontState => (a.cloudfront ??= { distributions: {}, oacs: {} });
 export const gas = (a: Account): Record<string, Accelerator> => (a.accelerators ??= {});
@@ -20,7 +21,7 @@ const E = {
 void E.dist;
 
 const distId = (a: Account) => ('E' + newId(a, 'cfid', '', 13, 'up')).slice(0, 14);
-const etagOf = (d: CfDistribution) => 'E' + md5(d.Id + d.LastModifiedTime + JSON.stringify(d.Origins) + d.Enabled + JSON.stringify(d.DefaultCacheBehavior)).slice(0, 13).toUpperCase();
+const etagOf = (d: CfDistribution) => 'E' + md5(d.Id + d.LastModifiedTime + JSON.stringify(d.Origins) + d.Enabled + JSON.stringify(d.DefaultCacheBehavior) + (d.WebACLId ?? '')).slice(0, 13).toUpperCase();
 
 export const cfByDomain = (a: Account, host: string): CfDistribution | undefined => Object.values(cf(a).distributions).find((d) => d.DomainName === host.toLowerCase() || d.Aliases.includes(host.toLowerCase()));
 
@@ -57,6 +58,7 @@ const configView = (d: CfDistribution) => ({
   Comment: d.Comment,
   PriceClass: d.PriceClass,
   Enabled: d.Enabled,
+  WebACLId: d.WebACLId ?? '',
 });
 
 const distView = (a: Account, d: CfDistribution) => ({ Id: d.Id, ARN: d.ARN, Status: cfStatus(a, d) === 'Deployed' ? 'Deployed' : 'InProgress', LastModifiedTime: d.LastModifiedTime, InProgressInvalidationBatches: 0, DomainName: d.DomainName, DistributionConfig: configView(d) });
@@ -73,6 +75,7 @@ const summary = (a: Account, d: CfDistribution) => ({
   Comment: d.Comment,
   PriceClass: d.PriceClass,
   Enabled: d.Enabled,
+  WebACLId: d.WebACLId ?? '',
 });
 
 // ───────────────────────── creación ─────────────────────────
@@ -91,6 +94,13 @@ function buildOrigin(a: Account, raw: Record<string, any>): CfOrigin {
   }
   if (!s3) o.CustomOriginConfig = raw.CustomOriginConfig ?? { HTTPPort: 80, HTTPSPort: 443, OriginProtocolPolicy: 'match-viewer' };
   return o;
+}
+
+/** El `WebACLId` de una distribución es el ARN de una ACL web de ámbito CLOUDFRONT (que vive en us-east-1). */
+function checkWebAcl(a: Account, id: unknown): string | undefined {
+  if (!id) return undefined;
+  if (!Object.values(wafOf(a, 'us-east-1').acls).some((x) => x.ARN === id && x.Scope === 'CLOUDFRONT')) throw new AwsError('InvalidWebACLId', 'The specified web ACL does not exist.', 400);
+  return String(id);
 }
 
 export function cfCreate(a: Account, cfg: Record<string, any>, tags = []): CfDistribution {
@@ -122,6 +132,7 @@ export function cfCreate(a: Account, cfg: Record<string, any>, tags = []): CfDis
     },
     PriceClass: cfg.PriceClass ?? 'PriceClass_All',
     Aliases: toArr(cfg.Aliases?.Items ?? []).map((x: string) => x.toLowerCase()),
+    WebACLId: checkWebAcl(a, cfg.WebACLId),
     ETag: '',
     Tags: tags,
     cache: {},
@@ -154,6 +165,11 @@ op('cloudfront', 'list-distributions', '', 'Lista las distribuciones de CloudFro
   return { DistributionList: { Marker: '', MaxItems: 100, IsTruncated: false, Quantity: list.length, ...(list.length ? { Items: list.map((d) => summary(c.acct, d)) } : {}) } };
 });
 
+op('cloudfront', 'list-distributions-by-web-acl-id', 'web-acl-id:s!', 'Distribuciones protegidas por una ACL web.', { global: true, res: () => '*' }, (c) => {
+  const list = Object.values(cf(c.acct).distributions).filter((d) => d.WebACLId === c.p.WebAclId);
+  return { DistributionList: { Marker: '', MaxItems: 100, IsTruncated: false, Quantity: list.length, ...(list.length ? { Items: list.map((d) => summary(c.acct, d)) } : {}) } };
+});
+
 op('cloudfront', 'get-distribution', 'id:s!', 'Datos y estado de una distribución.', { global: true, res: (c) => `arn:aws:cloudfront::${c.acct.id}:distribution/${c.p.Id}` }, (c) => {
   const d = find(c.acct, c.p.Id);
   return { ETag: d.ETag, Distribution: distView(c.acct, d) };
@@ -177,6 +193,8 @@ op('cloudfront', 'update-distribution', 'id:s! if-match:s distribution-config:j!
   d.DefaultRootObject = cfg.DefaultRootObject ?? '';
   d.PriceClass = cfg.PriceClass ?? d.PriceClass;
   d.Aliases = toArr(cfg.Aliases?.Items ?? []).map((x: string) => x.toLowerCase());
+  // update-distribution sustituye toda la configuración: sin WebACLId, la distribución se queda sin WAF
+  d.WebACLId = checkWebAcl(c.acct, cfg.WebACLId);
   d.DefaultCacheBehavior = { ...d.DefaultCacheBehavior, TargetOriginId: beh.TargetOriginId ?? origins[0].Id, ViewerProtocolPolicy: beh.ViewerProtocolPolicy ?? d.DefaultCacheBehavior.ViewerProtocolPolicy, MinTTL: Number(beh.MinTTL ?? d.DefaultCacheBehavior.MinTTL), DefaultTTL: Number(beh.DefaultTTL ?? d.DefaultCacheBehavior.DefaultTTL), MaxTTL: Number(beh.MaxTTL ?? d.DefaultCacheBehavior.MaxTTL), Compress: beh.Compress === true || beh.Compress === 'true' };
   d.LastModifiedTime = iso(c.acct.clock);
   d.deployedAt = c.acct.clock + DEPLOY_MS;

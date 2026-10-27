@@ -8,10 +8,13 @@ import { tickers } from '../tick';
 import type { Account, PolicyStatement } from '../types';
 import type { ConfigEvaluation, ConfigItem, ConfigRule, ConfigState } from '../types-ops';
 import { iso, isoZ, mkArn, newId, toArr, wildcard } from '../util';
+import { acmOf } from './acm';
+import { elb } from './elb';
 import { putEvent } from './events';
 import { roleTrusts } from './flowlogs';
 import { anonymousAllowed, s3Put } from './s3';
 import { ssmStatus } from './ssm';
+import { aclOfResource } from './waf';
 
 export const configOf = (a: Account, region: string): ConfigState => {
   const r = regional(a, region);
@@ -62,10 +65,18 @@ function resources(a: Account, region: string, recorder: NonNullable<ConfigState
     for (const d of Object.values(r.rds?.instances ?? {})) out.push({ type: 'AWS::RDS::DBInstance', id: d.DBInstanceIdentifier, name: d.DBInstanceIdentifier, arn: mkArn('rds', region, a.id, `db:${d.DBInstanceIdentifier}`), region, created: d.InstanceCreateTime, az: d.AvailabilityZone, tags: tagsOf(d.Tags), cfg: { dBInstanceIdentifier: d.DBInstanceIdentifier, dBInstanceClass: d.DBInstanceClass, engine: d.Engine, multiAZ: d.MultiAZ, publiclyAccessible: d.PubliclyAccessible, storageEncrypted: d.StorageEncrypted, backupRetentionPeriod: d.BackupRetentionPeriod, deletionProtection: d.DeletionProtection } });
   if (want('AWS::Lambda::Function'))
     for (const f of Object.values(r.lambda?.functions ?? {})) out.push({ type: 'AWS::Lambda::Function', id: f.FunctionName, name: f.FunctionName, arn: f.FunctionArn, region, tags: Object.entries(f.tags).map(([Key, Value]) => ({ Key, Value })), cfg: { functionName: f.FunctionName, runtime: f.Runtime, handler: f.Handler, memorySize: f.MemorySize, timeout: f.Timeout, role: f.Role, environment: Object.keys(f.Environment) } });
+  if (want('AWS::KMS::Key'))
+    for (const k of Object.values(r.kms?.keys ?? {})) if (k.manager === 'CUSTOMER') out.push({ type: 'AWS::KMS::Key', id: k.KeyId, name: k.KeyId, arn: k.Arn, region, created: iso(k.created), tags: tagsOf(k.Tags), cfg: { keyId: k.KeyId, keyState: k.State, keyManager: 'CUSTOMER', keySpec: k.Spec, keyUsage: k.Usage, keyRotationEnabled: k.rotation.enabled, rotationPeriodInDays: k.rotation.days, description: k.Description } });
+  if (want('AWS::ElasticLoadBalancingV2::LoadBalancer'))
+    for (const lb of Object.values(elb(a, region).lbs)) out.push({ type: 'AWS::ElasticLoadBalancingV2::LoadBalancer', id: lb.LoadBalancerArn, name: lb.LoadBalancerName, arn: lb.LoadBalancerArn, region, created: iso(lb.createdAt), tags: tagsOf(lb.Tags), cfg: { loadBalancerName: lb.LoadBalancerName, type: lb.Type, scheme: lb.Scheme, dnsName: lb.DNSName, securityGroups: lb.SecurityGroups, webAclArn: aclOfResource(a, region, lb.LoadBalancerArn) ?? null } });
+  if (want('AWS::SecretsManager::Secret'))
+    for (const sc of Object.values(r.secrets ?? {})) if (sc.deletedAt === undefined) out.push({ type: 'AWS::SecretsManager::Secret', id: sc.ARN, name: sc.Name, arn: sc.ARN, region, created: iso(sc.created), tags: tagsOf(sc.Tags), cfg: { name: sc.Name, rotationEnabled: !!sc.rotation?.enabled, rotationLambdaArn: sc.rotation?.lambda ?? null, rotationDays: sc.rotation?.days ?? null, kmsKeyId: sc.KmsKeyId ?? null, lastRotated: sc.rotation?.last ? iso(sc.rotation.last) : null } });
+  if (want('AWS::ACM::Certificate'))
+    for (const ce of Object.values(acmOf(a, region).certs)) out.push({ type: 'AWS::ACM::Certificate', id: ce.Arn, name: ce.Domain, arn: ce.Arn, region, created: iso(ce.created), tags: tagsOf(ce.Tags), cfg: { domainName: ce.Domain, status: ce.Status, type: ce.Type, notAfter: ce.notAfter ? iso(ce.notAfter) : null, notAfterMs: ce.notAfter ?? null } });
   return out;
 }
 
-export const CONFIG_TYPES = ['AWS::S3::Bucket', 'AWS::EC2::Instance', 'AWS::EC2::SecurityGroup', 'AWS::EC2::Volume', 'AWS::IAM::User', 'AWS::IAM::Role', 'AWS::RDS::DBInstance', 'AWS::Lambda::Function'];
+export const CONFIG_TYPES = ['AWS::S3::Bucket', 'AWS::EC2::Instance', 'AWS::EC2::SecurityGroup', 'AWS::EC2::Volume', 'AWS::IAM::User', 'AWS::IAM::Role', 'AWS::RDS::DBInstance', 'AWS::Lambda::Function', 'AWS::KMS::Key', 'AWS::ElasticLoadBalancingV2::LoadBalancer', 'AWS::SecretsManager::Secret', 'AWS::ACM::Certificate'];
 
 // ───────────────────────── reglas gestionadas ─────────────────────────
 
@@ -75,6 +86,8 @@ interface Managed {
   eval: (a: Account, region: string, res: Res, params: Record<string, string>) => Verdict;
   /** Parámetros que acepta (con su valor por defecto, si lo hay). */
   params?: Record<string, string | null>;
+  /** Regla periódica: se reevalúa cada día aunque nada cambie (depende del paso del tiempo). */
+  periodic?: boolean;
 }
 
 const open22 = (perms: { IpProtocol: string; FromPort?: number; ToPort?: number; IpRanges: { CidrIp: string }[]; Ipv6Ranges: { CidrIpv6: string }[] }[], ports: number[]): number | null => {
@@ -155,6 +168,7 @@ const MANAGED: Record<string, Managed> = {
   },
   ACCESS_KEYS_ROTATED: {
     types: ['AWS::IAM::User'],
+    periodic: true,
     params: { maxAccessKeyAge: '90' },
     eval: (a, _r, res, p) => {
       const max = Number(p.maxAccessKeyAge || 90) * 86400000;
@@ -165,6 +179,29 @@ const MANAGED: Record<string, Managed> = {
   RDS_INSTANCE_PUBLIC_ACCESS_CHECK: { types: ['AWS::RDS::DBInstance'], eval: (_a, _r, res) => (res.cfg.publiclyAccessible ? { c: 'NON_COMPLIANT', why: 'The DB instance is publicly accessible.' } : { c: 'COMPLIANT' }) },
   RDS_STORAGE_ENCRYPTED: { types: ['AWS::RDS::DBInstance'], eval: (_a, _r, res) => (res.cfg.storageEncrypted ? { c: 'COMPLIANT' } : { c: 'NON_COMPLIANT', why: 'The DB instance storage is not encrypted.' }) },
   RDS_MULTI_AZ_SUPPORT: { types: ['AWS::RDS::DBInstance'], eval: (_a, _r, res) => (res.cfg.multiAZ ? { c: 'COMPLIANT' } : { c: 'NON_COMPLIANT', why: 'The DB instance is not Multi-AZ.' }) },
+  CMK_BACKING_KEY_ROTATION_ENABLED: {
+    types: ['AWS::KMS::Key'],
+    eval: (_a, _r, res) => {
+      if (res.cfg.keyState !== 'Enabled' || res.cfg.keySpec !== 'SYMMETRIC_DEFAULT') return { c: 'NOT_APPLICABLE' };
+      return res.cfg.keyRotationEnabled ? { c: 'COMPLIANT' } : { c: 'NON_COMPLIANT', why: 'Automatic rotation is not enabled for this customer managed key.' };
+    },
+  },
+  KMS_CMK_NOT_SCHEDULED_FOR_DELETION: { types: ['AWS::KMS::Key'], eval: (_a, _r, res) => (res.cfg.keyState === 'PendingDeletion' ? { c: 'NON_COMPLIANT', why: 'The key is scheduled for deletion.' } : { c: 'COMPLIANT' }) },
+  ALB_WAF_ENABLED: {
+    types: ['AWS::ElasticLoadBalancingV2::LoadBalancer'],
+    eval: (_a, _r, res) => (res.cfg.type !== 'application' ? { c: 'NOT_APPLICABLE' } : res.cfg.webAclArn ? { c: 'COMPLIANT' } : { c: 'NON_COMPLIANT', why: 'The load balancer is not associated with an AWS WAF web ACL.' }),
+  },
+  SECRETSMANAGER_ROTATION_ENABLED_CHECK: { types: ['AWS::SecretsManager::Secret'], eval: (_a, _r, res) => (res.cfg.rotationEnabled ? { c: 'COMPLIANT' } : { c: 'NON_COMPLIANT', why: 'Automatic rotation is not enabled for this secret.' }) },
+  ACM_CERTIFICATE_EXPIRATION_CHECK: {
+    types: ['AWS::ACM::Certificate'],
+    periodic: true,
+    params: { daysToExpiration: '14' },
+    eval: (a, _r, res, p) => {
+      if (res.cfg.notAfterMs === null) return { c: 'NOT_APPLICABLE' };
+      const left = (res.cfg.notAfterMs - a.clock) / 86400000;
+      return left < Number(p.daysToExpiration || 14) ? { c: 'NON_COMPLIANT', why: `The certificate expires in ${Math.max(0, Math.floor(left))} days.` } : { c: 'COMPLIANT' };
+    },
+  },
   LAMBDA_FUNCTION_SETTINGS_CHECK: {
     types: ['AWS::Lambda::Function'],
     params: { runtime: 'python3.12', timeout: '' },
@@ -285,7 +322,9 @@ tickers.push((a) => {
       const m = MANAGED[rule.Source.SourceIdentifier];
       const types = rule.Scope?.ComplianceResourceTypes?.length ? rule.Scope.ComplianceResourceTypes : m?.types ?? [];
       const fresh = rule.ConfigRuleState === 'EVALUATING' || !st.evals.some((e) => e.rule === rule.ConfigRuleName) && !evaluated.has(rule);
-      if (fresh || types.some((t) => changedTypes.has(t))) {
+      const due = !!m?.periodic && a.clock - (lastPeriodic.get(rule) ?? a.clock) >= 86400000;
+      if (fresh || due || types.some((t) => changedTypes.has(t))) {
+        lastPeriodic.set(rule, a.clock);
         rule.ConfigRuleState = 'ACTIVE';
         evaluated.add(rule);
         evaluateRule(a, region, st, rule, res);
@@ -294,6 +333,7 @@ tickers.push((a) => {
   }
 });
 const evaluated = new WeakSet<ConfigRule>();
+const lastPeriodic = new WeakMap<ConfigRule, number>();
 
 // ───────────────────────── operaciones: grabador y canal ─────────────────────────
 

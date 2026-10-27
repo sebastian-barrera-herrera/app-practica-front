@@ -61,3 +61,5 @@ import './config';
 import './xray';
 import './kms';
 import './acm';
+import './waf';
+import './shield';
