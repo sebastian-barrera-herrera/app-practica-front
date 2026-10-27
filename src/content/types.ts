@@ -97,7 +97,12 @@ export type IllustrationId =
   | 'aws-endpoint-paths'
   | 'aws-hybrid-chooser'
   | 'aws-flow-reach'
-  | 'aws-ssm-access';
+  | 'aws-ssm-access'
+  | 'aws-lambda-lifecycle'
+  | 'aws-apigw-flow'
+  | 'aws-sqs-visibility'
+  | 'aws-event-routing'
+  | 'aws-cognito-flow';
 
 // ───────────────────────── preguntas ─────────────────────────
 

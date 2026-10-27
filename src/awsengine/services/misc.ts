@@ -3,7 +3,7 @@ import { regional } from '../account';
 import { IMAGES, imageId, instanceType } from '../catalog';
 import { AwsError, op } from '../registry';
 import type { Account, Alarm, Budget } from '../types';
-import { iso, mkArn, newId } from '../util';
+import { iso, mkArn } from '../util';
 import { refreshEc2 } from './ec2';
 import { liveAlarmState } from './metrics';
 
@@ -148,42 +148,6 @@ op('cloudwatch', 'set-alarm-state', 'alarm-name:s! state-value:s! state-reason:s
   if (!['OK', 'ALARM', 'INSUFFICIENT_DATA'].includes(c.p.StateValue)) throw new AwsError('ValidationError', `1 validation error detected: Value '${c.p.StateValue}' at 'stateValue' failed to satisfy constraint: Member must satisfy enum value set: [INSUFFICIENT_DATA, ALARM, OK]`);
   al.StateValue = c.p.StateValue;
   return undefined;
-});
-
-// ───────────────────────── SNS ─────────────────────────
-
-const topicArn = (c: { acct: Account; region: string }, name: string) => mkArn('sns', c.region, c.acct.id, name);
-
-op('sns', 'create-topic', 'name:s! tags:t', 'Crea un tema de notificaciones (idempotente).', { res: (c) => topicArn(c, c.p.Name) }, (c) => {
-  if (!/^[\w-]{1,256}$/.test(c.p.Name)) throw new AwsError('InvalidParameter', 'Invalid parameter: Topic Name');
-  const r = regional(c.acct, c.region);
-  const arn = topicArn(c, c.p.Name);
-  r.sns[arn] ??= { TopicArn: arn, subscriptions: [], messages: [] };
-  return { TopicArn: arn };
-});
-op('sns', 'list-topics', '', 'Lista los temas.', { paginate: 'Topics', res: () => '*' }, (c) => ({ Topics: Object.keys(regional(c.acct, c.region).sns).sort().map((TopicArn) => ({ TopicArn })) }));
-op('sns', 'delete-topic', 'topic-arn:s!', 'Borra un tema.', { res: (c) => c.p.TopicArn }, (c) => {
-  delete regional(c.acct, c.region).sns[c.p.TopicArn];
-  return undefined;
-});
-op('sns', 'subscribe', 'topic-arn:s! protocol:s! notification-endpoint:s', 'Suscribe un correo, SMS, SQS o Lambda a un tema.', { res: (c) => c.p.TopicArn }, (c) => {
-  const t = regional(c.acct, c.region).sns[c.p.TopicArn];
-  if (!t) throw new AwsError('NotFound', 'Topic does not exist', 404);
-  const confirmed = !['email', 'email-json', 'http', 'https'].includes(c.p.Protocol);
-  const arn = `${c.p.TopicArn}:${newId(c.acct, 'snssub', '', 8, 'hex')}-${newId(c.acct, 'snssub2', '', 4, 'hex')}`;
-  t.subscriptions.push({ SubscriptionArn: confirmed ? arn : 'pending confirmation', Protocol: c.p.Protocol, Endpoint: c.p.NotificationEndpoint ?? '', confirmed });
-  return { SubscriptionArn: confirmed ? arn : 'pending confirmation' };
-});
-op('sns', 'list-subscriptions-by-topic', 'topic-arn:s!', 'Suscripciones de un tema.', { paginate: 'Subscriptions', res: (c) => c.p.TopicArn }, (c) => {
-  const t = regional(c.acct, c.region).sns[c.p.TopicArn];
-  if (!t) throw new AwsError('NotFound', 'Topic does not exist', 404);
-  return { Subscriptions: t.subscriptions.map((s) => ({ SubscriptionArn: s.SubscriptionArn, Owner: c.acct.id, Protocol: s.Protocol, Endpoint: s.Endpoint, TopicArn: t.TopicArn })) };
-});
-op('sns', 'publish', 'topic-arn:s! message:s! subject:s', 'Publica un mensaje en un tema.', { res: (c) => c.p.TopicArn }, (c) => {
-  const t = regional(c.acct, c.region).sns[c.p.TopicArn];
-  if (!t) throw new AwsError('NotFound', 'Topic does not exist', 404);
-  t.messages.push(c.p.Message);
-  return { MessageId: newId(c.acct, 'snsmsg', '', 36, 'hex').replace(/^(.{8})(.{4})(.{4})(.{4})(.{12}).*$/, '$1-$2-$3-$4-$5') };
 });
 
 // ───────────────────────── SSM (parámetros públicos de AMI) ─────────────────────────

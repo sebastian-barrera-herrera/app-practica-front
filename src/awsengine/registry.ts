@@ -93,6 +93,8 @@ export interface GlobalOpts {
   startingToken: string | null;
   dryRun: boolean;
   noPaginate: boolean;
+  /** `--cli-binary-format` (o la configuración): `raw-in-base64-out` deja pasar JSON sin base64 en `--payload`. */
+  binaryFormat?: string;
 }
 
 /** Salida directa de texto (comandos como `aws s3 ls`, que no producen JSON). */
@@ -151,7 +153,7 @@ export interface OpDef {
 }
 
 export const OPS = new Map<string, OpDef>();
-export const SERVICE_PREFIX: Record<string, string> = { s3api: 's3', s3: 's3', cloudwatch: 'cloudwatch', budgets: 'budgets', elbv2: 'elasticloadbalancing', elb: 'elasticloadbalancing' };
+export const SERVICE_PREFIX: Record<string, string> = { s3api: 's3', s3: 's3', cloudwatch: 'cloudwatch', budgets: 'budgets', elbv2: 'elasticloadbalancing', elb: 'elasticloadbalancing', stepfunctions: 'states', apigatewayv2: 'apigateway' };
 export const SERVICE_SUMMARY: Record<string, string> = {
   sts: 'AWS Security Token Service',
   iam: 'AWS Identity and Access Management',
@@ -175,6 +177,12 @@ export const SERVICE_SUMMARY: Record<string, string> = {
   globalaccelerator: 'AWS Global Accelerator',
   directconnect: 'AWS Direct Connect',
   logs: 'Amazon CloudWatch Logs',
+  lambda: 'AWS Lambda',
+  sqs: 'Amazon Simple Queue Service',
+  events: 'Amazon EventBridge',
+  stepfunctions: 'AWS Step Functions',
+  apigatewayv2: 'Amazon API Gateway (APIs HTTP)',
+  'cognito-idp': 'Amazon Cognito (grupos de usuarios)',
   configure: 'Configura la CLI (credenciales, región, formato)',
 };
 
@@ -208,3 +216,13 @@ export const servicesList = (): string[] => [...new Set([...OPS.values()].map((o
 export const iamAction = (service: string, api: string) => `${SERVICE_PREFIX[service] ?? service}:${api}`;
 
 export type { Rec };
+
+/** Permisos que exige una operación por defecto (o los suyos propios, si los declara). */
+export function defaultTargets(o: OpDef, c: OpCtx): AuthzTarget[] {
+  if (o.authz === false) return [];
+  if (o.authz) return o.authz(c);
+  const action = o.action ?? iamAction(o.service, o.api);
+  const res = o.res ? o.res(c) : '*';
+  const context = o.ctx?.(c);
+  return (Array.isArray(res) ? res : [res]).map((resource) => ({ action, resource, context }));
+}

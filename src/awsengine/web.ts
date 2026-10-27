@@ -11,6 +11,7 @@ import { signUrl } from './services/s3cmd';
 import type { Account, LoadBalancer, S3Bucket } from './types';
 import { instancePage } from './hosting';
 import { traceFromInternet } from './net';
+import { apiRequest } from './services/apigw';
 import { emitFlow } from './services/flowlogs';
 import { clientGeo, r53Address, r53Lookup } from './services/route53';
 import { cfByDomain, cfServe, gas, gaServe } from './services/edge';
@@ -235,11 +236,15 @@ export interface WebReq {
   path: string;
   query: string;
   method: string;
+  body?: string;
+  headers?: Record<string, string>;
 }
 
 /** Lo que responde «internet» (la cuenta de AWS) a una petición web, o null si el nombre no es de ella. */
 export function awsHttp(a: Account, req: WebReq): Fetched | null {
   tick(a);
+  const gw = apiRequest(a, req);
+  if (gw) return gw;
   const lbDirect = lbByDns(a, req.host);
   if (lbDirect) return lbRequest(a, lbDirect, req, req.host);
   const dist = cfByDomain(a, req.host);
@@ -287,11 +292,11 @@ httpHandlers.push((req) => {
 });
 
 /** Para el corrector: una petición `GET` a una URL desde fuera de AWS. */
-export function fetchFromInternet(a: Account, url: string): Fetched {
+export function fetchFromInternet(a: Account, url: string, o: { method?: string; body?: string; headers?: Record<string, string> } = {}): Fetched {
   const m = /^(?:(https?):\/\/)?([^/:?#]+)(?::(\d+))?(\/[^?#]*)?(?:\?([^#]*))?/.exec(url);
   if (!m) return { ok: false, curlCode: 3, error: 'URL using bad/illegal format' };
   const scheme = m[1] ?? 'http';
-  return awsHttp(a, { host: m[2], port: m[3] ? Number(m[3]) : scheme === 'https' ? 443 : 80, scheme, path: m[4] ?? '/', query: m[5] ?? '', method: 'GET' }) ?? { ok: false, curlCode: 6, error: `Could not resolve host: ${m[2]}` };
+  return awsHttp(a, { host: m[2], port: m[3] ? Number(m[3]) : scheme === 'https' ? 443 : 80, scheme, path: m[4] ?? '/', query: m[5] ?? '', method: o.method ?? 'GET', body: o.body, headers: o.headers }) ?? { ok: false, curlCode: 6, error: `Could not resolve host: ${m[2]}` };
 }
 
 /** `ab`: la carga se aplica al balanceador al que llegue el nombre. Las instancias que atienden son las que están sanas. */

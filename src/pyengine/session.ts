@@ -117,6 +117,17 @@ export class PySession implements PySessionApi {
     }
   }
 
+  /** Ejecuta un programa que no pide entrada (`input()` da EOFError) sin esperas: lo usan las funciones Lambda del simulador de AWS. */
+  runSync(code: string, o: RunOptions = {}): PyRunResult {
+    const I = this.I;
+    I.skipChars = 0;
+    I.written = 0;
+    I.needInput = null;
+    const r = this.runOnce(code, o.mode ?? 'exec', o.filename ?? 'main.py', o);
+    this.lastResult = r.result!;
+    return r.result!;
+  }
+
   private runOnce(code: string, mode: 'exec' | 'repl', filename: string, o: RunOptions): Attempt {
     const I = this.I;
     I.steps = 0;

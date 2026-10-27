@@ -108,7 +108,7 @@ export function dnsLookup(sys: System, name: string, type: string): { records: D
 }
 
 /** Servidores web extra que atienden una petición antes que los sitios fijos. Devuelven null si no la reconocen. */
-export const httpHandlers: ((req: { sys: System; host: string; port: number; scheme: string; path: string; query: string; method: string }) => Fetched | null)[] = [];
+export const httpHandlers: ((req: { sys: System; host: string; port: number; scheme: string; path: string; query: string; method: string; body?: string; headers?: Record<string, string> }) => Fetched | null)[] = [];
 
 /** Una prueba de carga (`ab`): la atiende quien conozca el destino (p. ej. el balanceador de una cuenta de AWS). */
 export interface LoadReq {
@@ -222,7 +222,7 @@ Commercial support is available at
 </html>
 `;
 
-export function httpFetch(sys: System, fs: VFS, rt: { random(): number }, url: string, method = 'GET', body?: string): Fetched {
+export function httpFetch(sys: System, fs: VFS, rt: { random(): number }, url: string, method = 'GET', body?: string, headers?: Record<string, string>): Fetched {
   const m = /^(?:(https?):\/\/)?([^\/:?#]+)(?::(\d+))?(\/[^?#]*)?(\?[^#]*)?/.exec(url);
   if (!m) return { ok: false, curlCode: 3, error: `URL using bad/illegal format or missing URL` };
   const scheme = m[1] ?? 'http';
@@ -230,7 +230,7 @@ export function httpFetch(sys: System, fs: VFS, rt: { random(): number }, url: s
   const port = m[3] ? parseInt(m[3], 10) : scheme === 'https' ? 443 : 80;
   const path = m[4] ?? '/';
   for (const h of httpHandlers) {
-    const got = h({ sys, host, port, scheme, path, query: (m[5] ?? '').replace(/^\?/, ''), method });
+    const got = h({ sys, host, port, scheme, path, query: (m[5] ?? '').replace(/^\?/, ''), method, body, headers });
     if (got) return got;
   }
   const r = resolveHost(sys, fs, host);

@@ -51,6 +51,21 @@ function unwrap(content: string): { comp: Comp; inner: string } {
   return { comp: c, inner: content.slice(MARK[c].length) };
 }
 
+/** Archivos de un `.zip` del simulador (ruta → contenido), o null si no lo es. */
+export function zipFiles(text: string): Record<string, string> | null {
+  if (!text.startsWith(ZIP)) return null;
+  const entries = entriesOf(text);
+  if (!entries) return null;
+  const out: Record<string, string> = {};
+  for (const e of entries) if (e.kind === 'file') out[e.path.replace(/^\.?\//, '')] = e.content ?? '';
+  return out;
+}
+
+/** Un `.zip` del simulador con estos archivos (ruta → contenido): lo usan los escenarios para dejar código ya empaquetado. */
+export function makeZip(files: Record<string, string>): string {
+  return ZIP + JSON.stringify(Object.entries(files).map(([path, content]) => ({ path, kind: 'file', mode: 0o644, mtime: 0, uid: 'alumno', gid: 'alumno', content })));
+}
+
 function entriesOf(inner: string): Entry[] | null {
   const m = inner.startsWith(TAR) ? TAR : inner.startsWith(ZIP) ? ZIP : null;
   if (!m) return null;

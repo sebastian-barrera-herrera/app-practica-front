@@ -8,8 +8,9 @@ import { AWS_REF_DATA } from './ref/data';
 import { AWS_REF_COST } from './ref/cost';
 import { AWS_REF_HA } from './ref/ha';
 import { AWS_REF_CONN } from './ref/conn';
+import { AWS_REF_SERVERLESS } from './ref/serverless';
 
-export type AwsRefCategory = 'fundamentos' | 'identidad' | 'computo' | 'almacenamiento' | 'costes' | 'redes' | 'datos' | 'seguridad' | 'operaciones' | 'cli';
+export type AwsRefCategory = 'fundamentos' | 'identidad' | 'computo' | 'almacenamiento' | 'costes' | 'redes' | 'datos' | 'seguridad' | 'operaciones' | 'integracion' | 'cli';
 
 export const AWS_REF_CATEGORY: Record<AwsRefCategory, string> = {
   fundamentos: '☁️ Fundamentos',
@@ -21,6 +22,7 @@ export const AWS_REF_CATEGORY: Record<AwsRefCategory, string> = {
   datos: '🗄️ Bases de datos',
   seguridad: '🛡️ Seguridad',
   operaciones: '🔭 Operaciones',
+  integracion: '⚡ Serverless e integración',
   cli: '⌨️ CLI y herramientas',
 };
 
@@ -53,6 +55,6 @@ export interface AwsRef {
   seeAlso?: string[];
 }
 
-export const AWS_REFERENCE: AwsRef[] = [...AWS_REF_BASICS, ...AWS_REF_IAM, ...AWS_REF_EC2, ...AWS_REF_S3, ...AWS_REF_NET, ...AWS_REF_DATA, ...AWS_REF_COST, ...AWS_REF_HA, ...AWS_REF_CONN];
+export const AWS_REFERENCE: AwsRef[] = [...AWS_REF_BASICS, ...AWS_REF_IAM, ...AWS_REF_EC2, ...AWS_REF_S3, ...AWS_REF_NET, ...AWS_REF_DATA, ...AWS_REF_COST, ...AWS_REF_HA, ...AWS_REF_CONN, ...AWS_REF_SERVERLESS];
 
 export const awsRefByName = (name: string): AwsRef | undefined => AWS_REFERENCE.find((r) => r.name === name);

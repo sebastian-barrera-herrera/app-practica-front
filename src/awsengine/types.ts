@@ -182,6 +182,24 @@ export interface S3Bucket {
   cors?: unknown[];
   logging?: Rec;
   replication?: Rec;
+  /** Notificaciones de eventos (hacia Lambda, SQS o SNS). */
+  notifications?: S3Notifications;
+}
+
+export interface S3NotifyConfig {
+  Id?: string;
+  Events: string[];
+  Filter?: { Key?: { FilterRules: { Name: string; Value: string }[] } };
+  LambdaFunctionArn?: string;
+  QueueArn?: string;
+  TopicArn?: string;
+}
+
+export interface S3Notifications {
+  LambdaFunctionConfigurations?: S3NotifyConfig[];
+  QueueConfigurations?: S3NotifyConfig[];
+  TopicConfigurations?: S3NotifyConfig[];
+  EventBridgeConfiguration?: Record<string, never>;
 }
 
 export interface S3State {
@@ -514,10 +532,115 @@ export interface Alarm {
   StateValue: 'OK' | 'ALARM' | 'INSUFFICIENT_DATA';
 }
 
+export interface SnsSub {
+  SubscriptionArn: string;
+  Protocol: string;
+  Endpoint: string;
+  confirmed: boolean;
+  /** Atributos: `FilterPolicy`, `RawMessageDelivery`, `RedrivePolicy`… */
+  attrs?: Record<string, string>;
+}
+
 export interface SnsTopic {
   TopicArn: string;
-  subscriptions: { SubscriptionArn: string; Protocol: string; Endpoint: string; confirmed: boolean }[];
+  subscriptions: SnsSub[];
   messages: string[];
+  attrs?: Record<string, string>;
+  tags?: Record<string, string>;
+}
+
+// ───────────── Amazon SQS ─────────────
+
+export interface SqsMessage {
+  MessageId: string;
+  Body: string;
+  attrs: Record<string, { DataType: string; StringValue?: string; BinaryValue?: string }>;
+  /** Reloj virtual (ms). */
+  sentAt: number;
+  /** No se puede recibir antes de este instante (retraso de entrega). */
+  availableAt: number;
+  /** Oculto hasta este instante (tiempo de visibilidad). */
+  visibleAt: number;
+  receiveCount: number;
+  receiptHandle?: string;
+  firstReceivedAt?: number;
+  groupId?: string;
+  dedupId?: string;
+  /** Si viene de otra cola por redrive: su nombre. */
+  deadFrom?: string;
+  seq: number;
+}
+
+export interface SqsQueue {
+  name: string;
+  attrs: Record<string, string>;
+  messages: SqsMessage[];
+  created: number;
+  tags: Record<string, string>;
+  seq: number;
+}
+
+// ───────────── AWS Lambda ─────────────
+
+export interface LambdaVersion {
+  Version: string;
+  CodeSha256: string;
+  CodeSize: number;
+  files: Record<string, string>;
+  Description: string;
+  Runtime: string;
+  Handler: string;
+  MemorySize: number;
+  Timeout: number;
+  Environment: Record<string, string>;
+  Role: string;
+  LastModified: number;
+}
+
+export interface LambdaPolicyStatement {
+  Sid: string;
+  Effect: 'Allow';
+  Principal: string | { Service?: string; AWS?: string };
+  Action: string;
+  Resource: string;
+  Condition?: Record<string, Record<string, string>>;
+}
+
+export interface LambdaFn extends LambdaVersion {
+  FunctionName: string;
+  FunctionArn: string;
+  /** Versiones publicadas. */
+  versions: LambdaVersion[];
+  aliases: Record<string, { Name: string; FunctionVersion: string; Description: string }>;
+  policy: LambdaPolicyStatement[];
+  reserved?: number;
+  /** Concurrencia aprovisionada por versión o alias. */
+  provisioned: Record<string, number>;
+  deadLetter?: string;
+  eventInvoke?: { MaximumRetryAttempts?: number; OnFailure?: string; OnSuccess?: string };
+  lastInvoked: number;
+  /** Instante en que cambió el código o la configuración (los entornos calientes se descartan). */
+  changedAt: number;
+  tags: Record<string, string>;
+  /** Variables de entorno cifradas con una clave de KMS (opcional, para la zona de seguridad). */
+  kmsKeyArn?: string;
+}
+
+export interface LambdaEsm {
+  UUID: string;
+  FunctionArn: string;
+  EventSourceArn: string;
+  BatchSize: number;
+  State: 'Enabled' | 'Disabled';
+  FunctionResponseTypes: string[];
+  MaximumBatchingWindowInSeconds: number;
+  LastModified: number;
+  MaximumConcurrency?: number;
+}
+
+export interface LambdaState {
+  functions: Record<string, LambdaFn>;
+  esms: Record<string, LambdaEsm>;
 }
 
 // ───────────── DynamoDB ─────────────
@@ -648,6 +771,12 @@ export interface RegionalState {
   tgw?: TgwState;
   logs?: LogsState;
   ssm?: SsmState;
+  sqs?: Record<string, SqsQueue>;
+  lambda?: LambdaState;
+  events?: EventsState;
+  sfn?: SfnState;
+  apigw?: ApiGwState;
+  cognito?: CognitoState;
   /** Plantillas de lanzamiento de EC2. */
   launchTemplates?: Record<string, LaunchTemplate>;
 }
@@ -1166,4 +1295,157 @@ export interface Accelerator {
   Status: 'IN_PROGRESS' | 'DEPLOYED';
   CreatedTime: string;
   listeners: { ListenerArn: string; Protocol: string; PortRanges: { FromPort: number; ToPort: number }[]; endpointGroups: { EndpointGroupArn: string; EndpointGroupRegion: string; EndpointConfigurations: { EndpointId: string; Weight: number }[]; TrafficDialPercentage: number }[] }[];
+}
+
+// ───────────── Amazon EventBridge ─────────────
+
+export interface EventTarget {
+  Id: string;
+  Arn: string;
+  Input?: string;
+  InputPath?: string;
+  InputTransformer?: { InputPathsMap?: Record<string, string>; InputTemplate: string };
+  RoleArn?: string;
+}
+
+export interface EventRule {
+  Name: string;
+  EventBusName: string;
+  Description?: string;
+  EventPattern?: string;
+  ScheduleExpression?: string;
+  State: 'ENABLED' | 'DISABLED';
+  targets: EventTarget[];
+  /** Último instante (ms, reloj virtual) hasta el que se han procesado las programaciones. */
+  checkedAt: number;
+}
+
+export interface EventsState {
+  buses: Record<string, { name: string; rules: Record<string, EventRule> }>;
+  /** Eventos recibidos (para depurar: `aws events`… no los lista; lo usan los tests). */
+  log: { id: string; time: number; source: string; detailType: string; matched: string[] }[];
+}
+
+// ───────────── AWS Step Functions ─────────────
+
+export interface SfnEvent {
+  id: number;
+  timestamp: number;
+  type: string;
+  previousEventId: number;
+  details?: Record<string, unknown>;
+}
+
+export interface SfnExecution {
+  name: string;
+  stateMachineArn: string;
+  input: string;
+  startDate: number;
+  stopDate: number;
+  status: 'SUCCEEDED' | 'FAILED' | 'TIMED_OUT' | 'ABORTED';
+  output?: string;
+  error?: string;
+  cause?: string;
+  events: SfnEvent[];
+}
+
+export interface SfnMachine {
+  name: string;
+  arn: string;
+  definition: string;
+  roleArn: string;
+  type: 'STANDARD' | 'EXPRESS';
+  creationDate: number;
+  executions: Record<string, SfnExecution>;
+}
+
+export interface SfnState {
+  machines: Record<string, SfnMachine>;
+}
+
+// ───────────── Amazon API Gateway (HTTP API) ─────────────
+
+export interface ApiRoute {
+  RouteId: string;
+  RouteKey: string;
+  Target?: string;
+  AuthorizationType: 'NONE' | 'JWT' | 'AWS_IAM';
+  AuthorizerId?: string;
+}
+
+export interface ApiIntegration {
+  IntegrationId: string;
+  IntegrationType: string;
+  IntegrationUri: string;
+  PayloadFormatVersion: string;
+  IntegrationMethod?: string;
+}
+
+export interface ApiAuthorizer {
+  AuthorizerId: string;
+  Name: string;
+  AuthorizerType: 'JWT';
+  IdentitySource: string[];
+  JwtConfiguration: { Audience: string[]; Issuer: string };
+}
+
+export interface ApiStage {
+  StageName: string;
+  AutoDeploy: boolean;
+  /** Hay un despliegue activo (con `AutoDeploy` siempre; si no, tras `create-deployment`). */
+  Deployed: boolean;
+  ThrottlingBurstLimit?: number;
+  ThrottlingRateLimit?: number;
+}
+
+export interface ApiGw {
+  ApiId: string;
+  Name: string;
+  ProtocolType: 'HTTP';
+  CreatedDate: number;
+  routes: Record<string, ApiRoute>;
+  integrations: Record<string, ApiIntegration>;
+  authorizers: Record<string, ApiAuthorizer>;
+  stages: Record<string, ApiStage>;
+  cors?: Record<string, unknown>;
+}
+
+export interface ApiGwState {
+  apis: Record<string, ApiGw>;
+}
+
+// ───────────── Amazon Cognito (grupos de usuarios) ─────────────
+
+export interface CognitoUser {
+  Username: string;
+  sub: string;
+  attrs: Record<string, string>;
+  password: string;
+  status: 'UNCONFIRMED' | 'CONFIRMED' | 'FORCE_CHANGE_PASSWORD';
+  enabled: boolean;
+  created: number;
+  groups: string[];
+}
+
+export interface CognitoClient {
+  ClientId: string;
+  ClientName: string;
+  ExplicitAuthFlows: string[];
+  GenerateSecret: boolean;
+}
+
+export interface CognitoPool {
+  Id: string;
+  Name: string;
+  created: number;
+  usernameAttributes: string[];
+  autoVerified: string[];
+  passwordPolicy: { MinimumLength: number; RequireUppercase: boolean; RequireLowercase: boolean; RequireNumbers: boolean; RequireSymbols: boolean };
+  users: Record<string, CognitoUser>;
+  clients: Record<string, CognitoClient>;
+  groups: Record<string, { GroupName: string; Description: string }>;
+}
+
+export interface CognitoState {
+  pools: Record<string, CognitoPool>;
 }

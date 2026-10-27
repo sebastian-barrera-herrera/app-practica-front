@@ -151,7 +151,7 @@ describe('biblioteca de AWS', () => {
       seen.add(r.name);
       expect(r.summary.length).toBeGreaterThan(10);
       for (const s of r.seeAlso ?? []) if (!awsRefByName(s)) throw new Error(`${r.name}: «${s}» no existe`);
-      const term = r.examples?.length ? mkTerm({ aws: r.scenario ?? 'base' }) : null;
+      const term = r.examples?.length ? mkTerm({ aws: r.scenario ?? 'base', packages: ['zip', 'unzip'] }) : null;
       for (const [cmd, , kind] of r.examples ?? []) {
         const res = await term!.exec(cmd);
         if (kind === 'error') expect(res.status).not.toBe(0);

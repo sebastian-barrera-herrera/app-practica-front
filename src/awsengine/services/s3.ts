@@ -52,7 +52,12 @@ export interface PutOpts {
   metadata?: Record<string, string>;
   size?: number;
   mtime?: number;
+  /** Nombre del evento de notificación (`ObjectCreated:Put` por defecto; `Copy`, `CompleteMultipartUpload`…). */
+  event?: string;
 }
+
+/** Gancho de las notificaciones de eventos: lo instala `s3events.ts` para que este módulo no dependa de Lambda, SQS ni SNS. */
+export const s3Hooks: { emit?: (a: Account, bucket: S3Bucket, event: string, key: string, v?: S3Version) => void } = {};
 
 /** Guarda un objeto respetando el versionado del bucket. Devuelve la versión creada. */
 export function s3Put(a: Account, bucket: S3Bucket, key: string, body: string, o: PutOpts = {}): S3Version {
@@ -73,6 +78,7 @@ export function s3Put(a: Account, bucket: S3Bucket, key: string, body: string, o
   const cur = bucket.objects[key] ?? [];
   // sin versionado (o suspendido) la versión «null» se sobrescribe; las versiones reales anteriores se conservan
   bucket.objects[key] = versioned ? [...cur, v] : [...cur.filter((x) => x.versionId !== 'null'), v];
+  if (bucket.notifications) s3Hooks.emit?.(a, bucket, o.event ?? 'ObjectCreated:Put', key, v);
   return v;
 }
 
@@ -92,14 +98,18 @@ export function s3Delete(a: Account, bucket: S3Bucket, key: string, versionId?: 
     const wasMarker = l[i].deleteMarker;
     l.splice(i, 1);
     if (!l.length) delete bucket.objects[key];
+    if (bucket.notifications) s3Hooks.emit?.(a, bucket, 'ObjectRemoved:Delete', key);
     return { marker: wasMarker, versionId };
   }
   if (bucket.versioning === 'Enabled') {
     const id = newId(a, 's3ver', '', 32, 'b64').replace(/[+/]/g, 'x');
     (bucket.objects[key] ??= []).push({ versionId: id, deleteMarker: true, size: 0, etag: '', lastModified: iso(a.clock), storageClass: 'STANDARD', body: '', contentType: '', tags: [], metadata: {} });
+    if (bucket.notifications) s3Hooks.emit?.(a, bucket, 'ObjectRemoved:DeleteMarkerCreated', key);
     return { marker: true, versionId: id };
   }
+  const existed = !!l;
   delete bucket.objects[key];
+  if (existed && bucket.notifications) s3Hooks.emit?.(a, bucket, 'ObjectRemoved:Delete', key);
   return {};
 }
 
@@ -327,7 +337,7 @@ op('s3api', 'copy-object', 'bucket:s! key:s! copy-source:s! storage-class:s serv
   const sk = decodeURIComponent(src.slice(i + 1).split('?')[0]);
   const v = s3Current(sb, sk);
   if (!v) throw new AwsError('NoSuchKey', 'The specified key does not exist.', 404);
-  const nv = putObjectCore(c, bucketOf(c), c.p.Key, v.body, { size: v.size, contentType: v.contentType, metadata: v.metadata, tags: v.tags });
+  const nv = putObjectCore(c, bucketOf(c), c.p.Key, v.body, { size: v.size, contentType: v.contentType, metadata: v.metadata, tags: v.tags, event: 'ObjectCreated:Copy' });
   return { CopyObjectResult: { ETag: quotedEtag(nv), LastModified: nv.lastModified } };
 });
 

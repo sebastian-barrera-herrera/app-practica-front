@@ -250,7 +250,7 @@ function transferOne(c: OpCtx, it: Item, verb: string, out: Out): void {
         return;
       }
       const dst = getBucket(c.acct, it.to.bucket);
-      if (!c.p.Dryrun) s3Put(c.acct, dst, it.to.key!, v.body, { size: v.size, contentType: v.contentType, storageClass: c.p.StorageClass ?? undefined, metadata: v.metadata, tags: v.tags });
+      if (!c.p.Dryrun) s3Put(c.acct, dst, it.to.key!, v.body, { size: v.size, contentType: v.contentType, storageClass: c.p.StorageClass ?? undefined, metadata: v.metadata, tags: v.tags, event: 'ObjectCreated:Copy' });
     }
     out.lines.push(label);
   } catch (e) {

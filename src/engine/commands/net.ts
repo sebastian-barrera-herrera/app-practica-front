@@ -99,11 +99,16 @@ defineCommand('curl', {
   }
   const sys = c.sh.sys;
   const method = o.val('X') ?? (o.has('I') ? 'HEAD' : o.val('d') ? 'POST' : 'GET');
+  const reqHeaders: Record<string, string> = {};
+  for (const h of o.all('H')) {
+    const i = h.indexOf(':');
+    if (i > 0) reqHeaders[h.slice(0, i).trim().toLowerCase()] = h.slice(i + 1).trim();
+  }
   let hops = 0;
   let final: ReturnType<typeof httpFetch>;
   const verbose: string[] = [];
   for (;;) {
-    final = httpFetch(sys, c.fs, c.sh.rt, url, method, o.val('d'));
+    final = httpFetch(sys, c.fs, c.sh.rt, url, method, o.val('d'), reqHeaders);
     if (o.has('v')) {
       verbose.push(`*   Trying ${final.ip ?? '…'}:${/^https/.test(url) ? 443 : 80}...`, `* Connected to ${url.replace(/^https?:\/\//, '').split('/')[0]} (${final.ip}) port ${/^https/.test(url) ? 443 : 80}`, `> ${method} ${/^https?:\/\/[^/]+(\/.*)?$/.exec(url)?.[1] ?? '/'} HTTP/1.1`, `> Host: ${url.replace(/^https?:\/\//, '').split('/')[0]}`, `> User-Agent: curl/8.5.0`, `> Accept: */*`, '>');
     }

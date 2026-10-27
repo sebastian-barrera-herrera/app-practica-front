@@ -14,3 +14,4 @@ import './posix';
 import './struct';
 import './_codecs';
 import './pylib.generated';
+import './aws';

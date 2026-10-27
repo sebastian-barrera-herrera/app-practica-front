@@ -26,6 +26,8 @@ export interface AwsCheckSpec {
   fails?: boolean;
   /** Qué hay que conseguir, para el mensaje de pista. */
   want?: string;
+  /** Órdenes que se ejecutan antes (en la copia, como «dios») y tras las que se deja pasar un rato: pedir a una API, publicar un mensaje, subir un objeto… */
+  pre?: string[];
 }
 
 const isEmpty = (s: string) => ['', '[]', '{}', 'null', 'None'].includes(s.trim());
@@ -45,13 +47,24 @@ export function awsCheck(check: AwsCheckSpec, term: Terminal): CheckResult {
   settleEc2(acct);
   settleRds(acct);
   // balanceadores, grupos de Auto Scaling y comprobaciones de salud tardan minutos en asentarse
-  const settles = Object.values(acct.regions).some((r) => Object.keys(r.elb?.lbs ?? {}).length || Object.keys(r.asg?.groups ?? {}).length || Object.keys(r.tgw?.gateways ?? {}).length || Object.keys(r.ec2.vpns ?? {}).length || Object.keys(r.ec2.endpoints ?? {}).length);
-  if (settles || Object.keys(acct.route53?.healthChecks ?? {}).length || Object.keys(acct.cloudfront?.distributions ?? {}).length) {
-    for (let k = 0; k < 8; k++) {
+  const settles = Object.values(acct.regions).some(
+    (r) =>
+      Object.keys(r.elb?.lbs ?? {}).length ||
+      Object.keys(r.asg?.groups ?? {}).length ||
+      Object.keys(r.tgw?.gateways ?? {}).length ||
+      Object.keys(r.ec2.vpns ?? {}).length ||
+      Object.keys(r.ec2.endpoints ?? {}).length ||
+      Object.keys(r.lambda?.esms ?? {}).length ||
+      Object.values(r.events?.buses ?? {}).some((b) => Object.values(b.rules).some((x) => x.ScheduleExpression)) ||
+      Object.values(r.sfn?.machines ?? {}).some((m) => Object.keys(m.executions ?? {}).length),
+  );
+  const wait = (minutes: number) => {
+    for (let k = 0; k < minutes; k++) {
       acct.clock += 60000;
       tick(acct);
     }
-  }
+  };
+  if (settles || Object.keys(acct.route53?.healthChecks ?? {}).length || Object.keys(acct.cloudfront?.distributions ?? {}).length) wait(8);
   const io: AwsIO = {
     acct,
     env: {},
@@ -68,6 +81,10 @@ export function awsCheck(check: AwsCheckSpec, term: Terminal): CheckResult {
     cols: 100,
     god: true,
   };
+  if (check.pre?.length) {
+    for (const line of check.pre) runAwsSync(shellSplit(line), io);
+    wait(4);
+  }
   const res = runAwsSync(shellSplit(check.cmd), io);
   const fail = (why: string): CheckResult => ({ ok: false, why: check.want ?? why });
   if (check.fails) {

@@ -6,6 +6,7 @@ import { PolicyEval, StsAssume } from './AwsIam';
 import { DbChooser, DdbPartition, MultiAz } from './AwsData';
 import { OrgTree, PriceCalc, SupportPlans } from './AwsCosts';
 import { EndpointPaths, FlowReach, HybridChooser, PeeringTgw, SsmAccess } from './AwsConnect';
+import { ApiFlow, CognitoFlow, EventRouting, LambdaLifecycle, SqsVisibility } from './AwsServerless';
 import { AsgScale, CloudfrontFlow, ElbFlow, R53Policies, Spof } from './AwsHa';
 import { CidrCalc, DnsFlow, PacketTrace, SgVsNacl, VpcLayout } from './AwsNetwork';
 import { S3Classes, S3Security } from './AwsStorage';
@@ -117,6 +118,11 @@ const MAP: Partial<Record<IllustrationId, React.ComponentType>> = {
   'aws-hybrid-chooser': HybridChooser,
   'aws-flow-reach': FlowReach,
   'aws-ssm-access': SsmAccess,
+  'aws-lambda-lifecycle': LambdaLifecycle,
+  'aws-apigw-flow': ApiFlow,
+  'aws-sqs-visibility': SqsVisibility,
+  'aws-event-routing': EventRouting,
+  'aws-cognito-flow': CognitoFlow,
 };
 
 export function Illustration({ id }: { id: IllustrationId }) {

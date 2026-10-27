@@ -5,7 +5,7 @@ import { parseOpParams, splitArgs, suggest } from './args';
 import { authenticate, CredError, resolveCredentials, resolveRegion, type Resolved } from './creds';
 import { JmesError, search } from './jmespath';
 import { OUTPUT_FORMATS, renderOutput, type OutputFormat } from './render';
-import { AwsError, OPS, Raw, SERVICE_SUMMARY, UsageErr, iamAction, opsOf, servicesList, type AuthzTarget, type AwsIO, type Caller, type GlobalOpts, type OpCtx, type OpDef } from './registry';
+import { AwsError, OPS, Raw, SERVICE_SUMMARY, UsageErr, defaultTargets, opsOf, servicesList, type AwsIO, type Caller, type GlobalOpts, type OpCtx, type OpDef } from './registry';
 import { assumeRoleCore } from './services/sts';
 import { tick } from './tick';
 import { pascal } from './util';
@@ -118,15 +118,6 @@ ${o.params.map((p) => `       --${p.name}${p.type === 'b' ? ' (boolean)' : p.typ
 ${o.examples?.length ? `\nEXAMPLES\n${o.examples.map((e) => `       $ ${e}`).join('\n')}\n` : ''}`;
 }
 
-function defaultTargets(o: OpDef, c: OpCtx): AuthzTarget[] {
-  if (o.authz === false) return [];
-  if (o.authz) return o.authz(c);
-  const action = o.action ?? iamAction(o.service, o.api);
-  const res = o.res ? o.res(c) : '*';
-  const context = o.ctx?.(c);
-  return (Array.isArray(res) ? res : [res]).map((resource) => ({ action, resource, context }));
-}
-
 // ───────────────────────── skeleton ─────────────────────────
 
 function skeleton(o: OpDef): unknown {
@@ -236,6 +227,7 @@ function execAws(argv: string[], io: AwsIO): AwsResult | Promise<AwsResult> {
       startingToken: typeof globals['starting-token'] === 'string' ? globals['starting-token'] : null,
       dryRun: params.DryRun === true,
       noPaginate: !!globals['no-paginate'],
+      binaryFormat: typeof globals['cli-binary-format'] === 'string' ? globals['cli-binary-format'] : /^\s*cli_binary_format\s*=\s*(\S+)/m.exec(io.readFile(`${io.home}/.aws/config`) ?? '')?.[1],
     };
     if (resolved) caller = authenticate(acct, resolved, service);
     if (io.god) caller = { arn: `arn:aws:iam::${acct.id}:root`, account: acct.id, type: 'Account', userId: acct.id, root: true, mfa: true, accessKeyId: 'AKIAGOD', };

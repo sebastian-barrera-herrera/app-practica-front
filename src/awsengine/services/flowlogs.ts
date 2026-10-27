@@ -15,10 +15,10 @@ const flows = (r: Ec2Region) => (r.flowLogs ??= {});
 // ───────────────────────── entrega ─────────────────────────
 
 /** ¿Puede ese rol (ARN) hacer esas acciones? Sirve para ver si el servicio podrá escribir los registros. */
-export function roleCan(a: Account, roleArn: string, actions: string[]): boolean {
+export function roleCan(a: Account, roleArn: string, actions: string[], resource = '*'): boolean {
   const pp = principalPolicies(a, roleArn);
   if (!pp) return false;
-  return actions.every((action) => evaluate({ action, resource: '*', principalArn: roleArn, principalAccount: a.id, policies: pp.policies, root: pp.root }).decision === 'allowed');
+  return actions.every((action) => evaluate({ action, resource, principalArn: roleArn, principalAccount: a.id, policies: pp.policies, root: pp.root }).decision === 'allowed');
 }
 
 /** ¿Confía el rol en ese servicio (`vpc-flow-logs.amazonaws.com`, `ssm.amazonaws.com`…)? */

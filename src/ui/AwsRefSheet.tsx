@@ -67,7 +67,7 @@ export function AwsRefSheet({ name }: { name: string }) {
   // los ejemplos de una ficha comparten cuenta y shell: variables y recursos creados por uno los ve el siguiente
   const term = useRef<Terminal | null>(null);
   const exec = async (cmd: string) => {
-    term.current ??= new Terminal({ instant: true, cols: 60, aws: ref?.scenario ?? 'base' });
+    term.current ??= new Terminal({ instant: true, cols: 60, aws: ref?.scenario ?? 'base', packages: ['zip', 'unzip'] });
     const r = await term.current.exec(cmd);
     return r.text.trimEnd();
   };

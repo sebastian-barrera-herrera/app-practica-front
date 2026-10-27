@@ -9,7 +9,7 @@ export { demo, fill, illus, learn, lesson, match, mc, multi, order, practice, pr
 export { all, any, content, exists, missing, not, out, outEq, outRe, ran, exitCode } from '@/engine/check';
 
 /** Mundo de práctica con una cuenta de AWS: nombre de escenario o configuración completa. */
-export const A = (aws: string | AwsSetup = 'base', extra: Omit<WorldOptions, 'aws'> = {}): WorldOptions => ({ aws, hostname: 'aws-lab', ...extra });
+export const A = (aws: string | AwsSetup = 'base', extra: Omit<WorldOptions, 'aws'> = {}): WorldOptions => ({ aws, hostname: 'aws-lab', ...extra, packages: ['zip', 'unzip', ...(extra.packages ?? [])] });
 
 const spec = (cmd: string, o: Omit<AwsCheckSpec, 't' | 'cmd'>): AwsCheckSpec => ({ t: 'aws', cmd, ...o });
 
@@ -25,6 +25,9 @@ export const awsAny = (cmd: string, want?: string) => spec(cmd, { empty: false, 
 export const awsFails = (cmd: string, includes?: string, want?: string) => spec(cmd, { fails: true, includes, want });
 /** La salida cumple la expresión regular. */
 export const awsMatches = (cmd: string, matches: string, want?: string) => spec(cmd, { matches, want });
+
+/** Lo mismo que `check`, pero antes ejecuta estas órdenes de «dios» en la copia (pedir a una API, publicar un mensaje, subir un objeto…) y deja pasar unos minutos. */
+export const awsAfter = (pre: string[], s: AwsCheckSpec): AwsCheckSpec => ({ ...s, pre });
 
 /** Zona de AWS. Igual que `world` de Linux, pero fija el curso. */
 export function awsWorld(w: Omit<WorldDef, 'boss' | 'course'> & { boss?: PracticeInput }): WorldDef {

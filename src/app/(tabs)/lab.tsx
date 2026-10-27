@@ -54,7 +54,7 @@ function build(id: LabCourse): Terminal {
   const g = useGame.getState();
   const cols = g.settings.terminalCols;
   const snap = g.courses[id].sandbox;
-  const fresh = () => (id === 'aws' ? new Terminal({ cols, aws: { scenario: 'equipo' }, files: AWS_LAB_FILES, hostname: 'aws-lab' }) : new Terminal({ cols, lab: true }));
+  const fresh = () => (id === 'aws' ? new Terminal({ cols, aws: { scenario: 'equipo' }, files: AWS_LAB_FILES, hostname: 'aws-lab', packages: ['zip', 'unzip'] }) : new Terminal({ cols, lab: true }));
   const t = snap ? restoreTerminal(snap, { cols }) : fresh();
   t.setEditor(openEditor);
   return t;

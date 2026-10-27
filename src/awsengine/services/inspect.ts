@@ -4,10 +4,15 @@ import { type Proto } from '../net';
 import { ON_PREM_CIDR } from '../onprem';
 import { pathBetween, pathFromInstance, pathFromOnPrem, pathInternet, pathToEndpoint, type PathResult } from '../netpath';
 import type { Account, Ec2Instance, Ec2Region } from '../types';
+import { toArr } from '../util';
 import { refreshEc2 } from './ec2';
 import { ssmStatus } from './ssm';
 import { fetchFromInternet } from '../web';
 import { healthDescription } from './elb';
+import { apiHost } from './apigw';
+import { mintIdToken } from './cognito';
+import { resolveFn, runFunction } from './lambda';
+import { getBucket, s3Put } from './s3';
 import { r53Lookup } from './route53';
 
 function findInstance(a: Account, ref: string): { inst: Ec2Instance; r: Ec2Region } {
@@ -97,12 +102,20 @@ op('_check', 'org', 'account:s!', 'Unidad organizativa (o Root) de una cuenta mi
 });
 
 /** `_check http --url http://www.tienda.test/`: lo que respondería la web (estado, cuerpo y cabeceras) a quien llega desde internet. */
-op('_check', 'http', 'url:s!', 'Pide una URL como lo haría `curl` desde fuera de AWS.', { global: true, authz: false, anon: true }, (c) => {
-  // `http://lb:mi-alb/` = el balanceador con ese nombre; `http://cf:first/` = la primera distribución de CloudFront
+op('_check', 'http', 'url:s! method:s body:s header:l bearer-of:s', 'Pide una URL como lo haría `curl` desde fuera de AWS (con `--method`, `--body` y `--header "Nombre: valor"` si hace falta).', { global: true, authz: false, anon: true }, (c) => {
+  // `http://lb:mi-alb/` = el balanceador con ese nombre; `http://cf:first/` = la primera distribución de CloudFront; `api:first/ruta` = la primera API HTTP
   const url = String(c.p.Url)
+    .replace(/^((?:https?:\/\/)?)api:first/, (_m, pre: string) => (pre || 'https://') + (Object.entries(c.acct.regions).flatMap(([region, r]) => Object.values(r.apigw?.apis ?? {}).map((x) => apiHost(x.ApiId, region)))[0] ?? 'sin-api.execute-api.us-east-1.amazonaws.com'))
     .replace(/^((?:https?:\/\/)?)lb:([^/]+)/, (_m, pre: string, name: string) => pre + (Object.values(c.acct.regions).flatMap((r) => Object.values(r.elb?.lbs ?? {})).find((l) => l.LoadBalancerName === name)?.DNSName ?? name))
     .replace(/^((?:https?:\/\/)?)cf:first/, (_m, pre: string) => pre + (Object.values(c.acct.cloudfront?.distributions ?? {})[0]?.DomainName ?? 'sin-distribucion'));
-  const r = fetchFromInternet(c.acct, url);
+  const headers: Record<string, string> = Object.fromEntries(toArr<string>(c.p.Header).map((h) => [h.slice(0, h.indexOf(':')).trim().toLowerCase(), h.slice(h.indexOf(':') + 1).trim()]));
+  // `--bearer-of ana@tienda.es`: pide la URL con el token de identidad de ese usuario de Cognito
+  if (c.p.BearerOf) {
+    const tok = mintIdToken(c.acct, c.p.BearerOf);
+    if (!tok) throw new AwsError('UserNotFoundException', `No hay un usuario confirmado «${c.p.BearerOf}» en Cognito`);
+    headers.authorization = `Bearer ${tok}`;
+  }
+  const r = fetchFromInternet(c.acct, url, { method: c.p.Method ?? (c.p.Body ? 'POST' : 'GET'), body: c.p.Body, headers });
   if (!r.ok) return { Status: 0, Error: r.error ?? `curl ${r.curlCode}`, CurlCode: r.curlCode ?? 0 };
   return { Status: r.status ?? 0, Body: (r.body ?? '').trim(), Server: r.headers?.Server ?? null, Location: r.headers?.Location ?? null, XCache: r.headers?.['X-Cache'] ?? null, Region: r.headers?.['x-amz-ga-region'] ?? null };
 });
@@ -132,4 +145,31 @@ op('_check', 'targets', 'group:s!', 'Estado de salud de los destinos de un grupo
     if (tg) return { States: healthDescription(c.acct, region, tg).map((d) => d.TargetHealth.State).sort(), Count: tg.targets.length };
   }
   throw new AwsError('TargetGroupNotFound', `El grupo «${c.p.Group}» no existe`);
+});
+
+/** `_check invoke --function f --payload '{}'`: ejecuta la función y devuelve su resultado (en la copia de la cuenta que usa el corrector). */
+op('_check', 'invoke', 'function:s! payload:s qualifier:s', 'Ejecuta una función Lambda y devuelve estado, error, resultado y duración.', { global: true, authz: false, anon: true }, (c) => {
+  const { fn, qualifier, region } = resolveFn(c.acct, c.region, c.p.Qualifier ? `${c.p.Function}:${c.p.Qualifier}` : c.p.Function);
+  const out = runFunction(c.acct, region, fn, qualifier, c.p.Payload ?? '{}');
+  c.acct.clock += Math.ceil(out.durationMs);
+  let payload: unknown = out.payload;
+  try {
+    payload = JSON.parse(out.payload);
+  } catch {
+    /* texto */
+  }
+  return { StatusCode: out.statusCode, FunctionError: out.functionError ?? null, Payload: payload, DurationMs: Math.round(out.durationMs), ColdStart: out.initMs !== undefined, Logs: out.logs };
+});
+
+/** `_check put --bucket b --key k --body texto`: sube un objeto como si alguien lo hubiera subido (dispara las notificaciones del bucket). */
+op('_check', 'put', 'bucket:s! key:s! body:s', 'Sube un objeto a un bucket (y dispara sus notificaciones de eventos).', { global: true, authz: false, anon: true }, (c) => {
+  s3Put(c.acct, getBucket(c.acct, c.p.Bucket), c.p.Key, c.p.Body ?? '');
+  return { Put: `${c.p.Bucket}/${c.p.Key}` };
+});
+
+/** `_check cognito`: resumen del primer grupo de usuarios (clientes con sus flujos y usuarios con su estado). */
+op('_check', 'cognito', '', 'Resumen del primer grupo de usuarios de Cognito de la cuenta.', { global: true, authz: false, anon: true }, (c) => {
+  const pool = Object.values(c.acct.regions).flatMap((r) => Object.values(r.cognito?.pools ?? {}))[0];
+  if (!pool) return { Pools: 0, Clients: [], Users: [] };
+  return { Pools: 1, Id: pool.Id, Clients: Object.values(pool.clients).map((k) => ({ ClientName: k.ClientName, Flows: k.ExplicitAuthFlows })), Users: Object.values(pool.users).map((u) => ({ Username: u.Username, Status: u.status, Groups: u.groups })) };
 });
