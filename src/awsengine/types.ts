@@ -1,3 +1,4 @@
+import type { AasState, DockerState, EcrState, EcsState } from './types-containers';
 /** Modelo de la cuenta de AWS simulada (todo es JSON plano: se puede clonar con structuredClone). */
 
 export type Json = null | boolean | number | string | Json[] | { [k: string]: Json };
@@ -1053,6 +1054,9 @@ export interface RegionalState {
   sfn?: SfnState;
   apigw?: ApiGwState;
   cognito?: CognitoState;
+  ecr?: EcrState;
+  ecs?: EcsState;
+  aas?: AasState;
   /** Plantillas de lanzamiento de EC2. */
   launchTemplates?: Record<string, LaunchTemplate>;
 }
@@ -1510,6 +1514,8 @@ export interface Account {
   accelerators?: Record<string, Accelerator>;
   /** Direct Connect. */
   dx?: DxState;
+  /** Docker del ordenador del alumno (imágenes locales y contenedores). */
+  docker?: DockerState;
 }
 
 export interface DxState {

@@ -42,3 +42,7 @@ import './cfncli';
 import './codebuild';
 import './codedeploy';
 import './codepipeline';
+import './ecr';
+import './ecs';
+import './ecsops';
+import './aas';

@@ -31,6 +31,8 @@ export interface PyOptions {
   now?: number;
   /** Directorio de trabajo inicial (por defecto /home/alumno). */
   cwd?: string;
+  /** Paquetes de terceros «instalados» (los contenedores): solo estos módulos (flask, requests, boto3…) se pueden importar. Sin definir, todos. */
+  installed?: string[];
 }
 
 // ───────────────────────── resultados ─────────────────────────

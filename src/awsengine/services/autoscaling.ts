@@ -230,7 +230,7 @@ function setDesired(a: Account, g: Asg, n: number, t: number, cause: string): vo
   g.DesiredCapacity = next;
 }
 
-function cronMatches(expr: string, t: number): boolean {
+export function cronMatches(expr: string, t: number): boolean {
   const f = expr.trim().split(/\s+/);
   if (f.length < 5) return false;
   const d = new Date(t);

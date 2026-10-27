@@ -15,7 +15,7 @@ import { apiRequest } from './services/apigw';
 import { emitFlow } from './services/flowlogs';
 import { clientGeo, r53Address, r53Lookup } from './services/route53';
 import { cfByDomain, cfServe, gas, gaServe } from './services/edge';
-import { elb, healthyTargets, lbByDns, lbFromInternet, lbHandle, lbState } from './services/elb';
+import { ecsTaskCapacity, elb, healthyTargets, lbByDns, lbFromInternet, lbHandle, lbState } from './services/elb';
 import { instanceType } from './catalog';
 import { tick } from './tick';
 import { fakeIp, secretFor, stableId } from './util';
@@ -225,7 +225,7 @@ function lbCapacity(a: Account, region: string, lbArn: string): number {
   const tgs = new Set<string>();
   for (const l of Object.values(lb.listeners)) for (const rule of l.rules) for (const act of rule.Actions) for (const g of act.ForwardConfig?.TargetGroups.map((x) => x.TargetGroupArn) ?? (act.TargetGroupArn ? [act.TargetGroupArn] : [])) tgs.add(g);
   let cap = 0;
-  for (const arn of tgs) for (const t of healthyTargets(a, region, s.tgs[arn])) cap += (instanceType(r.instances[t.Id]?.InstanceType ?? 't3.micro')?.vcpu ?? 2) * 60;
+  for (const arn of tgs) for (const t of healthyTargets(a, region, s.tgs[arn])) cap += ecsTaskCapacity(a, region, t.Id) ?? (instanceType(r.instances[t.Id]?.InstanceType ?? 't3.micro')?.vcpu ?? 2) * 60;
   return cap;
 }
 

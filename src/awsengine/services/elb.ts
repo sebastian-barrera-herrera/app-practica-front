@@ -71,6 +71,12 @@ const allActions = (lb: LoadBalancer): LbAction[] => Object.values(lb.listeners)
 const actionTgs = (act: LbAction): string[] => (act.Type !== 'forward' ? [] : act.ForwardConfig ? act.ForwardConfig.TargetGroups.map((t) => t.TargetGroupArn) : act.TargetGroupArn ? [act.TargetGroupArn] : []);
 
 /** Balanceadores que mandan tráfico a un grupo de destino. */
+/** Peticiones por segundo que aguanta una tarea de ECS según su CPU (256 = 30 rps); `undefined` si la IP no es de una tarea. */
+export function ecsTaskCapacity(a: Account, region: string, ip: string): number | undefined {
+  const t = Object.values(a.regions[region]?.ecs?.tasks ?? {}).find((x) => x.privateIp === ip && x.desiredStatus === 'RUNNING' && x.stoppedAt === undefined);
+  return t ? Math.max(10, (Number(t.cpu) / 1024) * 120) : undefined;
+}
+
 export function lbsUsing(a: Account, region: string, tgArn: string): LoadBalancer[] {
   return Object.values(elb(a, region).lbs).filter((lb) => allActions(lb).some((act) => actionTgs(act).includes(tgArn)));
 }
@@ -96,12 +102,32 @@ const nodeIps = (r: Ec2Region, lb: LoadBalancer): string[] =>
     return intToIp(c.base + 10);
   });
 
-/** ¿Llega el tráfico del balanceador a la instancia por el puerto dado? (grupo de seguridad y NACL del destino) */
-function nodeReaches(r: Ec2Region, lb: LoadBalancer, inst: Ec2Instance, port: number): boolean {
-  const groups = inst.SecurityGroupIds.map((id) => r.securityGroups[id]).filter(Boolean);
-  const acl = naclFor(r, inst.SubnetId);
+/** ¿Llega el tráfico del balanceador a una interfaz (grupos de seguridad y NACL de su subred) por el puerto dado? */
+function nodeReachesEni(r: Ec2Region, lb: LoadBalancer, sgIds: string[], subnetId: string, port: number): boolean {
+  const groups = sgIds.map((id) => r.securityGroups[id]).filter(Boolean);
+  const acl = naclFor(r, subnetId);
   return nodeIps(r, lb).some((ip) => sgAllows(groups, false, 'tcp', port, ip, lb.SecurityGroups) && naclDecision(acl, false, 'tcp', ip, port).allowed);
 }
+
+/** ¿Llega el tráfico del balanceador a la instancia por el puerto dado? (grupo de seguridad y NACL del destino) */
+function nodeReaches(r: Ec2Region, lb: LoadBalancer, inst: Ec2Instance, port: number): boolean {
+  return nodeReachesEni(r, lb, inst.SecurityGroupIds, inst.SubnetId, port);
+}
+
+/** Un destino de tipo `ip`: la interfaz de red de una tarea de ECS (lo resuelve el servicio que la creó). */
+export interface IpTargetInfo {
+  up: boolean;
+  state: string;
+  subnetId: string;
+  az: string;
+  sgIds: string[];
+  /** Instante en que pasó a estar en marcha. */
+  since: number;
+  /** Atiende una petición HTTP en ese puerto del contenedor. `refused`: nadie escucha (o solo en 127.0.0.1). */
+  http: (port: number, method: string, path: string, probe?: boolean) => { refused?: boolean; status?: number; type?: string; body?: string; headers?: Record<string, string> };
+}
+export const ipTargets: { resolve?: (a: Account, region: string, ip: string) => IpTargetInfo | undefined } = {};
+const isIpId = (id: string) => /^\d{1,3}(\.\d{1,3}){3}$/.test(id);
 
 /** Estados que no dependen de las comprobaciones (el destino no está en uso, se está retirando, la instancia no corre…). */
 function directState(a: Account, region: string, tg: TargetGroup, t: { Id: string; Port: number; registeredAt: number; deregisteredAt?: number }): TargetHealthInfo | null {
@@ -109,6 +135,13 @@ function directState(a: Account, region: string, tg: TargetGroup, t: { Id: strin
   if (t.deregisteredAt !== undefined) return { state: 'draining', reason: 'Target.DeregistrationInProgress', description: 'Target deregistration is in progress' };
   const lbs = lbsUsing(a, region, tg.TargetGroupArn);
   if (!lbs.length) return { state: 'unused', reason: 'Target.NotInUse', description: 'Target group is not configured to receive traffic from the load balancer' };
+  if (isIpId(t.Id)) {
+    const ip = ipTargets.resolve?.(a, region, t.Id);
+    if (!ip) return { state: 'unused', reason: 'Target.InvalidState', description: 'Target is in the stopped state' };
+    if (!ip.up) return { state: ip.state === 'STOPPED' || ip.state === 'DEPROVISIONING' ? 'unused' : 'initial', reason: ip.state === 'STOPPED' || ip.state === 'DEPROVISIONING' ? 'Target.InvalidState' : 'Elb.RegistrationInProgress', description: ip.state === 'STOPPED' || ip.state === 'DEPROVISIONING' ? 'Target is in the stopped state' : 'Target registration is in progress' };
+    if (!lbs[0].subnetIds.map((id) => r.subnets[id]?.AvailabilityZone).includes(ip.az)) return { state: 'unused', reason: 'Target.NotInUse', description: 'Target is in an Availability Zone that is not enabled for the load balancer' };
+    return null;
+  }
   const inst = r.instances[t.Id];
   if (!inst || inst.state === 'terminated' || inst.state === 'shutting-down') return { state: 'unused', reason: 'Target.InvalidState', description: 'Target is in the terminated state' };
   if (inst.state === 'stopped' || inst.state === 'stopping') return { state: 'unused', reason: 'Target.InvalidState', description: `Target is in the ${inst.state} state` };
@@ -121,9 +154,21 @@ function directState(a: Account, region: string, tg: TargetGroup, t: { Id: strin
 /** Lo que verían ahora mismo las comprobaciones de salud del balanceador contra el destino. */
 function probeTarget(a: Account, region: string, tg: TargetGroup, t: { Id: string; Port: number }): { ok: boolean; reason?: string; description?: string } {
   const r = regional(a, region).ec2;
-  const inst = r.instances[t.Id];
   const lb = lbsUsing(a, region, tg.TargetGroupArn)[0];
   const hcPort = tg.HealthCheckPort === 'traffic-port' ? t.Port : Number(tg.HealthCheckPort);
+  if (isIpId(t.Id)) {
+    const ip = ipTargets.resolve!(a, region, t.Id)!;
+    if (!nodeReachesEni(r, lb, ip.sgIds, ip.subnetId, hcPort)) return { ok: false, reason: 'Target.Timeout', description: 'Request timed out' };
+    if (tg.HealthCheckProtocol === 'TCP' || tg.Protocol === 'TCP' || tg.Protocol === 'TLS') {
+      const res = ip.http(hcPort, 'GET', '/', true);
+      return res.refused ? { ok: false, reason: 'Target.FailedHealthChecks', description: 'Health checks failed' } : { ok: true };
+    }
+    const res = ip.http(hcPort, 'GET', tg.HealthCheckPath, true);
+    if (res.refused || res.status === undefined) return { ok: false, reason: 'Target.FailedHealthChecks', description: 'Health checks failed' };
+    if (!matchesCodes(tg.Matcher.HttpCode, res.status)) return { ok: false, reason: 'Target.ResponseCodeMismatch', description: `Health checks failed with these codes: [${res.status}]` };
+    return { ok: true };
+  }
+  const inst = r.instances[t.Id];
   if (!nodeReaches(r, lb, inst, hcPort)) return { ok: false, reason: 'Target.Timeout', description: 'Request timed out' };
   if (tg.HealthCheckProtocol === 'TCP' || tg.Protocol === 'TCP' || tg.Protocol === 'TLS') {
     return /(httpd|nginx|apache2|http\.server)/.test(inst.UserData ?? '') && hcPort === 80 ? { ok: true } : { ok: false, reason: 'Target.FailedHealthChecks', description: 'Health checks failed' };
@@ -146,7 +191,8 @@ export function targetHealth(a: Account, region: string, tg: TargetGroup, t: TgT
   const inst = regional(a, region).ec2.instances[t.Id];
   const probe = probeTarget(a, region, tg, t);
   const interval = tg.HealthCheckIntervalSeconds * 1000;
-  const hs = (t.hs ??= { ok: probe.ok, since: Math.max(t.registeredAt, upSince(inst)), state: 'initial', lastEval: a.clock });
+  const since0 = isIpId(t.Id) ? Math.max(t.registeredAt, ipTargets.resolve?.(a, region, t.Id)?.since ?? 0) : Math.max(t.registeredAt, upSince(inst));
+  const hs = (t.hs ??= { ok: probe.ok, since: since0, state: 'initial', lastEval: a.clock });
   if (hs.ok !== probe.ok) {
     hs.ok = probe.ok;
     hs.since = hs.lastEval;
@@ -281,6 +327,14 @@ function forward(a: Account, region: string, lb: LoadBalancer, act: LbAction, q:
   if (!pool.length) pool = registered;
   if (!pool.length) return errPage(503, 'Service Temporarily Unavailable');
   const t = pool[lb.served % pool.length];
+  if (isIpId(t.Id)) {
+    const ip = ipTargets.resolve?.(a, region, t.Id);
+    if (!ip || !ip.up) return errPage(502, 'Bad Gateway');
+    if (!nodeReachesEni(r, lb, ip.sgIds, ip.subnetId, t.Port)) return errPage(504, 'Gateway Time-out');
+    const res = ip.http(t.Port, q.method, q.path + (q.query ? '?' + q.query : ''));
+    if (res.refused || res.status === undefined) return errPage(502, 'Bad Gateway');
+    return { ok: true, status: res.status, type: res.type ?? 'text/html', body: res.body ?? '', headers: { ...(res.headers ?? {}), Server: 'awselb/2.0' } };
+  }
   const inst = r.instances[t.Id];
   if (!inst || inst.state !== 'running') return errPage(502, 'Bad Gateway');
   const reach = lb.Type === 'network' ? sgAllows(inst.SecurityGroupIds.map((id) => r.securityGroups[id]).filter(Boolean), false, 'tcp', t.Port, q.srcIp) : nodeReaches(r, lb, inst, t.Port);

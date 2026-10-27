@@ -13,5 +13,6 @@ import './net';
 import './archive';
 import './fun';
 import '../../awsengine/command';
+import '../../awsengine/docker';
 
 export { REGISTRY } from '../registry';

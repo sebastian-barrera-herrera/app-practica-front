@@ -132,9 +132,9 @@ op('cloudwatch', 'put-metric-alarm', 'alarm-name:s! alarm-description:s metric-n
   };
   return undefined;
 });
-op('cloudwatch', 'describe-alarms', 'alarm-names:l state-value:s', 'Lista las alarmas de la región.', { paginate: 'MetricAlarms', res: () => '*' }, (c) => {
+op('cloudwatch', 'describe-alarms', 'alarm-names:l alarm-name-prefix:s state-value:s', 'Lista las alarmas de la región.', { paginate: 'MetricAlarms', res: () => '*' }, (c) => {
   const r = regional(c.acct, c.region);
-  const list = Object.values(r.alarms).filter((al) => (!c.p.AlarmNames || c.p.AlarmNames.includes(al.AlarmName)) && (!c.p.StateValue || alarmState(c.acct, c.region, al) === c.p.StateValue));
+  const list = Object.values(r.alarms).filter((al) => (!c.p.AlarmNames || c.p.AlarmNames.includes(al.AlarmName)) && (!c.p.AlarmNamePrefix || al.AlarmName.startsWith(c.p.AlarmNamePrefix)) && (!c.p.StateValue || alarmState(c.acct, c.region, al) === c.p.StateValue));
   return { CompositeAlarms: [], MetricAlarms: list.map((al) => alarmView(c, al)) };
 });
 op('cloudwatch', 'delete-alarms', 'alarm-names:l!', 'Borra alarmas.', { res: (c) => (c.p.AlarmNames as string[]).map((n) => alarmArn(c, n)) }, (c) => {

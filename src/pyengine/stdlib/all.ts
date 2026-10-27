@@ -16,3 +16,4 @@ import './_codecs';
 import './pylib.generated';
 import './aws';
 import './redis';
+import './flask';

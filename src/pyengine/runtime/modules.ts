@@ -127,6 +127,8 @@ function searchPath(I: Interp): string[] {
   return out;
 }
 
+const THIRD_PARTY = new Set(['flask', 'requests', 'boto3', 'botocore', 'redis', 'yaml', 'PIL', 'numpy', 'pandas', 'gunicorn', 'werkzeug', 'jinja2']);
+
 function loadModule(I: Interp, abs: string, parent: PyModule | null): PyModule {
   const leaf = abs.slice(abs.lastIndexOf('.') + 1);
   // 1. archivos del usuario en el FS virtual
@@ -143,6 +145,9 @@ function loadModule(I: Interp, abs: string, parent: PyModule | null): PyModule {
       return m;
     }
   }
+  // 1b. paquetes de terceros: dentro de un contenedor solo existen los que se instalaron con pip
+  const top = abs.split('.')[0];
+  if (I.options.installed && THIRD_PARTY.has(top) && !I.options.installed.includes(top)) throw importError(`No module named '${abs}'`, abs, E.ModuleNotFoundError);
   // 2. biblioteca estándar
   const nat = NATIVE[abs];
   if (nat) {
