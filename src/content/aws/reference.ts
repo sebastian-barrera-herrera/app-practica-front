@@ -13,6 +13,8 @@ import { AWS_REF_DATADEEP } from './ref/datadeep';
 import { AWS_REF_IAC } from './ref/iac';
 import { AWS_REF_CONTAINERS } from './ref/containers';
 import { AWS_REF_CONTAINERS2 } from './ref/containers2';
+import { AWS_REF_OPS } from './ref/ops';
+import { AWS_REF_OPS2 } from './ref/ops2';
 
 export type AwsRefCategory = 'fundamentos' | 'identidad' | 'computo' | 'almacenamiento' | 'costes' | 'redes' | 'datos' | 'seguridad' | 'operaciones' | 'integracion' | 'devops' | 'contenedores' | 'cli';
 
@@ -61,6 +63,6 @@ export interface AwsRef {
   seeAlso?: string[];
 }
 
-export const AWS_REFERENCE: AwsRef[] = [...AWS_REF_BASICS, ...AWS_REF_IAM, ...AWS_REF_EC2, ...AWS_REF_S3, ...AWS_REF_NET, ...AWS_REF_DATA, ...AWS_REF_COST, ...AWS_REF_HA, ...AWS_REF_CONN, ...AWS_REF_SERVERLESS, ...AWS_REF_DATADEEP, ...AWS_REF_IAC, ...AWS_REF_CONTAINERS, ...AWS_REF_CONTAINERS2];
+export const AWS_REFERENCE: AwsRef[] = [...AWS_REF_BASICS, ...AWS_REF_IAM, ...AWS_REF_EC2, ...AWS_REF_S3, ...AWS_REF_NET, ...AWS_REF_DATA, ...AWS_REF_COST, ...AWS_REF_HA, ...AWS_REF_CONN, ...AWS_REF_SERVERLESS, ...AWS_REF_DATADEEP, ...AWS_REF_IAC, ...AWS_REF_CONTAINERS, ...AWS_REF_CONTAINERS2, ...AWS_REF_OPS, ...AWS_REF_OPS2];
 
 export const awsRefByName = (name: string): AwsRef | undefined => AWS_REFERENCE.find((r) => r.name === name);

@@ -28,7 +28,11 @@ export const OPS = {
 /** Un tema SNS (`alertas`) con una cola SQS (`guardia`) suscrita: así se ve si la alarma avisó. */
 function alertas(a: Account, topic = 'alertas', queue = 'guardia'): string {
   const t = call(a, 'sns', 'create-topic', { Name: topic }).TopicArn as string;
-  call(a, 'sqs', 'create-queue', { QueueName: queue });
+  const url = call(a, 'sqs', 'create-queue', { QueueName: queue }).QueueUrl as string;
+  // sin esta política en la cola, SNS no podría escribir en ella (como en AWS)
+  const qArn = `arn:aws:sqs:${R}:${ACCT}:${queue}`;
+  const pol = { Version: '2012-10-17', Statement: [{ Effect: 'Allow', Principal: { Service: 'sns.amazonaws.com' }, Action: 'sqs:SendMessage', Resource: qArn, Condition: { ArnEquals: { 'aws:SourceArn': t } } }] };
+  call(a, 'sqs', 'set-queue-attributes', { QueueUrl: url, Attributes: { Policy: JSON.stringify(pol) } });
   call(a, 'sns', 'subscribe', { TopicArn: t, Protocol: 'sqs', NotificationEndpoint: `arn:aws:sqs:${R}:${ACCT}:${queue}` });
   return t;
 }

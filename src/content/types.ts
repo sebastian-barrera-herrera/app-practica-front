@@ -117,7 +117,12 @@ export type IllustrationId =
   | 'aws-ecs-deploy'
   | 'aws-fargate-cost'
   | 'aws-eks-arch'
-  | 'aws-container-scaling';
+  | 'aws-container-scaling'
+  | 'aws-alarm-eval'
+  | 'aws-log-filter'
+  | 'aws-audit-trail'
+  | 'aws-ssm-fleet'
+  | 'aws-trace-map';
 
 // ───────────────────────── preguntas ─────────────────────────
 

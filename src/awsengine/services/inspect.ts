@@ -8,11 +8,10 @@ import { toArr } from '../util';
 import { cwPut } from './cwdata';
 import { logsPut } from './logs';
 import { sdkCall, userCaller } from '../sdk';
-import { ssmOf } from './ssm';
 import { xrayOf } from './xray';
 import { regional } from '../account';
 import { refreshEc2 } from './ec2';
-import { ssmStatus } from './ssm';
+import { ssmOf, ssmStatus } from './ssm';
 import { fetchFromInternet } from '../web';
 import { healthDescription } from './elb';
 import { apiHost } from './apigw';
@@ -222,6 +221,8 @@ op('_check', 'windows', '', 'Resumen de las ventanas de mantenimiento de Systems
   Windows: Object.values(ssmOf(c.acct, c.region).windows ?? {}).map((w) => ({
     Name: w.Name,
     Schedule: w.Schedule,
+    Duration: w.Duration,
+    Cutoff: w.Cutoff,
     Enabled: w.Enabled,
     Targets: w.targets.flatMap((t) => t.Targets.map((x) => `${x.Key}=${x.Values.join(',')}`)),
     Tasks: w.tasks.map((t) => ({ Document: t.TaskArn, Install: /Install/.test(JSON.stringify(t.TaskInvocationParameters ?? t.TaskParameters ?? {})) })),

@@ -10,6 +10,7 @@ import type { Account } from '../types';
 import type { SsmAutomation, SsmAutomationStep, SsmDocument } from '../types-ops';
 import { parseTemplate } from '../yaml';
 import { iso, mkArn, newId, toArr } from '../util';
+import { settleEc2 } from './ec2';
 import { invokeSync } from './lambda';
 import { roleTrusts } from './flowlogs';
 import { jsonPath } from './logpattern';
@@ -53,7 +54,7 @@ const PUBLIC: Record<string, PublicDoc> = {
   'AWS-GatherSoftwareInventory': { type: 'Command', description: 'Collect software inventory from the instance.', params: {}, steps: [{ name: 'collect', action: 'aws:softwareInventory', inputs: {} }] },
   'AWS-StopEC2Instance': { type: 'Automation', description: 'Stop an Amazon EC2 instance.', params: { InstanceId: S('(Required) The ID of the instance.'), AutomationAssumeRole: ROLE }, steps: [instStep('stopInstances', 'stopped')] },
   'AWS-StartEC2Instance': { type: 'Automation', description: 'Start an Amazon EC2 instance.', params: { InstanceId: S('(Required) The ID of the instance.'), AutomationAssumeRole: ROLE }, steps: [instStep('startInstances', 'running')] },
-  'AWS-RestartEC2Instance': { type: 'Automation', description: 'Restart an Amazon EC2 instance (stop and start).', params: { InstanceId: S('(Required) The ID of the instance.'), AutomationAssumeRole: ROLE }, steps: [instStep('stopInstances', 'stopped'), instStep('startInstances', 'running')] },
+  'AWS-RestartEC2Instance': { type: 'Automation', description: 'Restart an Amazon EC2 instance (stop and start).', params: { InstanceId: S('(Required) The ID of the instance.'), AutomationAssumeRole: ROLE }, steps: [instStep('restartInstances', 'restarted')] },
   'AWS-TerminateEC2Instance': { type: 'Automation', description: 'Terminate an Amazon EC2 instance.', params: { InstanceId: S('(Required) The ID of the instance.'), AutomationAssumeRole: ROLE }, steps: [instStep('terminateInstances', 'terminated')] },
   'AWS-CreateImage': { type: 'Automation', description: 'Create an AMI from an instance.', params: { InstanceId: S('(Required) The ID of the instance.'), NoReboot: S('Do not reboot the instance.', { default: 'true' }), AutomationAssumeRole: ROLE }, steps: [{ name: 'createImage', action: 'aws:executeAwsApi', inputs: { Service: 'ec2', Api: 'CreateImage', InstanceId: '{{ InstanceId }}', Name: 'AWS-CreateImage-{{ global:DATE_TIME }}', NoReboot: true } }] },
   'AWS-DisablePublicAccessForSecurityGroup': { type: 'Automation', description: 'Remove the rules that open ports 22 and 3389 to the whole internet (0.0.0.0/0 and ::/0).', params: { GroupId: S('(Required) The ID of the security group.'), AutomationAssumeRole: ROLE }, steps: [{ name: 'revokePublicRules', action: 'aws:executeScript', inputs: { Native: 'revokePublicSg', GroupId: '{{ GroupId }}' } }] },
@@ -318,8 +319,17 @@ const ACTIONS: Record<string, Handler> = {
   },
   'aws:changeInstanceState': (ctx, inp) => {
     const state = String(inp.DesiredState);
+    // `restarted`: parar, esperar a que pare del todo y volver a arrancar (todo en un paso, como en AWS)
+    if (state === 'restarted') {
+      const ids = instancesOf(ctx, inp.InstanceIds);
+      call(ctx, 'ec2', 'stop-instances', { InstanceIds: ids });
+      settleEc2(ctx.a);
+      call(ctx, 'ec2', 'start-instances', { InstanceIds: ids });
+      ctx.spent += 30000;
+      return { __data: { InstanceIds: ids } } as Record<string, V>;
+    }
     const api = STATE_API[state];
-    if (!api) throw new StepFail(`DesiredState ${state} is not supported (running, stopped, terminated).`);
+    if (!api) throw new StepFail(`DesiredState ${state} is not supported (running, stopped, restarted, terminated).`);
     const ids = instancesOf(ctx, inp.InstanceIds);
     call(ctx, 'ec2', api, { InstanceIds: ids });
     ctx.spent += 12000;

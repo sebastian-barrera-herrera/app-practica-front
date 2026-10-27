@@ -97,6 +97,8 @@ export function awsQuery(term: Terminal, cmd: string, pre?: string[]): ReturnTyp
   };
   if (pre?.length) {
     for (const line of pre) runAwsSync(shellSplit(line), io);
+    // las alarmas ven los datos nuevos en el mismo minuto en que llegan
+    tick(acct);
     wait(4);
   }
   return runAwsSync(shellSplit(cmd), io);

@@ -424,7 +424,7 @@ Ventajas frente a un bastión: **sin puertos entrantes**, permisos con **IAM** (
     category: 'operaciones',
     level: 2,
     summary: 'Ejecuta órdenes (documento `AWS-RunShellScript`) en una o muchas instancias administradas a la vez, sin conectarte a ninguna, y guarda la salida de cada una.',
-    details: 'Elige destinos por **id** o por **etiqueta** (`Key=tag:Rol,Values=web`). Cada instancia devuelve estado (`Success`/`Failed`), salida estándar, error y código de salida. Se puede limitar la concurrencia y el porcentaje de errores para no romper toda la flota.',
+    details: 'Elige destinos por **id** o por **etiqueta** (`Key=tag:Rol,Values=web`). Cada instancia devuelve estado (`Success`/`Failed`), salida estándar, error y código de salida. Se puede limitar la concurrencia y el porcentaje de errores (`--max-concurrency`, `--max-errors`) para no romper toda la flota. Además de `AWS-RunShellScript` hay documentos como `AWS-RunPatchBaseline` o `AWS-UpdateSSMAgent`, y puedes escribir los tuyos. Quien lanza necesita `ssm:SendCommand` (limitable por etiqueta) y todo queda en CloudTrail. `list-command-invocations` da el estado por instancia y `get-command-invocation`, su salida.',
     scenario: 'net-ssm-rol',
     examples: [
       [INST('INST', 'app-1')],

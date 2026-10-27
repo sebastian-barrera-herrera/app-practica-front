@@ -9,6 +9,7 @@ import { EndpointPaths, FlowReach, HybridChooser, PeeringTgw, SsmAccess } from '
 import { CachePatterns, DdbHotKey, DdbStreams, MigrationPaths, RdsProxyPool } from './AwsDeepData';
 import { CfnChange, CfnFlow, DeployShift, PipelineRun, SamCdk } from './AwsIac';
 import { ContainerLayers, ContainerScaling, EcsDeploy, EksArch, FargateCost } from './AwsContainers';
+import { AlarmEval, AuditTrail, LogFilter, SsmFleet, TraceMap } from './AwsOps';
 import { ApiFlow, CognitoFlow, EventRouting, LambdaLifecycle, SqsVisibility } from './AwsServerless';
 import { AsgScale, CloudfrontFlow, ElbFlow, R53Policies, Spof } from './AwsHa';
 import { CidrCalc, DnsFlow, PacketTrace, SgVsNacl, VpcLayout } from './AwsNetwork';
@@ -141,6 +142,11 @@ const MAP: Partial<Record<IllustrationId, React.ComponentType>> = {
   'aws-sam-cdk': SamCdk,
   'aws-pipeline-run': PipelineRun,
   'aws-deploy-shift': DeployShift,
+  'aws-alarm-eval': AlarmEval,
+  'aws-log-filter': LogFilter,
+  'aws-audit-trail': AuditTrail,
+  'aws-ssm-fleet': SsmFleet,
+  'aws-trace-map': TraceMap,
 };
 
 export function Illustration({ id }: { id: IllustrationId }) {

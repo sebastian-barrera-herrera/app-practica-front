@@ -4,6 +4,9 @@ import { AWS_REFERENCE, awsRefByName } from '../aws/reference';
 import { COURSES, allChallenges } from '../index';
 import type { Question } from '../types';
 
+// algunos retos (balanceadores, ECS, X-Ray…) simulan minutos de nube y tardan unos segundos
+jest.setTimeout(30000);
+
 const WORLDS = COURSES.aws.worlds;
 
 declare const __dirname: string;
