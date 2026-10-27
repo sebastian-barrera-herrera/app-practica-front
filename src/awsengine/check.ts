@@ -55,6 +55,11 @@ export function awsCheck(check: AwsCheckSpec, term: Terminal): CheckResult {
       Object.keys(r.ec2.vpns ?? {}).length ||
       Object.keys(r.ec2.endpoints ?? {}).length ||
       Object.keys(r.lambda?.esms ?? {}).length ||
+      Object.keys(r.elasticache?.groups ?? {}).length ||
+      Object.keys(r.elasticache?.clusters ?? {}).length ||
+      Object.keys(r.dms?.instances ?? {}).length ||
+      Object.keys(r.rds?.proxies ?? {}).length ||
+      Object.values(r.ddb ?? {}).some((t) => t.ttl?.Enabled) ||
       Object.values(r.events?.buses ?? {}).some((b) => Object.values(b.rules).some((x) => x.ScheduleExpression)) ||
       Object.values(r.sfn?.machines ?? {}).some((m) => Object.keys(m.executions ?? {}).length),
   );

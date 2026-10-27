@@ -595,6 +595,8 @@ export interface LambdaVersion {
   Environment: Record<string, string>;
   Role: string;
   LastModified: number;
+  /** Función conectada a una VPC: sus entornos usan interfaces de red en esas subredes. */
+  VpcConfig?: { SubnetIds: string[]; SecurityGroupIds: string[]; VpcId: string };
 }
 
 export interface LambdaPolicyStatement {
@@ -636,6 +638,13 @@ export interface LambdaEsm {
   MaximumBatchingWindowInSeconds: number;
   LastModified: number;
   MaximumConcurrency?: number;
+  /** Orígenes ordenados (DynamoDB Streams): desde dónde leer, cuántos reintentos lleva el lote atascado y cómo tratarlo. */
+  StartingPosition?: string;
+  afterSeq?: number;
+  failures?: number;
+  MaximumRetryAttempts?: number;
+  OnFailure?: string;
+  BisectBatchOnFunctionError?: boolean;
 }
 
 export interface LambdaState {
@@ -650,11 +659,46 @@ export interface DdbKey {
   KeyType: 'HASH' | 'RANGE';
 }
 
+export interface DdbBackup {
+  BackupArn: string;
+  BackupName: string;
+  TableName: string;
+  BackupCreationDateTime: number;
+  /** Copia de la tabla (esquema y elementos) en el momento de la copia. */
+  table: DdbTable;
+}
+
 export interface DdbIndex {
   IndexName: string;
   KeySchema: DdbKey[];
   Projection: { ProjectionType: 'ALL' | 'KEYS_ONLY' | 'INCLUDE'; NonKeyAttributes?: string[] };
   ProvisionedThroughput?: { ReadCapacityUnits: number; WriteCapacityUnits: number };
+}
+
+/** Un registro de DynamoDB Streams. */
+export interface DdbStreamRecord {
+  eventID: string;
+  eventName: 'INSERT' | 'MODIFY' | 'REMOVE';
+  eventVersion: string;
+  eventSource: string;
+  awsRegion: string;
+  dynamodb: {
+    ApproximateCreationDateTime: number;
+    Keys: Record<string, unknown>;
+    NewImage?: Record<string, unknown>;
+    OldImage?: Record<string, unknown>;
+    SequenceNumber: string;
+    SizeBytes: number;
+    StreamViewType: string;
+  };
+  userIdentity?: { type: string; principalId: string };
+}
+
+/** Un cambio guardado para la recuperación a un momento dado (PITR). */
+export interface DdbChange {
+  at: number;
+  k: string;
+  next?: Record<string, unknown>;
 }
 
 export interface DdbTable {
@@ -666,7 +710,13 @@ export interface DdbTable {
   GlobalSecondaryIndexes: DdbIndex[];
   LocalSecondaryIndexes: DdbIndex[];
   ttl?: { AttributeName: string; Enabled: boolean };
-  stream?: { StreamEnabled: boolean; StreamViewType?: string };
+  stream?: { StreamEnabled: boolean; StreamViewType?: string; label?: string; seq?: number; records?: DdbStreamRecord[] };
+  /** Regiones donde hay réplica de esta tabla (tablas globales). */
+  replicas?: string[];
+  /** Si esta tabla es una réplica: región de la tabla original. */
+  globalOrigin?: string;
+  /** Recuperación a un momento dado: estado base al activarla y cambios desde entonces. */
+  pitr?: { since: number; base: Record<string, Record<string, unknown>>; log: DdbChange[] };
   /** Clave canónica → elemento (tipado: `{"id": {"S": "1"}}`). */
   items: Record<string, Record<string, unknown>>;
   /** Reloj virtual (ms) de creación y de la orden de borrado. */
@@ -706,6 +756,39 @@ export interface DbInstance {
   DBClusterIdentifier?: string;
   /** Cambios pendientes de aplicar en la ventana de mantenimiento. */
   pending?: Record<string, unknown>;
+  /** Contraseña del usuario maestro (solo la usa el simulador para comprobar secretos y proxies). */
+  pw?: string;
+  /** Grupo de parámetros y valores que la instancia tiene ya aplicados (los estáticos necesitan reinicio). */
+  paramGroup?: string;
+  applied?: Record<string, string>;
+  /** Tablas de ejemplo de la base de datos (las usa DMS al migrar). */
+  tables?: { schema: string; name: string; rows: number }[];
+  Tags: Tag[];
+}
+
+export interface DbParamGroup {
+  name: string;
+  family: string;
+  description: string;
+  params: Record<string, { value: string; apply: 'immediate' | 'pending-reboot' }>;
+}
+
+export interface DbProxy {
+  name: string;
+  arn: string;
+  engineFamily: string;
+  roleArn: string;
+  secretArns: string[];
+  subnetIds: string[];
+  sgIds: string[];
+  vpcId: string;
+  requireTls: boolean;
+  idleTimeout: number;
+  status: 'creating' | 'available' | 'deleting';
+  stateAt: number;
+  created: number;
+  targets: { type: 'RDS_INSTANCE' | 'TRACKED_CLUSTER'; id: string }[];
+  pool: { MaxConnectionsPercent: number; MaxIdleConnectionsPercent: number; ConnectionBorrowTimeout: number };
   Tags: Tag[];
 }
 
@@ -750,6 +833,9 @@ export interface DbCluster {
   BackupRetentionPeriod: number;
   DeletionProtection: boolean;
   ClusterCreateTime: string;
+  /** Aurora Serverless v2: capacidad mínima y máxima en ACU. */
+  scaling?: { MinCapacity: number; MaxCapacity: number };
+  pw?: string;
   Tags: Tag[];
 }
 
@@ -758,6 +844,189 @@ export interface RdsState {
   snapshots: Record<string, DbSnapshot>;
   subnetGroups: Record<string, DbSubnetGroup>;
   clusters: Record<string, DbCluster>;
+  paramGroups?: Record<string, DbParamGroup>;
+  proxies?: Record<string, DbProxy>;
+}
+
+// ───────────── Migración: DMS y DataSync ─────────────
+
+export interface DmsInstance {
+  id: string;
+  arn: string;
+  cls: string;
+  storage: number;
+  sgIds: string[];
+  subnetGroup: string;
+  multiAz: boolean;
+  publiclyAccessible: boolean;
+  vpcId: string;
+  az: string;
+  status: 'creating' | 'available' | 'deleting';
+  stateAt: number;
+  created: number;
+}
+
+export interface DmsEndpoint {
+  id: string;
+  arn: string;
+  type: 'source' | 'target';
+  engine: string;
+  server?: string;
+  port?: number;
+  username?: string;
+  password?: string;
+  database?: string;
+  s3?: { BucketName: string; ServiceAccessRoleArn: string; BucketFolder?: string };
+  ddbRole?: string;
+  created: number;
+}
+
+export interface DmsConnection {
+  instArn: string;
+  endpointArn: string;
+  status: 'testing' | 'successful' | 'failed';
+  failure?: string;
+  at: number;
+}
+
+export interface DmsTask {
+  id: string;
+  arn: string;
+  type: 'full-load' | 'cdc' | 'full-load-and-cdc';
+  sourceArn: string;
+  targetArn: string;
+  instArn: string;
+  mappings: string;
+  status: 'ready' | 'starting' | 'running' | 'stopped' | 'failed' | 'deleting';
+  stateAt: number;
+  startedAt?: number;
+  stopReason?: string;
+  lastFailure?: string;
+  tables: { schema: string; table: string; rows: number }[];
+  loaded?: boolean;
+  created: number;
+}
+
+export interface DmsState {
+  subnetGroups: Record<string, { id: string; description: string; vpcId: string; subnetIds: string[] }>;
+  instances: Record<string, DmsInstance>;
+  endpoints: Record<string, DmsEndpoint>;
+  connections: DmsConnection[];
+  tasks: Record<string, DmsTask>;
+}
+
+export interface DsLocation {
+  arn: string;
+  kind: 's3' | 'nfs';
+  /** `s3://bucket/prefix` o `nfs://servidor/ruta`. */
+  uri: string;
+  bucket?: string;
+  prefix?: string;
+  roleArn?: string;
+  agentArns?: string[];
+  server?: string;
+  subdir?: string;
+}
+
+export interface DsTask {
+  arn: string;
+  name: string;
+  src: string;
+  dst: string;
+  options: Record<string, string>;
+  includes: string[];
+  excludes: string[];
+  schedule?: string;
+}
+
+export interface DsExecution {
+  arn: string;
+  taskArn: string;
+  startedAt: number;
+  status: 'LAUNCHING' | 'PREPARING' | 'TRANSFERRING' | 'VERIFYING' | 'SUCCESS' | 'ERROR';
+  files: number;
+  bytes: number;
+  error?: string;
+}
+
+export interface DataSyncState {
+  agents: Record<string, { arn: string; name: string; status: 'ONLINE' | 'OFFLINE' }>;
+  locations: Record<string, DsLocation>;
+  tasks: Record<string, DsTask>;
+  executions: Record<string, DsExecution>;
+}
+
+// ───────────── ElastiCache ─────────────
+
+export interface CacheNode {
+  id: string;
+  az: string;
+  role: 'primary' | 'replica';
+}
+
+export interface CacheGroup {
+  id: string;
+  description: string;
+  engine: 'redis' | 'valkey';
+  engineVersion: string;
+  nodeType: string;
+  status: 'creating' | 'available' | 'modifying' | 'deleting';
+  stateAt: number;
+  /** Fragmentos (con el modo clúster desactivado hay uno solo). */
+  shards: { id: string; nodes: CacheNode[] }[];
+  clusterMode: boolean;
+  automaticFailover: boolean;
+  multiAz: boolean;
+  subnetGroup: string;
+  sgIds: string[];
+  atRest: boolean;
+  transit: boolean;
+  authToken?: string;
+  port: number;
+  created: number;
+  Tags: Tag[];
+}
+
+export interface CacheCluster {
+  id: string;
+  engine: 'memcached' | 'redis';
+  nodeType: string;
+  numNodes: number;
+  status: 'creating' | 'available' | 'modifying' | 'deleting';
+  stateAt: number;
+  az: string;
+  subnetGroup: string;
+  sgIds: string[];
+  port: number;
+  created: number;
+  Tags: Tag[];
+}
+
+export interface CacheSubnetGroup {
+  name: string;
+  description: string;
+  vpcId: string;
+  subnetIds: string[];
+}
+
+export interface CacheState {
+  groups: Record<string, CacheGroup>;
+  clusters: Record<string, CacheCluster>;
+  subnetGroups: Record<string, CacheSubnetGroup>;
+  /** Contenido de cada almacén (un grupo de replicación = un almacén): clave → valor con caducidad. */
+  data: Record<string, Record<string, { t: 's' | 'h' | 'l' | 'set'; v: unknown; exp?: number }>>;
+}
+
+export interface Secret {
+  Name: string;
+  ARN: string;
+  Description: string;
+  created: number;
+  /** Versiones: la más reciente es AWSCURRENT y la anterior AWSPREVIOUS. */
+  versions: { id: string; value: string; binary?: boolean; created: number; stages: string[] }[];
+  deletedAt?: number;
+  recoveryDays?: number;
+  Tags: Tag[];
 }
 
 export interface RegionalState {
@@ -765,6 +1034,11 @@ export interface RegionalState {
   alarms: Record<string, Alarm>;
   sns: Record<string, SnsTopic>;
   ddb?: Record<string, DdbTable>;
+  ddbBackups?: Record<string, DdbBackup>;
+  secrets?: Record<string, Secret>;
+  elasticache?: CacheState;
+  dms?: DmsState;
+  datasync?: DataSyncState;
   rds?: RdsState;
   elb?: ElbState;
   asg?: AsgState;
@@ -1203,6 +1477,8 @@ export interface AssumedSession {
 
 export interface Account {
   id: string;
+  /** Recursos compartidos de la «oficina» (NFS): `servidor:/ruta` → archivos (ruta relativa → contenido). Los lee DataSync. */
+  onpremShares?: Record<string, Record<string, string>>;
   /** Semilla para generar identificadores deterministas. */
   seed: number;
   /** Reloj virtual en ms. */

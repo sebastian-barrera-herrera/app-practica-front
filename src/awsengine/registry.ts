@@ -153,7 +153,7 @@ export interface OpDef {
 }
 
 export const OPS = new Map<string, OpDef>();
-export const SERVICE_PREFIX: Record<string, string> = { s3api: 's3', s3: 's3', cloudwatch: 'cloudwatch', budgets: 'budgets', elbv2: 'elasticloadbalancing', elb: 'elasticloadbalancing', stepfunctions: 'states', apigatewayv2: 'apigateway' };
+export const SERVICE_PREFIX: Record<string, string> = { s3api: 's3', s3: 's3', cloudwatch: 'cloudwatch', budgets: 'budgets', elbv2: 'elasticloadbalancing', elb: 'elasticloadbalancing', stepfunctions: 'states', apigatewayv2: 'apigateway', dynamodbstreams: 'dynamodb' };
 export const SERVICE_SUMMARY: Record<string, string> = {
   sts: 'AWS Security Token Service',
   iam: 'AWS Identity and Access Management',
@@ -162,6 +162,11 @@ export const SERVICE_SUMMARY: Record<string, string> = {
   ec2: 'Amazon Elastic Compute Cloud',
   route53: 'Amazon Route 53 (DNS)',
   dynamodb: 'Amazon DynamoDB',
+  dynamodbstreams: 'Amazon DynamoDB Streams',
+  secretsmanager: 'AWS Secrets Manager',
+  elasticache: 'Amazon ElastiCache',
+  dms: 'AWS Database Migration Service',
+  datasync: 'AWS DataSync',
   ce: 'AWS Cost Explorer',
   organizations: 'AWS Organizations',
   resourcegroupstaggingapi: 'AWS Resource Groups Tagging API',

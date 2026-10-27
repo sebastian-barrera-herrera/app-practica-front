@@ -9,6 +9,7 @@ import { AWS_REF_COST } from './ref/cost';
 import { AWS_REF_HA } from './ref/ha';
 import { AWS_REF_CONN } from './ref/conn';
 import { AWS_REF_SERVERLESS } from './ref/serverless';
+import { AWS_REF_DATADEEP } from './ref/datadeep';
 
 export type AwsRefCategory = 'fundamentos' | 'identidad' | 'computo' | 'almacenamiento' | 'costes' | 'redes' | 'datos' | 'seguridad' | 'operaciones' | 'integracion' | 'cli';
 
@@ -55,6 +56,6 @@ export interface AwsRef {
   seeAlso?: string[];
 }
 
-export const AWS_REFERENCE: AwsRef[] = [...AWS_REF_BASICS, ...AWS_REF_IAM, ...AWS_REF_EC2, ...AWS_REF_S3, ...AWS_REF_NET, ...AWS_REF_DATA, ...AWS_REF_COST, ...AWS_REF_HA, ...AWS_REF_CONN, ...AWS_REF_SERVERLESS];
+export const AWS_REFERENCE: AwsRef[] = [...AWS_REF_BASICS, ...AWS_REF_IAM, ...AWS_REF_EC2, ...AWS_REF_S3, ...AWS_REF_NET, ...AWS_REF_DATA, ...AWS_REF_COST, ...AWS_REF_HA, ...AWS_REF_CONN, ...AWS_REF_SERVERLESS, ...AWS_REF_DATADEEP];
 
 export const awsRefByName = (name: string): AwsRef | undefined => AWS_REFERENCE.find((r) => r.name === name);

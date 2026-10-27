@@ -182,24 +182,24 @@ export const SRV_ASL = JSON.stringify(
   2,
 );
 
-const TRUST = (service: string): PolicyDoc => ({ Version: '2012-10-17', Statement: [{ Effect: 'Allow', Principal: { Service: service }, Action: 'sts:AssumeRole' }] });
-const policy = (statements: { Action: string | string[]; Resource: string | string[] }[]): PolicyDoc => ({ Version: '2012-10-17', Statement: statements.map((s) => ({ Effect: 'Allow' as const, ...s })) });
-const BASIC = 'service-role/AWSLambdaBasicExecutionRole';
+export const TRUST = (service: string): PolicyDoc => ({ Version: '2012-10-17', Statement: [{ Effect: 'Allow', Principal: { Service: service }, Action: 'sts:AssumeRole' }] });
+export const policy = (statements: { Action: string | string[]; Resource: string | string[] }[]): PolicyDoc => ({ Version: '2012-10-17', Statement: statements.map((s) => ({ Effect: 'Allow' as const, ...s })) });
+export const BASIC = 'service-role/AWSLambdaBasicExecutionRole';
 const tableArn = (n: string) => `arn:aws:dynamodb:${R}:${ACCT}:table/${n}`;
 const fnArn = (n: string) => `arn:aws:lambda:${R}:${ACCT}:function:${n}`;
 
 /** Llama a una operación como el sistema (sin comprobar permisos) y falla ruidosamente si el escenario está mal montado. */
-function call(a: Account, service: string, op: string, params: Record<string, unknown>): Record<string, any> {
+export function call(a: Account, service: string, op: string, params: Record<string, unknown>): Record<string, any> {
   const r = sdkCall(a, R, null, service, op, params);
   if (!r.ok) throw new Error(`escenario: ${service} ${op}: ${r.error?.Code} ${r.error?.Message}`);
   return r.data ?? {};
 }
 
-function role(a: Account, name: string, o: { attached?: string[]; inline?: Record<string, PolicyDoc>; service?: string } = {}): string {
+export function role(a: Account, name: string, o: { attached?: string[]; inline?: Record<string, PolicyDoc>; service?: string } = {}): string {
   return iamCreateRole(a, name, TRUST(o.service ?? 'lambda.amazonaws.com'), { attached: o.attached ?? [], inline: o.inline }).Arn;
 }
 
-function fn(a: Account, name: string, code: string, roleArn: string, o: { handler?: string; timeout?: number; memory?: number; env?: Record<string, string>; file?: string } = {}): string {
+export function fn(a: Account, name: string, code: string, roleArn: string, o: { handler?: string; timeout?: number; memory?: number; env?: Record<string, string>; file?: string } = {}): string {
   const file = o.file ?? 'lambda_function.py';
   call(a, 'lambda', 'create-function', {
     FunctionName: name,

@@ -15,3 +15,4 @@ import './struct';
 import './_codecs';
 import './pylib.generated';
 import './aws';
+import './redis';

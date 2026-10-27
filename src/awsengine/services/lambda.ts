@@ -14,6 +14,8 @@ import { tickers } from '../tick';
 import type { Account, LambdaEsm, LambdaFn, LambdaPolicyStatement, LambdaState, LambdaVersion } from '../types';
 import { iso, mkArn, newId, toArr } from '../util';
 import { roleCan } from './flowlogs';
+import { lambdaAwsReach } from '../lambdanet';
+import { cacheBridge } from './cache';
 import { logsCreateGroup, logsOf } from './logs';
 import { findQueue, queueArn, sqsReceive, sqsSend, sqsSweep } from './sqs';
 
@@ -270,6 +272,11 @@ function runFunctionOnce(a: Account, region: string, fn: LambdaFn, qualifier: st
         },
       });
     }
+    if (service === '__net' || service === '__cache') return cacheBridge(a, region, v.VpcConfig, service, opName, parsed);
+    if (v.VpcConfig) {
+      const reach = lambdaAwsReach(a, reg || region, v.VpcConfig, service);
+      if (!reach.ok) return JSON.stringify({ __error: { Code: 'EndpointConnectionError', Message: `Could not connect to the endpoint URL: "https://${service}.${reg || region}.amazonaws.com/" (${reach.why})`, Status: 0 }, __delay: 60000 });
+    }
     const r = sdkCall(a, reg || region, fnCaller, service, opName, parsed);
     return JSON.stringify(r.ok ? r.data : { __error: r.error });
   };
@@ -446,7 +453,7 @@ export const destinations: {
   publish?: (a: Account, topicArn: string, message: string) => void;
 } = {};
 
-function deliver(a: Account, target: string, body: string): void {
+export function deliver(a: Account, target: string, body: string): void {
   if (target.startsWith('arn:aws:sqs:')) {
     try {
       const { q } = findQueue(a, target.split(':')[3], target);
@@ -554,6 +561,7 @@ const configView = (a: Account, region: string, fn: LambdaFn, v: LambdaVersion =
   CodeSha256: v.CodeSha256,
   Version: v.Version,
   ...(Object.keys(v.Environment).length ? { Environment: { Variables: v.Environment } } : {}),
+  ...(v.VpcConfig ? { VpcConfig: { SubnetIds: v.VpcConfig.SubnetIds, SecurityGroupIds: v.VpcConfig.SecurityGroupIds, VpcId: v.VpcConfig.VpcId, Ipv6AllowedForDualStack: false } } : {}),
   TracingConfig: { Mode: 'PassThrough' },
   RevisionId: uuid(a, 'lrev' + fn.FunctionName + v.Version + v.CodeSha256),
   State: 'Active',
@@ -615,6 +623,29 @@ function checkRole(c: OpCtx, role: string): void {
   if (!trusted) throw new AwsError('InvalidParameterValueException', 'The role defined for the function cannot be assumed by Lambda.', 400);
 }
 
+/** Valida `--vpc-config` (subredes y grupos de seguridad de la misma VPC) y que el rol pueda crear las interfaces de red. `undefined` = sin VPC. */
+function parseVpc(c: OpCtx, raw: unknown, roleArn: string): { SubnetIds: string[]; SecurityGroupIds: string[]; VpcId: string } | undefined {
+  const v = (raw ?? {}) as { SubnetIds?: string | string[]; SecurityGroupIds?: string | string[] };
+  const subnets = toArr<string>(v.SubnetIds);
+  const sgs = toArr<string>(v.SecurityGroupIds);
+  if (!subnets.length && !sgs.length) return undefined;
+  if (!subnets.length) throw new AwsError('InvalidParameterValueException', 'VpcConfig needs at least one subnet (SubnetIds).', 400);
+  const r = regional(c.acct, c.region).ec2;
+  for (const id of subnets) if (!r.subnets[id]) throw new AwsError('InvalidParameterValueException', `Error occurred while DescribeSubnets. EC2 Error Code: InvalidSubnetID.NotFound. EC2 Error Message: The subnet ID '${id}' does not exist`, 400);
+  const vpcs = new Set(subnets.map((id) => r.subnets[id].VpcId));
+  if (vpcs.size > 1) throw new AwsError('InvalidParameterValueException', 'The provided subnets belong to different VPCs: all subnets of a function must be in the same VPC.', 400);
+  const vpcId = [...vpcs][0];
+  const groups = sgs.length ? sgs : [Object.values(r.securityGroups).find((g) => g.VpcId === vpcId && g.GroupName === 'default')?.GroupId ?? ''];
+  for (const g of groups) {
+    const sg = r.securityGroups[g];
+    if (!sg) throw new AwsError('InvalidParameterValueException', `Error occurred while DescribeSecurityGroups. EC2 Error Code: InvalidGroup.NotFound. EC2 Error Message: The security group '${g}' does not exist`, 400);
+    if (sg.VpcId !== vpcId) throw new AwsError('InvalidParameterValueException', `Security group ${g} does not belong to the VPC ${vpcId} of the subnets.`, 400);
+  }
+  if (!roleCan(c.acct, roleArn, ['ec2:CreateNetworkInterface', 'ec2:DescribeNetworkInterfaces', 'ec2:DeleteNetworkInterface']))
+    throw new AwsError('InvalidParameterValueException', 'The provided execution role does not have permissions to call CreateNetworkInterface on EC2 (attach AWSLambdaVPCAccessExecutionRole).', 400);
+  return { SubnetIds: subnets, SecurityGroupIds: groups, VpcId: vpcId };
+}
+
 function checkConfig(c: OpCtx): void {
   const rt = c.p.Runtime as string | undefined;
   if (rt !== undefined && !RUNTIMES.includes(rt)) {
@@ -639,7 +670,7 @@ function checkConfig(c: OpCtx): void {
 op(
   'lambda',
   'create-function',
-  'function-name:s! runtime:s role:s! handler:s code:j zip-file:s description:s timeout:i memory-size:i environment:j publish:b package-type:s architectures:l tags:j dead-letter-config:j tracing-config:j layers:l',
+  'function-name:s! runtime:s role:s! handler:s code:j zip-file:s description:s timeout:i memory-size:i environment:j publish:b package-type:s architectures:l tags:j dead-letter-config:j tracing-config:j layers:l vpc-config:j',
   'Crea una función a partir de un .zip (`--zip-file fileb://function.zip`) o de un objeto de S3.',
   {
     authz: (c) => [
@@ -693,6 +724,7 @@ op(
       changedAt: c.acct.clock,
       tags: (c.p.Tags ?? {}) as Record<string, string>,
       deadLetter: (c.p.DeadLetterConfig as { TargetArn?: string } | undefined)?.TargetArn,
+      ...(c.p.VpcConfig ? { VpcConfig: parseVpc(c, c.p.VpcConfig, String(c.p.Role)) } : {}),
     };
     s.functions[name] = fn;
     if (c.p.Publish) {
@@ -740,7 +772,7 @@ op(
 op(
   'lambda',
   'update-function-configuration',
-  'function-name:s! role:s handler:s description:s timeout:i memory-size:i environment:j runtime:s dead-letter-config:j',
+  'function-name:s! role:s handler:s description:s timeout:i memory-size:i environment:j runtime:s dead-letter-config:j vpc-config:j',
   'Cambia la configuración: memoria, timeout, variables de entorno, rol, handler…',
   {
     res: (c) => fnArn(c.acct, c.region, String(c.p.FunctionName).split(':').pop() ?? ''),
@@ -759,6 +791,7 @@ op(
     if (c.p.MemorySize !== undefined) fn.MemorySize = c.p.MemorySize;
     if (c.p.Environment !== undefined) fn.Environment = envOf(c.p.Environment);
     if (c.p.DeadLetterConfig !== undefined) fn.deadLetter = (c.p.DeadLetterConfig as { TargetArn?: string }).TargetArn || undefined;
+    if (c.p.VpcConfig !== undefined) fn.VpcConfig = parseVpc(c, c.p.VpcConfig, fn.Role);
     fn.LastModified = c.acct.clock;
     fn.changedAt = c.acct.clock;
     return configView(c.acct, region, fn);
@@ -1205,8 +1238,16 @@ op('lambda', 'get-function-event-invoke-config', 'function-name:s!', 'Configurac
 
 // ───────────────────────── mapeos de origen de eventos ─────────────────────────
 
+/** Orígenes de eventos ordenados (streams de DynamoDB): los instala `dynamodb2.ts`. */
+export const esmHooks: {
+  validateStream?: (c: OpCtx, fn: LambdaFn, src: string) => void;
+  streamHead?: (a: Account, src: string) => number;
+  pollStream?: (a: Account, region: string, m: LambdaEsm, fn: LambdaFn) => void;
+} = {};
+
 const esmView = (a: Account, region: string, m: LambdaEsm) => ({
   UUID: m.UUID,
+  ...(m.StartingPosition ? { StartingPosition: m.StartingPosition, MaximumRetryAttempts: m.MaximumRetryAttempts, BisectBatchOnFunctionError: !!m.BisectBatchOnFunctionError } : {}),
   BatchSize: m.BatchSize,
   MaximumBatchingWindowInSeconds: m.MaximumBatchingWindowInSeconds,
   EventSourceArn: m.EventSourceArn,
@@ -1222,23 +1263,29 @@ const esmView = (a: Account, region: string, m: LambdaEsm) => ({
 op(
   'lambda',
   'create-event-source-mapping',
-  'function-name:s! event-source-arn:s batch-size:i maximum-batching-window-in-seconds:i enabled:b function-response-types:l scaling-config:j',
-  'Conecta una cola SQS con la función: Lambda lee la cola, invoca la función con lotes y borra lo que sale bien.',
+  'function-name:s! event-source-arn:s batch-size:i maximum-batching-window-in-seconds:i enabled:b function-response-types:l scaling-config:j starting-position:s maximum-retry-attempts:i bisect-batch-on-function-error:b destination-config:j',
+  'Conecta una cola SQS (o un stream de DynamoDB) con la función: Lambda lee el origen, invoca la función con lotes y avanza cuando sale bien.',
   { res: (c) => fnArn(c.acct, c.region, String(c.p.FunctionName)) },
   (c) => {
     const { fn, region } = findFn(c, c.p.FunctionName);
     const src = String(c.p.EventSourceArn ?? '');
-    if (!src.startsWith('arn:aws:sqs:')) throw new AwsError('InvalidParameterValueException', 'Unrecognized event source. This simulator supports Amazon SQS queues.', 400);
-    let q;
-    try {
-      q = findQueue(c.acct, region, src).q;
-    } catch {
-      throw new AwsError('InvalidParameterValueException', `Error occurred while ReceiveMessage. SQS Error Code: AWS.SimpleQueueService.NonExistentQueue. SQS Error Message: The specified queue does not exist.`, 400);
+    const isStream = src.startsWith('arn:aws:dynamodb:') && src.includes('/stream/');
+    if (!isStream && !src.startsWith('arn:aws:sqs:')) throw new AwsError('InvalidParameterValueException', 'Unrecognized event source. This simulator supports Amazon SQS queues and DynamoDB streams.', 400);
+    if (isStream) {
+      esmHooks.validateStream?.(c, fn, src);
+      if (!c.p.StartingPosition || !['LATEST', 'TRIM_HORIZON'].includes(c.p.StartingPosition)) throw new AwsError('InvalidParameterValueException', 'StartingPosition is required for stream event sources (LATEST or TRIM_HORIZON).', 400);
+    } else {
+      let q;
+      try {
+        q = findQueue(c.acct, region, src).q;
+      } catch {
+        throw new AwsError('InvalidParameterValueException', `Error occurred while ReceiveMessage. SQS Error Code: AWS.SimpleQueueService.NonExistentQueue. SQS Error Message: The specified queue does not exist.`, 400);
+      }
+      if (!roleCan(c.acct, fn.Role, ['sqs:ReceiveMessage', 'sqs:DeleteMessage', 'sqs:GetQueueAttributes']))
+        throw new AwsError('InvalidParameterValueException', 'The provided execution role does not have permissions to call ReceiveMessage on SQS', 400);
+      if (Number(q.attrs.VisibilityTimeout) < fn.Timeout)
+        throw new AwsError('InvalidParameterValueException', `Queue visibility timeout: ${q.attrs.VisibilityTimeout} seconds is less than Function timeout: ${fn.Timeout} seconds`, 400);
     }
-    if (!roleCan(c.acct, fn.Role, ['sqs:ReceiveMessage', 'sqs:DeleteMessage', 'sqs:GetQueueAttributes']))
-      throw new AwsError('InvalidParameterValueException', 'The provided execution role does not have permissions to call ReceiveMessage on SQS', 400);
-    if (Number(q.attrs.VisibilityTimeout) < fn.Timeout)
-      throw new AwsError('InvalidParameterValueException', `Queue visibility timeout: ${q.attrs.VisibilityTimeout} seconds is less than Function timeout: ${fn.Timeout} seconds`, 400);
     const s = lambdaOf(c.acct, region);
     if (Object.values(s.esms).some((m) => m.EventSourceArn === src && m.FunctionArn === fn.FunctionArn))
       throw new AwsError(
@@ -1260,6 +1307,15 @@ op(
       MaximumBatchingWindowInSeconds: c.p.MaximumBatchingWindowInSeconds ?? 0,
       LastModified: c.acct.clock,
       MaximumConcurrency: (c.p.ScalingConfig as { MaximumConcurrency?: number } | undefined)?.MaximumConcurrency,
+      ...(isStream
+        ? {
+            StartingPosition: c.p.StartingPosition,
+            afterSeq: c.p.StartingPosition === 'LATEST' ? esmHooks.streamHead?.(c.acct, src) ?? 0 : 0,
+            MaximumRetryAttempts: c.p.MaximumRetryAttempts ?? -1,
+            BisectBatchOnFunctionError: !!c.p.BisectBatchOnFunctionError,
+            OnFailure: (c.p.DestinationConfig as { OnFailure?: { Destination?: string } } | undefined)?.OnFailure?.Destination,
+          }
+        : {}),
     };
     s.esms[id] = m;
     return { ...esmView(c.acct, region, m), State: 'Creating' };
@@ -1309,6 +1365,11 @@ export function pollQueues(a: Account): void {
     if (!s) continue;
     for (const m of Object.values(s.esms)) {
       if (m.State !== 'Enabled') continue;
+      if (m.StartingPosition) {
+        const sfn = s.functions[m.FunctionArn.split(':function:')[1]];
+        if (sfn) esmHooks.pollStream?.(a, region, m, sfn);
+        continue;
+      }
       let found;
       try {
         found = findQueue(a, region, m.EventSourceArn);

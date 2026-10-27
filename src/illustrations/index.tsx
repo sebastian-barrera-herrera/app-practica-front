@@ -6,6 +6,7 @@ import { PolicyEval, StsAssume } from './AwsIam';
 import { DbChooser, DdbPartition, MultiAz } from './AwsData';
 import { OrgTree, PriceCalc, SupportPlans } from './AwsCosts';
 import { EndpointPaths, FlowReach, HybridChooser, PeeringTgw, SsmAccess } from './AwsConnect';
+import { CachePatterns, DdbHotKey, DdbStreams, MigrationPaths, RdsProxyPool } from './AwsDeepData';
 import { ApiFlow, CognitoFlow, EventRouting, LambdaLifecycle, SqsVisibility } from './AwsServerless';
 import { AsgScale, CloudfrontFlow, ElbFlow, R53Policies, Spof } from './AwsHa';
 import { CidrCalc, DnsFlow, PacketTrace, SgVsNacl, VpcLayout } from './AwsNetwork';
@@ -123,6 +124,11 @@ const MAP: Partial<Record<IllustrationId, React.ComponentType>> = {
   'aws-sqs-visibility': SqsVisibility,
   'aws-event-routing': EventRouting,
   'aws-cognito-flow': CognitoFlow,
+  'aws-ddb-hotkey': DdbHotKey,
+  'aws-ddb-streams': DdbStreams,
+  'aws-rds-proxy': RdsProxyPool,
+  'aws-cache-patterns': CachePatterns,
+  'aws-migration': MigrationPaths,
 };
 
 export function Illustration({ id }: { id: IllustrationId }) {

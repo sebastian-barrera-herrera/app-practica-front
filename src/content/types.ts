@@ -102,7 +102,12 @@ export type IllustrationId =
   | 'aws-apigw-flow'
   | 'aws-sqs-visibility'
   | 'aws-event-routing'
-  | 'aws-cognito-flow';
+  | 'aws-cognito-flow'
+  | 'aws-ddb-hotkey'
+  | 'aws-ddb-streams'
+  | 'aws-rds-proxy'
+  | 'aws-cache-patterns'
+  | 'aws-migration';
 
 // ───────────────────────── preguntas ─────────────────────────
 

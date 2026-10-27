@@ -7,6 +7,7 @@ import { iamCreateGroup, iamCreatePolicy, iamCreateRole, iamCreateUser } from '.
 import { makeBScenarios } from './scenarios-b';
 import { makeCScenarios } from './scenarios-c';
 import { makeNetScenarios } from './scenarios-net';
+import { makeDataScenarios } from './scenarios-data';
 import { makeSrvScenarios } from './scenarios-srv';
 import type { Account } from './types';
 import { iso, secretFor } from './util';
@@ -159,7 +160,7 @@ const huerfanos: Scenario = (a) => {
   ec2CreateVolume(a, 'us-east-1', { az, size: 50, tags: [{ Key: 'Name', Value: 'migracion-2024' }] });
 };
 
-export const SCENARIOS: Record<string, Scenario> = { base, empty: base, equipo, regiones, 'root-inseguro': rootInseguro, politicas, exceso, auditoria, ec2demo, ec2web, s3demo, s3versiones, s3fugas, huerfanos, ...makeBScenarios(base), ...makeCScenarios(base), ...makeNetScenarios(base), ...makeSrvScenarios(base) };
+export const SCENARIOS: Record<string, Scenario> = { base, empty: base, equipo, regiones, 'root-inseguro': rootInseguro, politicas, exceso, auditoria, ec2demo, ec2web, s3demo, s3versiones, s3fugas, huerfanos, ...makeBScenarios(base), ...makeCScenarios(base), ...makeNetScenarios(base), ...makeSrvScenarios(base), ...makeDataScenarios(base) };
 
 export function registerScenario(id: string, fn: Scenario): void {
   SCENARIOS[id] = fn;

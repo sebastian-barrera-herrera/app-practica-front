@@ -28,7 +28,8 @@ class NoCredentialsError(BotoCoreError):
         super().__init__('Unable to locate credentials')
 
 class EndpointConnectionError(BotoCoreError):
-    pass
+    def __init__(self, msg=''):
+        super().__init__(msg)
 
 class ParamValidationError(BotoCoreError):
     def __init__(self, report=''):
@@ -132,6 +133,11 @@ class _Client:
             res = _json.loads(_aws.call(service, op, _json.dumps(params, default=_default), self._region))
             if '__error' in res:
                 err = res['__error']
+                if res.get('__delay'):
+                    import time as _t
+                    _t.sleep(res['__delay'] / 1000)
+                if err.get('Code') == 'EndpointConnectionError':
+                    raise EndpointConnectionError(err.get('Message', ''))
                 resp = {'Error': {'Code': err.get('Code', 'Unknown'), 'Message': err.get('Message', '')}, 'ResponseMetadata': {'HTTPStatusCode': err.get('Status', 400)}}
                 if err.get('Code') == 'NoCredentialsError':
                     raise NoCredentialsError()

@@ -6,6 +6,21 @@ import { AwsError, op, type OpCtx } from '../registry';
 import type { Account, DdbIndex, DdbKey, DdbTable, Tag } from '../types';
 import { iso, stableId } from '../util';
 
+/** Ganchos para streams, TTL, réplicas globales y copias de seguridad (los instala `dynamodb2.ts`). */
+export const ddbHooks: {
+  change?: (a: Account, region: string, t: DdbTable, k: string, old: Item | undefined, next: Item | undefined, by?: 'ttl') => void;
+  view?: (a: Account, region: string, t: DdbTable) => Record<string, unknown>;
+  streamSpec?: (a: Account, t: DdbTable, spec: { StreamEnabled?: unknown; StreamViewType?: string }) => void;
+  replicaUpdates?: (c: OpCtx, t: DdbTable, updates: { Create?: { RegionName: string }; Delete?: { RegionName: string } }[]) => void;
+} = {};
+
+/** Guarda (o borra, si `next` es undefined) un elemento y avisa a los ganchos. */
+export function ddbCommit(a: Account, region: string, t: DdbTable, k: string, old: Item | undefined, next: Item | undefined, by?: 'ttl'): void {
+  if (next) t.items[k] = next;
+  else delete t.items[k];
+  ddbHooks.change?.(a, region, t, k, old, next, by);
+}
+
 const CREATING_MS = 5000;
 const DELETING_MS = 5000;
 
@@ -17,17 +32,17 @@ export function tablesOf(a: Account, region: string): Record<string, DdbTable> {
   return t;
 }
 
-const status = (a: Account, t: DdbTable) => (t.deleting !== undefined ? 'DELETING' : a.clock - t.created < CREATING_MS ? 'CREATING' : 'ACTIVE');
+export const status = (a: Account, t: DdbTable) => (t.deleting !== undefined ? 'DELETING' : a.clock - t.created < CREATING_MS ? 'CREATING' : 'ACTIVE');
 
 const notFound = () => new AwsError('ResourceNotFoundException', 'Requested resource not found');
 
-function tableFor(c: OpCtx, name: string): DdbTable {
+export function tableFor(c: OpCtx, name: string): DdbTable {
   const t = tablesOf(c.acct, c.region)[name];
   if (!t || t.deleting !== undefined) throw notFound();
   return t;
 }
 
-const arn = (c: OpCtx, name: string) => `arn:aws:dynamodb:${c.region}:${c.acct.id}:table/${name}`;
+export const arn = (c: OpCtx, name: string) => `arn:aws:dynamodb:${c.region}:${c.acct.id}:table/${name}`;
 const tableArn = (c: OpCtx) => arn(c, c.p.TableName ?? '*');
 
 // ───────────────────────── claves ─────────────────────────
@@ -37,7 +52,7 @@ const skName = (ks: DdbKey[]) => ks.find((k) => k.KeyType === 'RANGE')?.Attribut
 const attrType = (t: DdbTable, name: string) => t.AttributeDefinitions.find((d) => d.AttributeName === name)?.AttributeType;
 
 /** Comprueba que el elemento o la clave traiga la clave primaria con los tipos correctos. */
-function checkKey(t: DdbTable, k: Item, what: 'item' | 'key'): void {
+export function checkKey(t: DdbTable, k: Item, what: 'item' | 'key'): void {
   for (const ks of t.KeySchema) {
     const v = k[ks.AttributeName];
     if (!v) throw validation(what === 'item' ? `One or more parameter values were invalid: Missing the key ${ks.AttributeName} in the item` : 'The provided key element does not match the schema');
@@ -48,7 +63,7 @@ function checkKey(t: DdbTable, k: Item, what: 'item' | 'key'): void {
   if (what === 'key' && Object.keys(k).length !== t.KeySchema.length) throw validation('The provided key element does not match the schema');
 }
 
-const keyOf = (t: DdbTable, it: Item) => t.KeySchema.map((k) => canon(it[k.AttributeName])).join('\u0001');
+export const keyOf = (t: DdbTable, it: Item) => t.KeySchema.map((k) => canon(it[k.AttributeName])).join('\u0001');
 const keyPart = (t: DdbTable, it: Item): Item => Object.fromEntries(t.KeySchema.map((k) => [k.AttributeName, it[k.AttributeName]]));
 
 function keyOfIndex(idx: DdbKey[], it: Item): string | null {
@@ -101,6 +116,7 @@ function tableView(c: OpCtx, t: DdbTable) {
     ...(t.LocalSecondaryIndexes.length ? { LocalSecondaryIndexes: t.LocalSecondaryIndexes.map((i) => indexView(c, t, i, true)) } : {}),
     ...(t.GlobalSecondaryIndexes.length ? { GlobalSecondaryIndexes: t.GlobalSecondaryIndexes.map((i) => indexView(c, t, i, false)) } : {}),
     ...(t.stream?.StreamEnabled ? { StreamSpecification: { StreamEnabled: true, StreamViewType: t.stream.StreamViewType } } : {}),
+    ...(ddbHooks.view?.(c.acct, c.region, t) ?? {}),
     DeletionProtectionEnabled: t.DeletionProtectionEnabled,
   };
 }
@@ -191,6 +207,7 @@ op('dynamodb', 'create-table', 'table-name:s! attribute-definitions:f! key-schem
     Tags: (c.p.Tags as Tag[]) ?? [],
   };
   tables[name] = t;
+  if (c.p.StreamSpecification) ddbHooks.streamSpec?.(c.acct, t, c.p.StreamSpecification);
   return { TableDescription: tableView(c, t) };
 });
 
@@ -205,7 +222,7 @@ op('dynamodb', 'delete-table', 'table-name:s!', 'Borra una tabla y todos sus ele
   return { TableDescription: { ...tableView(c, t), TableStatus: 'DELETING', ItemCount: 0 } };
 });
 
-op('dynamodb', 'update-table', 'table-name:s! billing-mode:s provisioned-throughput:j attribute-definitions:f global-secondary-index-updates:j deletion-protection-enabled:b stream-specification:j', 'Cambia la capacidad, el modo de facturación o los índices secundarios globales.', { res: tableArn }, (c) => {
+op('dynamodb', 'update-table', 'table-name:s! billing-mode:s provisioned-throughput:j attribute-definitions:f global-secondary-index-updates:j deletion-protection-enabled:b stream-specification:j replica-updates:j', 'Cambia la capacidad, el modo de facturación, los índices secundarios globales, los streams o las réplicas globales (`--replica-updates`).', { res: tableArn }, (c) => {
   const t = tableFor(c, c.p.TableName);
   if (c.p.BillingMode) {
     if (c.p.BillingMode !== 'PROVISIONED' && c.p.BillingMode !== 'PAY_PER_REQUEST') throw validation('Invalid BillingMode');
@@ -231,6 +248,8 @@ op('dynamodb', 'update-table', 'table-name:s! billing-mode:s provisioned-through
       t.GlobalSecondaryIndexes.splice(i, 1);
     }
   }
+  if (c.p.StreamSpecification) ddbHooks.streamSpec?.(c.acct, t, c.p.StreamSpecification);
+  if (c.p.ReplicaUpdates) ddbHooks.replicaUpdates?.(c, t, c.p.ReplicaUpdates);
   return { TableDescription: { ...tableView(c, t), TableStatus: 'UPDATING' } };
 });
 
@@ -264,7 +283,7 @@ op('dynamodb', 'list-tags-of-resource', 'resource-arn:s!', 'Etiquetas de una tab
 
 const ITEM_PARAMS = 'table-name:s! condition-expression:s expression-attribute-names:j expression-attribute-values:j return-values:s return-consumed-capacity:s';
 
-function condition(c: OpCtx, cur: Item | undefined): void {
+export function condition(c: OpCtx, cur: Item | undefined): void {
   const src = c.p.ConditionExpression as string | undefined;
   if (!src) return;
   const env = mkEnv(c.p.ExpressionAttributeNames, c.p.ExpressionAttributeValues, 'ConditionExpression');
@@ -286,7 +305,7 @@ op('dynamodb', 'put-item', ITEM_PARAMS.replace('table-name:s!', 'table-name:s! i
   const key = keyOf(t, item);
   const old = t.items[key] as Item | undefined;
   condition(c, old);
-  t.items[key] = item;
+  ddbCommit(c.acct, c.region, t, key, old, item);
   return { ...returnVals(c, old), ...capacity(c, t.TableName, wcu(itemSize(item))) };
 });
 
@@ -308,7 +327,7 @@ op('dynamodb', 'delete-item', 'table-name:s! key:j! condition-expression:s expre
   const k = keyOf(t, key);
   const old = t.items[k] as Item | undefined;
   condition(c, old);
-  delete t.items[k];
+  ddbCommit(c.acct, c.region, t, k, old, undefined);
   return { ...returnVals(c, old), ...capacity(c, t.TableName, wcu(old ? itemSize(old) : 0)) };
 });
 
@@ -329,7 +348,7 @@ op('dynamodb', 'update-item', 'table-name:s! key:j! update-expression:s conditio
   if (cond && !evalCond(cond, old ?? {})) throw new AwsError('ConditionalCheckFailedException', 'The conditional request failed');
   const next: Item = structuredClone(old ?? key);
   const touched = applyUpdate(acts, next);
-  t.items[k] = next;
+  ddbCommit(c.acct, c.region, t, k, old, next);
   const rv = c.p.ReturnValues as string | undefined;
   const pick = (it: Item | undefined) => (it ? Object.fromEntries(touched.filter((n) => it[n]).map((n) => [n, it[n]])) : {});
   const attrs = rv === 'ALL_NEW' ? next : rv === 'ALL_OLD' ? old : rv === 'UPDATED_NEW' ? pick(next) : rv === 'UPDATED_OLD' ? pick(old) : undefined;
@@ -457,8 +476,13 @@ op('dynamodb', 'batch-write-item', 'request-items:j! return-consumed-capacity:s'
   for (const [name, list] of Object.entries(req)) {
     const t = tableFor(c, name);
     for (const r of list) {
-      if (r.PutRequest) t.items[keyOf(t, r.PutRequest.Item)] = r.PutRequest.Item;
-      else delete t.items[keyOf(t, r.DeleteRequest!.Key)];
+      if (r.PutRequest) {
+        const k = keyOf(t, r.PutRequest.Item);
+        ddbCommit(c.acct, c.region, t, k, t.items[k] as Item | undefined, r.PutRequest.Item);
+      } else {
+        const k = keyOf(t, r.DeleteRequest!.Key);
+        ddbCommit(c.acct, c.region, t, k, t.items[k] as Item | undefined, undefined);
+      }
     }
   }
   return { UnprocessedItems: {} };

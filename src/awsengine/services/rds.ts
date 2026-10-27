@@ -29,6 +29,8 @@ export const DB_CLASSES: Record<string, { vcpu: number; memGiB: number; price: n
   'db.r5.large': { vcpu: 2, memGiB: 16, price: 0.24 },
   'db.r5.xlarge': { vcpu: 4, memGiB: 32, price: 0.48 },
   'db.r6g.large': { vcpu: 2, memGiB: 16, price: 0.216 },
+  /** Aurora Serverless v2: la capacidad real se mide en ACU (0,12 $ por ACU-hora). */
+  'db.serverless': { vcpu: 2, memGiB: 4, price: 0.12 },
 };
 
 const CREATING_MS = 30000;
@@ -95,8 +97,8 @@ export function settleRds(a: Account): void {
   }
 }
 
-const arnOf = (c: Pick<OpCtx, 'acct' | 'region'>, kind: string, id: string) => `arn:aws:rds:${c.region}:${c.acct.id}:${kind}:${id}`;
-const E = {
+export const arnOf = (c: Pick<OpCtx, 'acct' | 'region'>, kind: string, id: string) => `arn:aws:rds:${c.region}:${c.acct.id}:${kind}:${id}`;
+export const E = {
   inst: (id: string) => new AwsError('DBInstanceNotFound', `DBInstance ${id} not found.`, 404),
   snap: (id: string) => new AwsError('DBSnapshotNotFound', `DBSnapshot not found: ${id}`, 404),
   sub: (id: string) => new AwsError('DBSubnetGroupNotFoundFault', `DB subnet group '${id}' does not exist.`, 404),
@@ -121,9 +123,16 @@ const subnetGroupView = (c: Pick<OpCtx, 'acct' | 'region'>, g: DbSubnetGroup) =>
   };
 };
 
-const endpointHost = (a: Account, region: string, id: string, kind = '') => `${id}.${kind}${REGION_CODE(a, region)}.${region}.rds.amazonaws.com`;
+export const endpointHost = (a: Account, region: string, id: string, kind = '') => `${id}.${kind}${REGION_CODE(a, region)}.${region}.rds.amazonaws.com`;
 
-function instanceView(c: Pick<OpCtx, 'acct' | 'region'>, i: DbInstance) {
+/** `in-sync` o `pending-reboot`: ¿tiene la instancia aplicados todos los valores de su grupo de parámetros? */
+export function paramStatus(a: Account, region: string, i: DbInstance): string {
+  const g = i.paramGroup ? rdsOf(a, region).paramGroups?.[i.paramGroup] : undefined;
+  if (!g) return 'in-sync';
+  return Object.entries(g.params).every(([k, p]) => (i.applied ?? {})[k] === p.value) ? 'in-sync' : 'pending-reboot';
+}
+
+export function instanceView(c: Pick<OpCtx, 'acct' | 'region'>, i: DbInstance) {
   const s = rdsOf(c.acct, c.region);
   const replicas = Object.values(s.instances).filter((x) => x.ReadReplicaSourceDBInstanceIdentifier === i.DBInstanceIdentifier).map((x) => x.DBInstanceIdentifier);
   const g = s.subnetGroups[i.DBSubnetGroupName];
@@ -143,7 +152,8 @@ function instanceView(c: Pick<OpCtx, 'acct' | 'region'>, i: DbInstance) {
     BackupRetentionPeriod: i.BackupRetentionPeriod,
     DBSecurityGroups: [],
     VpcSecurityGroups: i.VpcSecurityGroupIds.map((id) => ({ VpcSecurityGroupId: id, Status: 'active' })),
-    DBParameterGroups: [{ DBParameterGroupName: `default.${family}`, ParameterApplyStatus: 'in-sync' }],
+    DBParameterGroups: [{ DBParameterGroupName: i.paramGroup ?? `default.${family}`, ParameterApplyStatus: paramStatus(c.acct, c.region, i) }],
+    ...(i.BackupRetentionPeriod > 0 && i.status === 'available' ? { LatestRestorableTime: iso(c.acct.clock - 300000) } : {}),
     AvailabilityZone: i.AvailabilityZone,
     DBSubnetGroup: g ? subnetGroupView(c, g) : undefined,
     PreferredMaintenanceWindow: 'sat:08:18-sat:08:48',
@@ -206,7 +216,7 @@ const snapView = (c: Pick<OpCtx, 'acct' | 'region'>, sn: DbSnapshot) => {
 
 // ───────────────────────── validaciones ─────────────────────────
 
-const checkId = (id: string, what = 'DB Instance') => {
+export const checkId = (id: string, what = 'DB Instance') => {
   if (!/^[a-z](?:-?[a-z0-9])*$/i.test(id) || id.length > 63) throw E.invalid(`Invalid ${what} identifier: ${id}`);
 };
 
@@ -317,6 +327,7 @@ op('rds', 'create-db-instance', CREATE, 'Crea una base de datos relacional gesti
     if (!c.p.MasterUsername) throw E.combo('The parameter MasterUsername must be provided and must not be blank.');
     checkPassword(c.p.MasterUserPassword);
   }
+  if (cls === 'db.serverless' && !cluster?.scaling) throw E.combo('The DB instance class db.serverless requires a DB cluster with a ServerlessV2ScalingConfiguration (create or modify the cluster with --serverless-v2-scaling-configuration MinCapacity=0.5,MaxCapacity=8).');
   if (engine === 'postgres' && c.p.MasterUsername === 'admin') throw E.invalid('MasterUsername admin cannot be used as it is a reserved word used by the engine');
   const g = groupFor(c, c.p.DbSubnetGroupName ?? (cluster ? cluster.DBSubnetGroup : undefined));
   const azs = azsOf(c, g);
@@ -334,6 +345,7 @@ op('rds', 'create-db-instance', CREATE, 'Crea una base de datos relacional gesti
     AllocatedStorage: eng.aurora ? 1 : c.p.AllocatedStorage,
     StorageType: eng.aurora ? 'aurora' : c.p.StorageType ?? 'gp3',
     MasterUsername: cluster?.MasterUsername ?? c.p.MasterUsername,
+    pw: cluster?.pw ?? c.p.MasterUserPassword,
     ...(c.p.DbName ? { DBName: c.p.DbName } : {}),
     MultiAZ: !!c.p.MultiAz,
     AvailabilityZone: az,
@@ -368,7 +380,7 @@ op('rds', 'describe-db-instances', 'db-instance-identifier:s filters:f max-recor
   return { DBInstances: list.map((i) => instanceView(c, i)) };
 });
 
-const MODIFY = 'db-instance-identifier:s! db-instance-class:s allocated-storage:i multi-az:b backup-retention-period:i apply-immediately:b master-user-password:s deletion-protection:b vpc-security-group-ids:l publicly-accessible:b storage-type:s engine-version:s';
+const MODIFY = 'db-parameter-group-name:s db-instance-identifier:s! db-instance-class:s allocated-storage:i multi-az:b backup-retention-period:i apply-immediately:b master-user-password:s deletion-protection:b vpc-security-group-ids:l publicly-accessible:b storage-type:s engine-version:s';
 
 op('rds', 'modify-db-instance', MODIFY, 'Cambia la clase, el disco, Multi-AZ, las copias… (con `--apply-immediately` o en la próxima ventana de mantenimiento).', { res: (c) => arnOf(c, 'db', c.p.DbInstanceIdentifier) }, (c) => {
   const s = refreshRds(c.acct, c.region);
@@ -400,7 +412,16 @@ op('rds', 'modify-db-instance', MODIFY, 'Cambia la clase, el disco, Multi-AZ, la
   if (c.p.VpcSecurityGroupIds) change.VpcSecurityGroupIds = sgsFor(c, groupFor(c, i.DBSubnetGroupName), c.p.VpcSecurityGroupIds);
   if (c.p.EngineVersion) change.EngineVersion = c.p.EngineVersion;
   if (c.p.DeletionProtection !== undefined) i.DeletionProtection = c.p.DeletionProtection;
-  if (c.p.MasterUserPassword) checkPassword(c.p.MasterUserPassword);
+  if (c.p.MasterUserPassword) {
+    checkPassword(c.p.MasterUserPassword);
+    i.pw = c.p.MasterUserPassword;
+  }
+  if (c.p.DbParameterGroupName) {
+    const pg = s.paramGroups?.[c.p.DbParameterGroupName];
+    if (!pg) throw new AwsError('DBParameterGroupNotFound', `DBParameterGroup not found: ${c.p.DbParameterGroupName}`, 404);
+    i.paramGroup = pg.name;
+    for (const [k, v] of Object.entries(pg.params)) if (v.apply === 'immediate') (i.applied ??= {})[k] = v.value;
+  }
   if (Object.keys(change).length) {
     i.pending = { ...(i.pending ?? {}), ...change };
   }
@@ -425,6 +446,7 @@ op('rds', 'reboot-db-instance', 'db-instance-identifier:s! force-failover:b', 'R
     Object.assign(i, i.pending);
     i.pending = undefined;
   }
+  if (i.paramGroup) i.applied = Object.fromEntries(Object.entries(s.paramGroups?.[i.paramGroup]?.params ?? {}).map(([k, v]) => [k, v.value]));
   i.status = 'rebooting';
   i.stateAt = c.acct.clock;
   return { DBInstance: instanceView(c, i) };
@@ -588,7 +610,17 @@ op('rds', 'delete-db-subnet-group', 'db-subnet-group-name:s!', 'Borra un grupo d
 
 // ───────────────────────── Aurora: clústeres ─────────────────────────
 
-const clusterView = (c: Pick<OpCtx, 'acct' | 'region'>, k: DbCluster) => {
+/** Valida y normaliza `MinCapacity`/`MaxCapacity` (ACU) de Aurora Serverless v2. */
+export function checkScaling(raw: unknown): { MinCapacity: number; MaxCapacity: number } {
+  const r = raw as { MinCapacity?: unknown; MaxCapacity?: unknown };
+  const min = Number(r.MinCapacity);
+  const max = Number(r.MaxCapacity);
+  if (Number.isNaN(min) || Number.isNaN(max)) throw E.invalid('ServerlessV2ScalingConfiguration needs MinCapacity and MaxCapacity (in ACUs).');
+  if (min < 0 || max < 1 || max > 256 || min > max) throw E.invalid(`Invalid ServerlessV2ScalingConfiguration: MinCapacity must be between 0 and MaxCapacity, and MaxCapacity between 1 and 256 ACUs.`);
+  return { MinCapacity: min, MaxCapacity: max };
+}
+
+export const clusterView = (c: Pick<OpCtx, 'acct' | 'region'>, k: DbCluster) => {
   const s = rdsOf(c.acct, c.region);
   return {
     AllocatedStorage: 1,
@@ -605,6 +637,7 @@ const clusterView = (c: Pick<OpCtx, 'acct' | 'region'>, k: DbCluster) => {
     EngineVersion: k.EngineVersion,
     Port: k.Port,
     MasterUsername: k.MasterUsername,
+    ...(k.scaling ? { ServerlessV2ScalingConfiguration: k.scaling } : {}),
     DBClusterMembers: k.members.map((m) => ({ DBInstanceIdentifier: m.id, IsClusterWriter: m.writer, DBClusterParameterGroupStatus: 'in-sync', PromotionTier: m.writer ? 0 : 1 })),
     VpcSecurityGroups: k.VpcSecurityGroupIds.map((id) => ({ VpcSecurityGroupId: id, Status: 'active' })),
     StorageEncrypted: k.StorageEncrypted,
@@ -615,7 +648,7 @@ const clusterView = (c: Pick<OpCtx, 'acct' | 'region'>, k: DbCluster) => {
   };
 };
 
-op('rds', 'create-db-cluster', 'db-cluster-identifier:s! engine:s! master-username:s! master-user-password:s! database-name:s db-subnet-group-name:s vpc-security-group-ids:l storage-encrypted:b backup-retention-period:i deletion-protection:b tags:t', 'Crea un clúster de Aurora (almacenamiento compartido en 3 zonas); después se le añaden instancias.', { res: (c) => arnOf(c, 'cluster', c.p.DbClusterIdentifier) }, (c) => {
+op('rds', 'create-db-cluster', 'db-cluster-identifier:s! serverless-v2-scaling-configuration:j engine:s! master-username:s! master-user-password:s! database-name:s db-subnet-group-name:s vpc-security-group-ids:l storage-encrypted:b backup-retention-period:i deletion-protection:b tags:t', 'Crea un clúster de Aurora (almacenamiento compartido en 3 zonas); después se le añaden instancias.', { res: (c) => arnOf(c, 'cluster', c.p.DbClusterIdentifier) }, (c) => {
   const s = refreshRds(c.acct, c.region);
   const id = c.p.DbClusterIdentifier as string;
   checkId(id, 'DB Cluster');
@@ -624,7 +657,7 @@ op('rds', 'create-db-cluster', 'db-cluster-identifier:s! engine:s! master-userna
   if (!eng?.aurora) throw E.invalid(`Invalid DB engine: ${c.p.Engine}. DB clusters use engine aurora-mysql or aurora-postgresql.`);
   checkPassword(c.p.MasterUserPassword);
   const g = groupFor(c, c.p.DbSubnetGroupName);
-  const k: DbCluster = { DBClusterIdentifier: id, Engine: c.p.Engine, EngineVersion: eng.version, MasterUsername: c.p.MasterUsername, ...(c.p.DatabaseName ? { DatabaseName: c.p.DatabaseName } : {}), Port: eng.port, status: 'creating', stateAt: c.acct.clock, members: [], DBSubnetGroup: g.DBSubnetGroupName, VpcSecurityGroupIds: sgsFor(c, g, c.p.VpcSecurityGroupIds), StorageEncrypted: c.p.StorageEncrypted !== false, BackupRetentionPeriod: c.p.BackupRetentionPeriod ?? 1, DeletionProtection: !!c.p.DeletionProtection, ClusterCreateTime: iso(c.acct.clock), Tags: (c.p.Tags as Tag[]) ?? [] };
+  const k: DbCluster = { DBClusterIdentifier: id, Engine: c.p.Engine, EngineVersion: eng.version, MasterUsername: c.p.MasterUsername, ...(c.p.DatabaseName ? { DatabaseName: c.p.DatabaseName } : {}), Port: eng.port, status: 'creating', stateAt: c.acct.clock, members: [], DBSubnetGroup: g.DBSubnetGroupName, VpcSecurityGroupIds: sgsFor(c, g, c.p.VpcSecurityGroupIds), StorageEncrypted: c.p.StorageEncrypted !== false, BackupRetentionPeriod: c.p.BackupRetentionPeriod ?? 1, DeletionProtection: !!c.p.DeletionProtection, ClusterCreateTime: iso(c.acct.clock), pw: c.p.MasterUserPassword, Tags: (c.p.Tags as Tag[]) ?? [], ...(c.p.ServerlessV2ScalingConfiguration ? { scaling: checkScaling(c.p.ServerlessV2ScalingConfiguration) } : {}) };
   s.clusters[id] = k;
   return { DBCluster: clusterView(c, k) };
 });
