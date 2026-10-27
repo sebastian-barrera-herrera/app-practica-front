@@ -164,7 +164,7 @@ export interface OpOutcome {
 export const opHooks: ((c: OpCtx, o: OpOutcome) => void)[] = [];
 
 export const OPS = new Map<string, OpDef>();
-export const SERVICE_PREFIX: Record<string, string> = { s3api: 's3', s3: 's3', cloudwatch: 'cloudwatch', budgets: 'budgets', elbv2: 'elasticloadbalancing', elb: 'elasticloadbalancing', stepfunctions: 'states', apigatewayv2: 'apigateway', dynamodbstreams: 'dynamodb', deploy: 'codedeploy', configservice: 'config' };
+export const SERVICE_PREFIX: Record<string, string> = { s3api: 's3', s3: 's3', cloudwatch: 'cloudwatch', budgets: 'budgets', elbv2: 'elasticloadbalancing', elb: 'elasticloadbalancing', stepfunctions: 'states', apigatewayv2: 'apigateway', dynamodbstreams: 'dynamodb', deploy: 'codedeploy', configservice: 'config', accessanalyzer: 'access-analyzer' };
 export const SERVICE_SUMMARY: Record<string, string> = {
   sts: 'AWS Security Token Service',
   iam: 'AWS Identity and Access Management',
@@ -209,6 +209,11 @@ export const SERVICE_SUMMARY: Record<string, string> = {
   acm: 'AWS Certificate Manager (certificados TLS)',
   wafv2: 'AWS WAF (cortafuegos de aplicaciones web)',
   shield: 'AWS Shield (protección contra DDoS)',
+  guardduty: 'Amazon GuardDuty (detección de amenazas)',
+  inspector2: 'Amazon Inspector (vulnerabilidades)',
+  macie2: 'Amazon Macie (datos sensibles en S3)',
+  securityhub: 'AWS Security Hub (hallazgos y cumplimiento)',
+  accessanalyzer: 'IAM Access Analyzer (accesos externos y validación de políticas)',
   lambda: 'AWS Lambda',
   sqs: 'Amazon Simple Queue Service',
   events: 'Amazon EventBridge',

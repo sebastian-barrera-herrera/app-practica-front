@@ -158,3 +158,184 @@ export interface ShieldState {
   subscription?: { start: number; end: number; autoRenew: boolean };
   protections: Record<string, ShieldProtection>;
 }
+
+// ───────────────────────── GuardDuty ─────────────────────────
+
+export interface GdFinding {
+  Id: string;
+  Arn: string;
+  Type: string;
+  Severity: number;
+  Title: string;
+  Description: string;
+  Resource: Record<string, any>;
+  Service: { Action: Record<string, any>; Archived: boolean; Count: number; DetectorId: string; EventFirstSeen: string; EventLastSeen: string; ResourceRole: string; ServiceName: 'guardduty'; AdditionalInfo?: Record<string, any>; Feedback?: string };
+  CreatedAt: string;
+  UpdatedAt: string;
+  /** Clave de agrupación: el mismo tipo sobre el mismo recurso se acumula en un solo hallazgo. */
+  key: string;
+  sample?: boolean;
+  /** Última vez (ms) que se avisó a EventBridge de este hallazgo. */
+  sentAt?: number;
+}
+
+export interface GdFilter {
+  Name: string;
+  Description: string;
+  Action: 'ARCHIVE' | 'NOOP';
+  Rank: number;
+  FindingCriteria: { Criterion: Record<string, Record<string, any>> };
+  Tags: Record<string, string>;
+}
+
+export interface GdListSet {
+  Id: string;
+  Name: string;
+  Format: string;
+  Location: string;
+  Activate: boolean;
+  Kind: 'ip' | 'threat';
+  Tags: Record<string, string>;
+}
+
+export interface GdDestination {
+  DestinationId: string;
+  DestinationArn: string;
+  KmsKeyArn: string;
+}
+
+export interface GdDetector {
+  Id: string;
+  Status: 'ENABLED' | 'DISABLED';
+  created: number;
+  updated: number;
+  Frequency: string;
+  Features: Record<string, 'ENABLED' | 'DISABLED'>;
+  Tags: Record<string, string>;
+  findings: Record<string, GdFinding>;
+  filters: Record<string, GdFilter>;
+  sets: Record<string, GdListSet>;
+  destinations: Record<string, GdDestination>;
+  /** Hasta qué instante (ms) de CloudTrail se han leído eventos. */
+  scanned: number;
+  /** Eventos del instante `scanned` que ya se leyeron (en ese instante pueden llegar más). */
+  boundary: string[];
+  /** Desde cuándo está expuesto cada puerto (`instancia|puerto` → instante). */
+  exposed: Record<string, number>;
+}
+
+export interface GdState {
+  detectors: Record<string, GdDetector>;
+}
+
+// ───────────────────────── Inspector ─────────────────────────
+
+export interface InspFilter {
+  arn: string;
+  name: string;
+  action: 'NONE' | 'SUPPRESS';
+  description: string;
+  criteria: Record<string, any>;
+  created: number;
+}
+
+export interface InspState {
+  enabled: { EC2: boolean; ECR: boolean; LAMBDA: boolean };
+  since: number;
+  filters: Record<string, InspFilter>;
+  /** Cuándo vio por primera vez cada hallazgo (clave estable → instante). */
+  seen: Record<string, number>;
+}
+
+// ───────────────────────── Macie ─────────────────────────
+
+export interface MacieJob {
+  jobId: string;
+  jobArn: string;
+  name: string;
+  jobType: 'ONE_TIME' | 'SCHEDULED';
+  status: 'RUNNING' | 'COMPLETE' | 'CANCELLED' | 'PAUSED';
+  buckets: string[];
+  created: number;
+  finishedAt?: number;
+  customIdentifierIds: string[];
+  stats: { objects: number; classified: number; bytes: number };
+  samplingPercentage: number;
+  description: string;
+}
+
+export interface MacieFinding {
+  id: string;
+  type: string;
+  category: 'CLASSIFICATION' | 'POLICY';
+  severity: 'Low' | 'Medium' | 'High';
+  bucket: string;
+  key?: string;
+  count: number;
+  description: string;
+  detections: { type: string; count: number }[];
+  archived: boolean;
+  createdAt: number;
+  jobId?: string;
+}
+
+export interface MacieCustomId {
+  Id: string;
+  Name: string;
+  Regex: string;
+  Keywords: string[];
+  Description: string;
+  created: number;
+}
+
+export interface MacieState {
+  enabled: boolean;
+  since: number;
+  frequency: string;
+  jobs: Record<string, MacieJob>;
+  findings: Record<string, MacieFinding>;
+  customIds: Record<string, MacieCustomId>;
+}
+
+// ───────────────────────── Security Hub ─────────────────────────
+
+export interface HubState {
+  enabled: boolean;
+  since: number;
+  autoEnableControls: boolean;
+  /** Estándares activados: id corto (`fsbp`, `cis`) → controles desactivados con su motivo. */
+  standards: Record<string, { disabled: Record<string, string>; enabledAt: number }>;
+  products: string[];
+  workflow: Record<string, { Status: string; Note?: string; Severity?: string; UpdatedBy?: string; at: number }>;
+}
+
+// ───────────────────────── IAM Access Analyzer ─────────────────────────
+
+export interface AnalyzerFinding {
+  id: string;
+  key: string;
+  resourceType: string;
+  resource: string;
+  status: 'ACTIVE' | 'ARCHIVED' | 'RESOLVED';
+  principal: Record<string, string>;
+  action: string[];
+  condition: Record<string, any>;
+  isPublic: boolean;
+  createdAt: number;
+  analyzedAt: number;
+  updatedAt: number;
+}
+
+export interface Analyzer {
+  arn: string;
+  name: string;
+  type: 'ACCOUNT' | 'ORGANIZATION';
+  created: number;
+  archiveRules: Record<string, { ruleName: string; filter: Record<string, any>; created: number }>;
+  findings: Record<string, AnalyzerFinding>;
+  tags: Record<string, string>;
+}
+
+export interface AnalyzerState {
+  analyzers: Record<string, Analyzer>;
+}

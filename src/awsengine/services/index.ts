@@ -63,3 +63,4 @@ import './kms';
 import './acm';
 import './waf';
 import './shield';
+import './guardduty';

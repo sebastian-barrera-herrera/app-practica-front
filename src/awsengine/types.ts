@@ -1,4 +1,4 @@
-import type { AcmState, KmsState, ShieldState, WafState } from './types-sec';
+import type { AcmState, AnalyzerState, GdState, HubState, InspState, KmsState, MacieState, ShieldState, WafState } from './types-sec';
 import type { AasState, ArState, DockerState, EcrState, EcsState, EksState } from './types-containers';
 import type { ConfigState, CtState, CwState, LogQuery, MetricFilter, SsmAssociation, SsmAutomation, SsmBaseline, SsmDocument, SsmParam, SsmPatchState, SsmWindow, XrayState } from './types-ops';
 /** Modelo de la cuenta de AWS simulada (todo es JSON plano: se puede clonar con structuredClone). */
@@ -1095,6 +1095,11 @@ export interface RegionalState {
   kms?: KmsState;
   acm?: AcmState;
   wafv2?: WafState;
+  guardduty?: GdState;
+  inspector2?: InspState;
+  macie?: MacieState;
+  securityhub?: HubState;
+  analyzer?: AnalyzerState;
   /** Plantillas de lanzamiento de EC2. */
   launchTemplates?: Record<string, LaunchTemplate>;
 }
