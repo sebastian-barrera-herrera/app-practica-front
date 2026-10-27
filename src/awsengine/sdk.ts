@@ -16,6 +16,13 @@ export function roleCaller(a: Account, roleArn: string, session: string): Caller
   return { arn: `arn:aws:sts::${a.id}:assumed-role/${name}/${session}`, account: a.id, type: 'AssumedRole', userId: `${role?.RoleId ?? 'AROAXXXXXXXXXXXXXXXXX'}:${session}`, root: false, mfa: false, accessKeyId: 'ASIAROLESESSION000000', roleName: name, sessionName: session };
 }
 
+/** Identidad de un usuario de IAM con su primera clave de acceso (lo que ve CloudTrail cuando ese usuario llama a la API). */
+export function userCaller(a: Account, userName: string): Caller {
+  const u = a.iam.users[userName];
+  if (!u) throw new Error(`escenario: el usuario ${userName} no existe`);
+  return { arn: u.Arn, account: a.id, type: 'User', userName, userId: u.UserId, root: false, mfa: u.mfa.length > 0, accessKeyId: u.accessKeys[0]?.AccessKeyId ?? 'AKIAEXAMPLEEXAMPLE0' };
+}
+
 export interface SdkResult {
   ok: boolean;
   data?: Record<string, unknown>;

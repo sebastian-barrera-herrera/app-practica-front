@@ -39,9 +39,10 @@ function canon(v: unknown): string {
   return JSON.stringify(v);
 }
 
-export function awsCheck(check: AwsCheckSpec, term: Terminal): CheckResult {
+/** Prepara la copia de la cuenta (la deja asentarse y ejecuta las órdenes previas como «dios») y ejecuta la consulta. Null si el ejercicio no tiene cuenta. */
+export function awsQuery(term: Terminal, cmd: string, pre?: string[]): ReturnType<typeof runAwsSync> | null {
   const live = awsAccountOf(term.world.sys);
-  if (!live) return { ok: false, why: 'No hay cuenta de AWS en este ejercicio' };
+  if (!live) return null;
   // se consulta una copia: la comprobación nunca cambia la cuenta del alumno
   const acct = clone(live);
   settleEc2(acct);
@@ -94,11 +95,16 @@ export function awsCheck(check: AwsCheckSpec, term: Terminal): CheckResult {
     cols: 100,
     god: true,
   };
-  if (check.pre?.length) {
-    for (const line of check.pre) runAwsSync(shellSplit(line), io);
+  if (pre?.length) {
+    for (const line of pre) runAwsSync(shellSplit(line), io);
     wait(4);
   }
-  const res = runAwsSync(shellSplit(check.cmd), io);
+  return runAwsSync(shellSplit(cmd), io);
+}
+
+export function awsCheck(check: AwsCheckSpec, term: Terminal): CheckResult {
+  const res = awsQuery(term, check.cmd, check.pre);
+  if (!res) return { ok: false, why: 'No hay cuenta de AWS en este ejercicio' };
   const fail = (why: string): CheckResult => ({ ok: false, why: check.want ?? why });
   if (check.fails) {
     if (res.code === 0) return fail('Esto todavía debería dar error');

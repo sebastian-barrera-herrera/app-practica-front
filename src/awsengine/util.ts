@@ -116,6 +116,8 @@ export function s3Date(ms: number): string {
 
 /** Interpreta una fecha ISO (con o sin hora) y devuelve ms, o NaN. */
 export function parseDate(s: string): number {
+  // la CLI acepta también «segundos desde 1970» (lo que da `date +%s`)
+  if (/^\d{9,10}(\.\d+)?$/.test(s)) return Number(s) * 1000;
   const t = Date.parse(/^\d{4}-\d{2}-\d{2}$/.test(s) ? s + 'T00:00:00Z' : s);
   return t;
 }

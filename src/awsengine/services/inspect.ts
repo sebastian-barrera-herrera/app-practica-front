@@ -5,6 +5,12 @@ import { ON_PREM_CIDR } from '../onprem';
 import { pathBetween, pathFromInstance, pathFromOnPrem, pathInternet, pathToEndpoint, type PathResult } from '../netpath';
 import type { Account, Ec2Instance, Ec2Region } from '../types';
 import { toArr } from '../util';
+import { cwPut } from './cwdata';
+import { logsPut } from './logs';
+import { sdkCall, userCaller } from '../sdk';
+import { ssmOf } from './ssm';
+import { xrayOf } from './xray';
+import { regional } from '../account';
 import { refreshEc2 } from './ec2';
 import { ssmStatus } from './ssm';
 import { fetchFromInternet } from '../web';
@@ -186,4 +192,50 @@ op('_check', 'load', 'lb:s! rps:n! minutes:n', 'Carga sostenida contra un balanc
     return { Started: true };
   }
   throw new AwsError('LoadBalancerNotFound', `El balanceador «${c.p.Lb}» no existe`);
+});
+
+/** `_check metric --namespace Tienda --name Errores --value 20 --dimensions Servicio=checkout --count 3`: publica datos de una métrica propia como lo haría la aplicación. */
+op('_check', 'metric', 'namespace:s! name:s! value:n! count:i dimensions:f unit:s', 'Publica muestras de una métrica propia (como la aplicación).', { global: true, authz: false, anon: true }, (c) => {
+  const dims = Object.fromEntries(Object.entries((c.p.Dimensions ?? {}) as Record<string, string>).map(([k, v]) => [k, String(v)]));
+  for (let k = 0; k < (c.p.Count ?? 1); k++) cwPut(c.acct, c.region, c.p.Namespace, c.p.Name, dims, { value: Number(c.p.Value), unit: c.p.Unit });
+  return { Put: `${c.p.Namespace}/${c.p.Name}` };
+});
+
+/** `_check log --group /tienda/api --message 'ERROR…' --count 3`: la aplicación escribe líneas en un grupo de registros (dispara sus filtros de métricas). */
+op('_check', 'log', 'group:s! message:s! stream:s count:i', 'Escribe líneas en un grupo de registros (como la aplicación).', { global: true, authz: false, anon: true }, (c) => {
+  for (let k = 0; k < (c.p.Count ?? 1); k++) logsPut(c.acct, c.region, c.p.Group, c.p.Stream ?? 'app', c.p.Message, c.acct.clock);
+  return { Put: c.p.Group };
+});
+
+/** `_check act --user carlos --service ec2 --op authorize-security-group-ingress --params '{…}'`: otra persona hace una llamada a la API (con sus permisos, y queda en CloudTrail). */
+op('_check', 'act', 'user:s! service:s! op:s! params:j', 'Hace una llamada a la API como otro usuario de la cuenta.', { global: true, authz: false, anon: true }, (c) => {
+  // `sg:web-sg` en los parámetros = el id de ese grupo de seguridad
+  const sgId = (name: string) => Object.values(regional(c.acct, c.region).ec2.securityGroups).find((g) => g.GroupName === name)?.GroupId ?? name;
+  const fill = (v: unknown): unknown => (typeof v === 'string' && v.startsWith('sg:') ? sgId(v.slice(3)) : Array.isArray(v) ? v.map(fill) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, fill(x)])) : v);
+  const r = sdkCall(c.acct, c.region, userCaller(c.acct, c.p.User), c.p.Service, c.p.Op, fill(c.p.Params ?? {}) as Record<string, unknown>);
+  if (!r.ok) return { Ok: false, Error: r.error?.Code ?? 'Error' };
+  return { Ok: true };
+});
+
+/** `_check windows`: resumen de las ventanas de mantenimiento de Systems Manager (nombre, horario, destinos y tareas). */
+op('_check', 'windows', '', 'Resumen de las ventanas de mantenimiento de Systems Manager.', { global: true, authz: false, anon: true }, (c) => ({
+  Windows: Object.values(ssmOf(c.acct, c.region).windows ?? {}).map((w) => ({
+    Name: w.Name,
+    Schedule: w.Schedule,
+    Enabled: w.Enabled,
+    Targets: w.targets.flatMap((t) => t.Targets.map((x) => `${x.Key}=${x.Values.join(',')}`)),
+    Tasks: w.tasks.map((t) => ({ Document: t.TaskArn, Install: /Install/.test(JSON.stringify(t.TaskInvocationParameters ?? t.TaskParameters ?? {})) })),
+  })),
+}));
+
+/** `_check traces`: cuántas trazas de X-Ray hay y qué servicios aparecen en ellas. */
+op('_check', 'traces', '', 'Trazas de X-Ray recibidas y servicios que aparecen en ellas.', { global: true, authz: false, anon: true }, (c) => {
+  const names = new Set<string>();
+  const walk = (d: { name?: string; subsegments?: unknown[] }) => {
+    if (d.name) names.add(d.name);
+    for (const s of d.subsegments ?? []) walk(s as never);
+  };
+  const segs = xrayOf(c.acct, c.region).segments;
+  for (const s of segs) walk(s.doc);
+  return { Traces: new Set(segs.map((s) => s.traceId)).size, Services: [...names].sort() };
 });
