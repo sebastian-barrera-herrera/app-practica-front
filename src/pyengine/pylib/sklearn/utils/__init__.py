@@ -37,8 +37,9 @@ def check_array(array, *, dtype='numeric', ensure_2d=True, allow_nd=False, ensur
         if X.ndim == 1:
             raise ValueError('Expected 2D array, got 1D array instead:\narray=%s.\nReshape your data either using array.reshape(-1, 1) if your data has a single feature or array.reshape(1, -1) if it contains a single sample.' % (X,))
         raise ValueError('Expected 2D array, got scalar array instead:\narray=%s.' % (X,))
+    allow_nan = isinstance(ensure_all_finite, str) and ensure_all_finite == 'allow-nan'
     if ensure_all_finite and X.dtype.kind == 'f':
-        if np.isnan(X).any():
+        if not allow_nan and np.isnan(X).any():
             name = type(estimator).__name__ if estimator is not None else 'the estimator'
             raise ValueError('Input %s contains NaN.\n%s does not accept missing values encoded as NaN natively. For supported imputers see: https://scikit-learn.org/stable/modules/impute.html' % (input_name or 'X', name))
         if np.isinf(X).any():

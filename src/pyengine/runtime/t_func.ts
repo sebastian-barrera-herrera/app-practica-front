@@ -196,6 +196,7 @@ defMethods(BM, {
   __hash__: ['self', (m: any) => ops.hashOf(interp().idOf(bm(m).fn)) ^ ops.hashOf(interp().idOf(bm(m).self))],
   __get__: ['self, obj, type=', (m: any) => m],
 });
+BM.dict!.set('__new__', mkNative('__new__', 'cls, func, obj', (_cls: any, fn: any, obj: any) => new BoundMethod(boundMethodType, fn, obj)));
 prop(BM, '__self__', (m) => bm(m).self);
 prop(BM, '__func__', (m) => bm(m).fn);
 BM.ownGetattro = (m: any, name: string): any => {

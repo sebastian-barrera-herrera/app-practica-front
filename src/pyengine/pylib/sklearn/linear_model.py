@@ -301,7 +301,7 @@ def _sigmoid(z):
 
 
 class LogisticRegression(ClassifierMixin, LinearModel):
-    def __init__(self, penalty='l2', *, dual=False, tol=1e-4, C=1.0, fit_intercept=True, intercept_scaling=1, class_weight=None, random_state=None, solver='lbfgs', max_iter=100, multi_class='deprecated', verbose=0, warm_start=False, n_jobs=None, l1_ratio=None):
+    def __init__(self, penalty='deprecated', *, C=1.0, l1_ratio=0.0, dual=False, tol=1e-4, fit_intercept=True, intercept_scaling=1, class_weight=None, random_state=None, solver='lbfgs', max_iter=100, verbose=0, warm_start=False, n_jobs=None):
         self.penalty = penalty
         self.dual = dual
         self.tol = tol
@@ -312,19 +312,29 @@ class LogisticRegression(ClassifierMixin, LinearModel):
         self.random_state = random_state
         self.solver = solver
         self.max_iter = max_iter
-        self.multi_class = multi_class
         self.verbose = verbose
         self.warm_start = warm_start
         self.n_jobs = n_jobs
         self.l1_ratio = l1_ratio
+
+    def _eff_penalty(self):
+        pen = self.penalty
+        if isinstance(pen, str) and pen == 'deprecated':
+            if self.C == float('inf'):
+                return None
+            if self.l1_ratio == 0:
+                return 'l2'
+            return 'l1' if self.l1_ratio == 1 else 'elasticnet'
+        return pen
 
     def fit(self, X, y, sample_weight=None):
         X, y = self._validate_data(X, y)
         self.classes_ = np.unique(y)
         if len(self.classes_) < 2:
             raise ValueError('This solver needs samples of at least 2 classes in the data, but the data contains only one class: %r' % self.classes_[0])
-        if self.penalty in ('l1', 'elasticnet'):
-            raise ValueError('penalty=%r no está disponible en esta versión en miniatura (usa penalty="l2" o None)' % self.penalty)
+        eff = self._eff_penalty()
+        if eff in ('l1', 'elasticnet'):
+            raise ValueError('penalty=%r no está disponible en esta versión en miniatura (usa l2 o sin penalización)' % eff)
         n, d = X.shape
         K = len(self.classes_)
         yi = np.searchsorted(self.classes_, y)
@@ -336,7 +346,7 @@ class LogisticRegression(ClassifierMixin, LinearModel):
             else:
                 cw = np.array([self.class_weight.get(c, 1.0) for c in self.classes_.tolist()])
             sw = sw * cw[yi]
-        reg = 0.0 if self.penalty in (None, 'none') else 1.0 / self.C
+        reg = 0.0 if eff in (None, 'none') else 1.0 / self.C
         Xa = np.hstack([X, np.ones((n, 1))]) if self.fit_intercept else X
         p = Xa.shape[1]
         pen = np.ones(p) * reg

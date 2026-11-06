@@ -1,3 +1,4 @@
+from sklearn.utils._param_validation import check_interval
 import math
 import numbers
 import numpy as np
@@ -149,6 +150,8 @@ class DecisionTreeClassifier(ClassifierMixin, BaseDecisionTree):
         self.monotonic_cst = monotonic_cst
 
     def fit(self, X, y, sample_weight=None, check_input=True):
+        check_interval(self, 'max_depth', self.max_depth, int, 1, None, 'left', none_ok=True)
+        check_interval(self, 'min_samples_leaf', self.min_samples_leaf, int, 1, None, 'left', extra='or a float in the range (0.0, 1.0)') if isinstance(self.min_samples_leaf, int) else None
         if self.criterion not in ('gini', 'entropy', 'log_loss'):
             raise ValueError("The 'criterion' parameter of DecisionTreeClassifier must be a str among {'gini', 'entropy', 'log_loss'}. Got %r instead." % (self.criterion,))
         X, y = self._validate_data(X, y)

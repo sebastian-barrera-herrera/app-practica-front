@@ -1,3 +1,4 @@
+from sklearn.utils._param_validation import check_interval
 import math
 import numbers
 import warnings
@@ -130,6 +131,8 @@ class RandomForestClassifier(ClassifierMixin, BaseForest):
         self.estimator_ = DecisionTreeClassifier()
 
     def fit(self, X, y, sample_weight=None):
+        if hasattr(self, 'n_estimators'):
+            check_interval(self, 'n_estimators', self.n_estimators, int, 1, None, 'left')
         X, y = self._validate_data(X, y)
         self.classes_, yi = np.unique(y, return_inverse=True)
         self.n_classes_ = len(self.classes_)
@@ -197,6 +200,8 @@ class RandomForestRegressor(RegressorMixin, BaseForest):
         self.estimator_ = DecisionTreeRegressor()
 
     def fit(self, X, y, sample_weight=None):
+        if hasattr(self, 'n_estimators'):
+            check_interval(self, 'n_estimators', self.n_estimators, int, 1, None, 'left')
         X, y = self._validate_data(X, y)
         self.n_outputs_ = 1
         self.estimator_ = DecisionTreeRegressor()
@@ -297,6 +302,8 @@ class BaggingClassifier(ClassifierMixin, _BaseBagging):
         self.verbose = verbose
 
     def fit(self, X, y, sample_weight=None):
+        if hasattr(self, 'n_estimators'):
+            check_interval(self, 'n_estimators', self.n_estimators, int, 1, None, 'left')
         X, y = self._validate_data(X, y)
         self.classes_, yi = np.unique(y, return_inverse=True)
         self.n_classes_ = len(self.classes_)
@@ -344,6 +351,8 @@ class BaggingRegressor(RegressorMixin, _BaseBagging):
         self.verbose = verbose
 
     def fit(self, X, y, sample_weight=None):
+        if hasattr(self, 'n_estimators'):
+            check_interval(self, 'n_estimators', self.n_estimators, int, 1, None, 'left')
         X, y = self._validate_data(X, y)
         self.estimator_ = DecisionTreeRegressor() if self.estimator is None else self.estimator
         sw = None if sample_weight is None else np.asarray(sample_weight, dtype=np.float64)
@@ -370,6 +379,8 @@ class AdaBoostClassifier(ClassifierMixin, _BaseEnsemble):
         self.random_state = random_state
 
     def fit(self, X, y, sample_weight=None):
+        if hasattr(self, 'n_estimators'):
+            check_interval(self, 'n_estimators', self.n_estimators, int, 1, None, 'left')
         X, y = self._validate_data(X, y)
         self.classes_, yi = np.unique(y, return_inverse=True)
         self.n_classes_ = len(self.classes_)
@@ -454,6 +465,8 @@ class VotingClassifier(ClassifierMixin, _BaseEnsemble):
         self.verbose = verbose
 
     def fit(self, X, y, sample_weight=None):
+        if hasattr(self, 'n_estimators'):
+            check_interval(self, 'n_estimators', self.n_estimators, int, 1, None, 'left')
         X, y = self._validate_data(X, y)
         self.classes_, yi = np.unique(y, return_inverse=True)
         self.estimators_ = []
@@ -492,6 +505,8 @@ class VotingRegressor(RegressorMixin, _BaseEnsemble):
         self.verbose = verbose
 
     def fit(self, X, y, sample_weight=None):
+        if hasattr(self, 'n_estimators'):
+            check_interval(self, 'n_estimators', self.n_estimators, int, 1, None, 'left')
         X, y = self._validate_data(X, y)
         self.estimators_ = [clone(e).fit(X, y) for _, e in self.estimators]
         self.named_estimators_ = {n: e for (n, _), e in zip(self.estimators, self.estimators_)}
@@ -727,6 +742,8 @@ class GradientBoostingRegressor(RegressorMixin, BaseGradientBoosting):
         self.ccp_alpha = ccp_alpha
 
     def fit(self, X, y, sample_weight=None, monitor=None):
+        if hasattr(self, 'n_estimators'):
+            check_interval(self, 'n_estimators', self.n_estimators, int, 1, None, 'left')
         self._check()
         X, y = self._validate_data(X, y)
         y = np.asarray(y, dtype=np.float64)
@@ -778,6 +795,8 @@ class GradientBoostingClassifier(ClassifierMixin, BaseGradientBoosting):
         self.ccp_alpha = ccp_alpha
 
     def fit(self, X, y, sample_weight=None, monitor=None):
+        if hasattr(self, 'n_estimators'):
+            check_interval(self, 'n_estimators', self.n_estimators, int, 1, None, 'left')
         self._check()
         X, y = self._validate_data(X, y)
         self.classes_, yi = np.unique(y, return_inverse=True)

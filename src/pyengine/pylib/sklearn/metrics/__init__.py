@@ -121,15 +121,36 @@ def _counts(yt, yp, labels, w):
     return np.array(tp), np.array(fp), np.array(fn), np.array(sup)
 
 
-def _prf(tp, fp, fn, beta, zd, warn=True):
-    prec = np.array([_safe_div(a, a + b, zd, 'Precision', warn) for a, b in zip(tp, fp)])
-    rec = np.array([_safe_div(a, a + b, zd, 'Recall', warn) for a, b in zip(tp, fn)])
+def _warn_prf(average, modifier, msg_start, result_size):
+    axis0, axis1 = 'sample', 'label'
+    if average == 'samples':
+        axis0, axis1 = axis1, axis0
+    msg = '%s ill-defined and being set to 0.0 {0} no %s %ss. Use `zero_division` parameter to control this behavior.' % (msg_start, modifier, axis0)
+    msg = msg.format('due to') if result_size == 1 else msg.format('in %ss with' % axis1)
+    warnings.warn(msg, UndefinedMetricWarning)
+
+
+def _prf(tp, fp, fn, beta, zd, warn_for=(), average=None):
+    zval = 0.0 if (isinstance(zd, str) and zd == 'warn') else float(zd)
+    pred = tp + fp
+    true = tp + fn
+    prec = np.where(pred == 0, zval, tp / np.where(pred == 0, 1.0, pred))
+    rec = np.where(true == 0, zval, tp / np.where(true == 0, 1.0, true))
     b2 = beta ** 2
-    f = []
-    for a, b, c in zip(tp, fp, fn):
-        den = (1 + b2) * a + b2 * c + b
-        f.append(_safe_div((1 + b2) * a, den, zd, 'F-score', False) if den == 0 else (1 + b2) * a / den)
-    return prec, rec, np.array(f)
+    den = (1 + b2) * tp + b2 * fn + fp
+    f = np.where(den == 0, zval, (1 + b2) * tp / np.where(den == 0, 1.0, den))
+    if isinstance(zd, str) and zd == 'warn':
+        if 'precision' in warn_for and (pred == 0).any():
+            _warn_prf(average, 'predicted', 'Precision is', len(pred))
+        if 'recall' in warn_for and (true == 0).any():
+            _warn_prf(average, 'true', 'Recall is', len(true))
+        if 'f-score' in warn_for:
+            if len(warn_for) > 1:
+                if (den == 0).any():
+                    _warn_prf(average, 'true nor predicted', 'F-score is', len(den))
+            elif ((true == 0) & (pred == 0)).any():
+                _warn_prf(average, 'true nor predicted', 'F-score is', len(true))
+    return prec, rec, f
 
 
 def precision_recall_fscore_support(y_true, y_pred, *, beta=1.0, labels=None, pos_label=1, average=None, warn_for=('precision', 'recall', 'f-score'), sample_weight=None, zero_division='warn'):
@@ -149,9 +170,9 @@ def precision_recall_fscore_support(y_true, y_pred, *, beta=1.0, labels=None, po
         labs = present
     tp, fp, fn, sup = _counts(yt, yp, labs.tolist(), w)
     if average == 'micro':
-        p, r, f = _prf(np.array([tp.sum()]), np.array([fp.sum()]), np.array([fn.sum()]), beta, zero_division)
+        p, r, f = _prf(np.array([tp.sum()]), np.array([fp.sum()]), np.array([fn.sum()]), beta, zero_division, warn_for, average)
         return float(p[0]), float(r[0]), float(f[0]), None
-    p, r, f = _prf(tp, fp, fn, beta, zero_division)
+    p, r, f = _prf(tp, fp, fn, beta, zero_division, warn_for, average)
     if average is None:
         return p, r, f, sup.astype(np.int64) if w is None else sup
     if average == 'binary':
@@ -166,19 +187,19 @@ def precision_recall_fscore_support(y_true, y_pred, *, beta=1.0, labels=None, po
 
 
 def precision_score(y_true, y_pred, *, labels=None, pos_label=1, average='binary', sample_weight=None, zero_division='warn'):
-    return precision_recall_fscore_support(y_true, y_pred, labels=labels, pos_label=pos_label, average=average, sample_weight=sample_weight, zero_division=zero_division)[0]
+    return precision_recall_fscore_support(y_true, y_pred, labels=labels, pos_label=pos_label, average=average, warn_for=('precision',), sample_weight=sample_weight, zero_division=zero_division)[0]
 
 
 def recall_score(y_true, y_pred, *, labels=None, pos_label=1, average='binary', sample_weight=None, zero_division='warn'):
-    return precision_recall_fscore_support(y_true, y_pred, labels=labels, pos_label=pos_label, average=average, sample_weight=sample_weight, zero_division=zero_division)[1]
+    return precision_recall_fscore_support(y_true, y_pred, labels=labels, pos_label=pos_label, average=average, warn_for=('recall',), sample_weight=sample_weight, zero_division=zero_division)[1]
 
 
 def f1_score(y_true, y_pred, *, labels=None, pos_label=1, average='binary', sample_weight=None, zero_division='warn'):
-    return precision_recall_fscore_support(y_true, y_pred, beta=1.0, labels=labels, pos_label=pos_label, average=average, sample_weight=sample_weight, zero_division=zero_division)[2]
+    return precision_recall_fscore_support(y_true, y_pred, beta=1.0, labels=labels, pos_label=pos_label, average=average, warn_for=('f-score',), sample_weight=sample_weight, zero_division=zero_division)[2]
 
 
 def fbeta_score(y_true, y_pred, *, beta, labels=None, pos_label=1, average='binary', sample_weight=None, zero_division='warn'):
-    return precision_recall_fscore_support(y_true, y_pred, beta=beta, labels=labels, pos_label=pos_label, average=average, sample_weight=sample_weight, zero_division=zero_division)[2]
+    return precision_recall_fscore_support(y_true, y_pred, beta=beta, labels=labels, pos_label=pos_label, average=average, warn_for=('f-score',), sample_weight=sample_weight, zero_division=zero_division)[2]
 
 
 def balanced_accuracy_score(y_true, y_pred, *, sample_weight=None, adjusted=False):

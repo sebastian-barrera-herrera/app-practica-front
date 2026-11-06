@@ -1,3 +1,4 @@
+from sklearn.utils._param_validation import check_interval
 import numpy as np
 
 from sklearn.base import BaseEstimator, ClassifierMixin, RegressorMixin, check_is_fitted
@@ -103,6 +104,7 @@ class KNeighborsClassifier(ClassifierMixin, _KNeighborsBase):
         self.n_jobs = n_jobs
 
     def fit(self, X, y):
+        check_interval(self, 'n_neighbors', self.n_neighbors, int, 1, None, 'left', none_ok=True)
         X, y = self._validate_data(X, y)
         self._fit_X = X
         self.classes_, self._y = np.unique(y, return_inverse=True)
@@ -143,6 +145,7 @@ class KNeighborsRegressor(RegressorMixin, _KNeighborsBase):
         self.n_jobs = n_jobs
 
     def fit(self, X, y):
+        check_interval(self, 'n_neighbors', self.n_neighbors, int, 1, None, 'left', none_ok=True)
         X, y = self._validate_data(X, y)
         self._fit_X = X
         self._y = np.asarray(y, dtype=np.float64)
@@ -172,6 +175,7 @@ class RadiusNeighborsClassifier(ClassifierMixin, NearestNeighbors):
         self.n_jobs = n_jobs
 
     def fit(self, X, y):
+        check_interval(self, 'n_neighbors', self.n_neighbors, int, 1, None, 'left', none_ok=True)
         X, y = self._validate_data(X, y)
         self._fit_X = X
         self.classes_, self._y = np.unique(y, return_inverse=True)

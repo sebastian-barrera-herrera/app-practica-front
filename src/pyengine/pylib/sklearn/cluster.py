@@ -1,3 +1,4 @@
+from sklearn.utils._param_validation import check_interval
 import math
 import numpy as np
 
@@ -93,6 +94,7 @@ class KMeans(ClusterMixin, TransformerMixin, BaseEstimator):
         self.algorithm = algorithm
 
     def fit(self, X, y=None, sample_weight=None):
+        check_interval(self, 'n_clusters', self.n_clusters, int, 1, None, 'left')
         X = self._validate_data(X).astype(np.float64)
         n = X.shape[0]
         if n < self.n_clusters:
@@ -224,14 +226,11 @@ class AgglomerativeClustering(ClusterMixin, BaseEstimator):
         if self.linkage == 'ward':
             D = D ** 2
         dist = {(i, j): D[i, j] for i in range(n) for j in range(i + 1, n)}
-        target = 1 if self.distance_threshold is not None else self.n_clusters
         sizes = {i: 1 for i in range(n)}
         nxt = n
         merges = []
-        while len(clusters) > target:
+        while len(clusters) > 1:
             (a, b), dab = min(dist.items(), key=lambda kv: (kv[1], kv[0]))
-            if self.distance_threshold is not None and (math.sqrt(dab) if self.linkage == 'ward' else dab) >= self.distance_threshold:
-                break
             na, nb = sizes[a], sizes[b]
             for c in clusters:
                 if c in (a, b):
@@ -248,21 +247,45 @@ class AgglomerativeClustering(ClusterMixin, BaseEstimator):
                     nc = sizes[c]
                     nd = ((na + nc) * dac + (nb + nc) * dbc - nc * dab) / (na + nb + nc)
                 dist[(min(nxt, c), max(nxt, c))] = nd
-            members = clusters.pop(a) + clusters.pop(b)
+            clusters.pop(a)
+            clusters.pop(b)
             for key in [k for k in dist if a in k or b in k]:
                 del dist[key]
-            clusters[nxt] = members
+            clusters[nxt] = True
             sizes[nxt] = na + nb
             merges.append((a, b, math.sqrt(dab) if self.linkage == 'ward' else dab, na + nb))
             nxt += 1
-        labels = np.zeros(n, dtype=int)
-        for lab, (cid, mem) in enumerate(sorted(clusters.items(), key=lambda kv: min(kv[1]))):
-            labels[mem] = lab
-        self.labels_ = labels
-        self.n_clusters_ = len(clusters)
         self.children_ = np.array([[m[0], m[1]] for m in merges])
         self.distances_ = np.array([m[2] for m in merges])
+        self.n_leaves_ = n
+        self.n_connected_components_ = 1
+        if self.distance_threshold is not None:
+            self.n_clusters_ = int(np.count_nonzero(self.distances_ >= self.distance_threshold)) + 1
+        else:
+            self.n_clusters_ = self.n_clusters
+        self.labels_ = _hc_cut(self.n_clusters_, self.children_, n)
         return self
+
+
+def _hc_cut(n_clusters, children, n_leaves):
+    import heapq
+    if n_clusters > n_leaves:
+        raise ValueError('Cannot extract more clusters than samples: %d clusters were given for a tree with %d leaves.' % (n_clusters, n_leaves))
+    nodes = [-(int(max(children[-1])) + 1)]
+    for _ in range(n_clusters - 1):
+        these_children = children[-nodes[0] - n_leaves]
+        heapq.heappush(nodes, -int(these_children[0]))
+        heapq.heappushpop(nodes, -int(these_children[1]))
+    label = np.zeros(n_leaves, dtype=int)
+    for i, node in enumerate(nodes):
+        ind = [-node]
+        while ind:
+            k = ind.pop()
+            if k < n_leaves:
+                label[k] = i
+            else:
+                ind.extend([int(v) for v in children[k - n_leaves]])
+    return label
 
 
 class AffinityPropagation(ClusterMixin, BaseEstimator):

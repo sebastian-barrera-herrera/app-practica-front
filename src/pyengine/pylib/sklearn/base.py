@@ -64,23 +64,23 @@ class BaseEstimator:
                 out.append((k, v))
         return out
 
-    def __repr__(self):
-        name = self.__class__.__name__
-        items = ['%s=%s' % (k, _fmt(v)) for k, v in self._changed_params()]
-        one = '%s(%s)' % (name, ', '.join(items))
-        if len(one) <= 80 and '\n' not in one:
-            return one
-        pad = ' ' * (len(name) + 1)
-        lines = []
-        cur = name + '('
-        for i, it in enumerate(items):
-            piece = it + (',' if i < len(items) - 1 else ')')
-            if len(cur) + len(piece) > 78 and cur.strip() != name + '(' and cur != pad:
-                lines.append(cur.rstrip())
-                cur = pad
-            cur += piece + ' '
-        lines.append(cur.rstrip())
-        return '\n'.join(lines)
+    def __repr__(self, N_CHAR_MAX=700):
+        import re
+        from sklearn.utils._pprint import _EstimatorPrettyPrinter
+        pp = _EstimatorPrettyPrinter(compact=True, indent=1, indent_at_name=True, n_max_elements_to_show=30)
+        repr_ = pp.pformat(self)
+        n_nonblank = len("".join(repr_.split()))
+        if n_nonblank > N_CHAR_MAX:
+            lim = N_CHAR_MAX // 2
+            regex = r"^(\s*\S){%d}" % lim
+            left_lim = re.match(regex, repr_).end()
+            right_lim = re.match(regex, repr_[::-1]).end()
+            if "\n" in repr_[left_lim:-right_lim]:
+                regex += r"[^\n]*\n"
+                right_lim = re.match(regex, repr_[::-1]).end()
+            if left_lim + 3 < len(repr_) - right_lim:
+                repr_ = repr_[:left_lim] + "..." + repr_[-right_lim:]
+        return repr_
 
     def __sklearn_is_fitted__(self):
         return any(k.endswith('_') and not k.startswith('__') for k in vars(self))
@@ -91,10 +91,10 @@ class BaseEstimator:
         if hasattr(X, 'columns'):
             names = np.array([str(c) for c in list(X.columns)])
         if y is None or (isinstance(y, str) and y == 'no_validation'):
-            X = check_array(X, estimator=self, **{k: v for k, v in kw.items() if k in ('dtype', 'ensure_min_samples')})
+            X = check_array(X, estimator=self, **{k: v for k, v in kw.items() if k in ('dtype', 'ensure_min_samples', 'ensure_all_finite')})
             out = X
         else:
-            X, y = check_X_y(X, y, estimator=self, **{k: v for k, v in kw.items() if k in ('dtype',)})
+            X, y = check_X_y(X, y, estimator=self, **{k: v for k, v in kw.items() if k in ('dtype', 'ensure_all_finite')})
             out = (X, y)
         if reset:
             self.n_features_in_ = X.shape[1]
@@ -196,6 +196,8 @@ def check_is_fitted(estimator, attributes=None):
     if attributes is not None:
         attrs = attributes if isinstance(attributes, (list, tuple)) else [attributes]
         fitted = all(hasattr(estimator, a) for a in attrs)
+    elif hasattr(estimator, '__sklearn_is_fitted__'):
+        fitted = bool(estimator.__sklearn_is_fitted__())
     else:
         fitted = any(k.endswith('_') and not k.startswith('__') for k in vars(estimator))
     if not fitted:

@@ -88,11 +88,20 @@ class StandardScaler(OneToOneFeatureMixin, TransformerMixin, BaseEstimator):
         self.with_std = with_std
 
     def fit(self, X, y=None, sample_weight=None):
-        X = self._validate_data(X, reset=True)
-        self.n_samples_seen_ = X.shape[0]
-        self.mean_ = X.mean(axis=0) if (self.with_mean or self.with_std) else None
+        X = self._validate_data(X, reset=True, ensure_all_finite='allow-nan')
+        has_nan = bool(np.isnan(X).any())
+        if has_nan:
+            cnt = (~np.isnan(X)).sum(axis=0).astype(np.float64)
+            self.n_samples_seen_ = float(cnt[0]) if cnt.min() == cnt.max() else cnt
+            mean = np.nanmean(X, axis=0)
+            var = np.nanvar(X, axis=0)
+        else:
+            self.n_samples_seen_ = float(X.shape[0])
+            mean = X.mean(axis=0)
+            var = X.var(axis=0)
+        self.mean_ = mean if (self.with_mean or self.with_std) else None
         if self.with_std:
-            self.var_ = X.var(axis=0)
+            self.var_ = var
             scale = np.sqrt(self.var_)
             self.scale_ = np.where(scale < 10 * np.finfo(np.float64).eps, 1.0, scale)
         else:
@@ -105,7 +114,7 @@ class StandardScaler(OneToOneFeatureMixin, TransformerMixin, BaseEstimator):
 
     def transform(self, X, copy=None):
         check_is_fitted(self)
-        Xv = self._validate_data(X, reset=False)
+        Xv = self._validate_data(X, reset=False, ensure_all_finite='allow-nan')
         out = Xv.copy()
         if self.with_mean:
             out = out - self.mean_
@@ -130,12 +139,12 @@ class MinMaxScaler(OneToOneFeatureMixin, TransformerMixin, BaseEstimator):
         self.clip = clip
 
     def fit(self, X, y=None):
-        X = self._validate_data(X, reset=True)
+        X = self._validate_data(X, reset=True, ensure_all_finite='allow-nan')
         lo, hi = self.feature_range
         if lo >= hi:
             raise ValueError('Minimum of desired feature range must be smaller than maximum. Got %s.' % (self.feature_range,))
-        self.data_min_ = X.min(axis=0)
-        self.data_max_ = X.max(axis=0)
+        self.data_min_ = np.nanmin(X, axis=0)
+        self.data_max_ = np.nanmax(X, axis=0)
         self.data_range_ = self.data_max_ - self.data_min_
         rng = np.where(self.data_range_ == 0, 1.0, self.data_range_)
         self.scale_ = (hi - lo) / rng
@@ -145,7 +154,7 @@ class MinMaxScaler(OneToOneFeatureMixin, TransformerMixin, BaseEstimator):
 
     def transform(self, X):
         check_is_fitted(self)
-        Xv = self._validate_data(X, reset=False)
+        Xv = self._validate_data(X, reset=False, ensure_all_finite='allow-nan')
         out = Xv * self.scale_ + self.min_
         if self.clip:
             out = np.clip(out, self.feature_range[0], self.feature_range[1])
@@ -161,8 +170,8 @@ class MaxAbsScaler(OneToOneFeatureMixin, TransformerMixin, BaseEstimator):
         self.copy = copy
 
     def fit(self, X, y=None):
-        X = self._validate_data(X, reset=True)
-        m = np.abs(X).max(axis=0)
+        X = self._validate_data(X, reset=True, ensure_all_finite='allow-nan')
+        m = np.nanmax(np.abs(X), axis=0)
         self.max_abs_ = m
         self.scale_ = np.where(m == 0, 1.0, m)
         self.n_samples_seen_ = X.shape[0]
@@ -170,7 +179,7 @@ class MaxAbsScaler(OneToOneFeatureMixin, TransformerMixin, BaseEstimator):
 
     def transform(self, X):
         check_is_fitted(self)
-        return _out(self, X, self._validate_data(X, reset=False) / self.scale_)
+        return _out(self, X, self._validate_data(X, reset=False, ensure_all_finite='allow-nan') / self.scale_)
 
     def inverse_transform(self, X):
         return np.asarray(_to_array(X), dtype=np.float64) * self.scale_
@@ -185,11 +194,12 @@ class RobustScaler(OneToOneFeatureMixin, TransformerMixin, BaseEstimator):
         self.unit_variance = unit_variance
 
     def fit(self, X, y=None):
-        X = self._validate_data(X, reset=True)
+        X = self._validate_data(X, reset=True, ensure_all_finite='allow-nan')
         lo, hi = self.quantile_range
-        self.center_ = np.median(X, axis=0) if self.with_centering else None
+        self.center_ = np.nanmedian(X, axis=0) if self.with_centering else None
         if self.with_scaling:
-            q = np.percentile(X, [lo, hi], axis=0)
+            cols = [X[:, j][~np.isnan(X[:, j])] for j in range(X.shape[1])]
+            q = np.array([np.percentile(c, [lo, hi]) for c in cols]).T
             s = q[1] - q[0]
             self.scale_ = np.where(s == 0, 1.0, s)
         else:
@@ -198,7 +208,7 @@ class RobustScaler(OneToOneFeatureMixin, TransformerMixin, BaseEstimator):
 
     def transform(self, X):
         check_is_fitted(self)
-        out = self._validate_data(X, reset=False)
+        out = self._validate_data(X, reset=False, ensure_all_finite='allow-nan')
         if self.with_centering:
             out = out - self.center_
         if self.with_scaling:

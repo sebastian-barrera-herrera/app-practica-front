@@ -278,6 +278,80 @@ function cholLower(cov: NdArray): Float64Array {
   return l;
 }
 
+
+/** exponencial estándar de `RandomState` (`legacy_standard_exponential`) */
+function stdExp(s: Sampler): number {
+  return -Math.log(1 - s.double());
+}
+
+/** gamma estándar como `legacy_standard_gamma` de NumPy (Marsaglia–Tsang para shape > 1) */
+function stdGamma(s: Sampler, shape: number): number {
+  if (shape === 1) return stdExp(s);
+  if (shape === 0) return 0;
+  if (shape < 1) {
+    for (;;) {
+      const U = s.double();
+      const V = stdExp(s);
+      if (U <= 1 - shape) {
+        const X = Math.pow(U, 1 / shape);
+        if (X <= V) return X;
+      } else {
+        const Y = -Math.log((1 - U) / shape);
+        const X = Math.pow(1 - shape + shape * Y, 1 / shape);
+        if (X <= V + Y) return X;
+      }
+    }
+  }
+  const b = shape - 1 / 3;
+  const c = 1 / Math.sqrt(9 * b);
+  for (;;) {
+    let X: number;
+    let V: number;
+    do {
+      X = s.gauss();
+      V = 1 + c * X;
+    } while (V <= 0);
+    V = V * V * V;
+    const U = s.double();
+    if (U < 1 - 0.0331 * (X * X) * (X * X)) return b * V;
+    if (Math.log(U) < 0.5 * X * X + b * (1 - V + Math.log(V))) return b * V;
+  }
+}
+
+/** binomial por inversión (exacta como NumPy cuando n·min(p, 1-p) <= 30) */
+function binomInv(s: Sampler, n: number, p: number): number {
+  const q = 1 - p;
+  const qn = Math.exp(n * Math.log(q));
+  const np = n * p;
+  const bound = Math.min(n, np + 10 * Math.sqrt(np * q + 1));
+  let X = 0;
+  let px = qn;
+  let U = s.double();
+  while (U > px) {
+    X++;
+    if (X > bound) {
+      X = 0;
+      px = qn;
+      U = s.double();
+    } else {
+      U -= px;
+      px = ((n - X + 1) * p * px) / (X * q);
+    }
+  }
+  return X;
+}
+
+function randBinomial(s: Sampler, n: number, p: number): number {
+  if (n <= 0 || p <= 0) return 0;
+  if (p >= 1) return n;
+  if (p <= 0.5) {
+    if (p * n <= 30) return binomInv(s, n, p);
+  } else if ((1 - p) * n <= 30) return n - binomInv(s, n, 1 - p);
+  let k = 0;
+  for (let i = 0; i < n; i++) if (s.double() < p) k++;
+  return k;
+}
+
 /** métodos comunes a RandomState y Generator, vinculados a un `Sampler` */
 function distributions(ctx: Ctx, get: (self: any) => Sampler, legacy: boolean): Record<string, [string, (...a: any[]) => any]> {
   const g = get;
@@ -297,11 +371,91 @@ function distributions(ctx: Ctx, get: (self: any) => Sampler, legacy: boolean): 
       return mu - sc * Math.sign(u) * Math.log(1 - 2 * Math.abs(u));
     })];
   r.binomial = ['self, n, p, size=', (self: any, n: any, p: any, size: any) =>
-    fillN(ctx, sizeArg(size), [n, p], [0, 0], ([nn, pp]) => {
-      let k = 0;
-      for (let i = 0; i < nn; i++) if (g(self).double() < pp) k++;
-      return k;
-    }, 'int64')];
+    fillN(ctx, sizeArg(size), [n, p], [0, 0], ([nn, pp]) => randBinomial(g(self), nn, pp), 'int64')];
+  r.standard_exponential = ['self, size=', (self: any, size: any) => fill(sizeArg(size), () => stdExp(g(self)))];
+  r.gamma = ['self, shape, scale=, size=', (self: any, shape: any, scale: any, size: any) =>
+    fillN(ctx, sizeArg(size), [shape, scale], [1, 1], ([sh, sc]) => sc * stdGamma(g(self), sh))];
+  r.standard_gamma = ['self, shape, size=', (self: any, shape: any, size: any) =>
+    fillN(ctx, sizeArg(size), [shape], [1], ([sh]) => stdGamma(g(self), sh))];
+  r.chisquare = ['self, df, size=', (self: any, df: any, size: any) =>
+    fillN(ctx, sizeArg(size), [df], [1], ([d]) => 2 * stdGamma(g(self), d / 2))];
+  r.standard_t = ['self, df, size=', (self: any, df: any, size: any) =>
+    fillN(ctx, sizeArg(size), [df], [1], ([d]) => {
+      const num = g(self).gauss();
+      const den = stdGamma(g(self), d / 2);
+      return Math.sqrt(d / 2) * num / Math.sqrt(den);
+    })];
+  r.f = ['self, dfnum, dfden, size=', (self: any, dn: any, dd: any, size: any) =>
+    fillN(ctx, sizeArg(size), [dn, dd], [1, 1], ([a, b]) => ((2 * stdGamma(g(self), a / 2)) * b) / ((2 * stdGamma(g(self), b / 2)) * a))];
+  r.beta = ['self, a, b, size=', (self: any, a: any, b: any, size: any) =>
+    fillN(ctx, sizeArg(size), [a, b], [1, 1], ([aa, bb]) => {
+      const s = g(self);
+      if (aa <= 1 && bb <= 1) {
+        for (;;) {
+          const U = s.double();
+          const V = s.double();
+          const X = Math.pow(U, 1 / aa);
+          const Y = Math.pow(V, 1 / bb);
+          const XpY = X + Y;
+          if (XpY <= 1 && U + V > 0) {
+            if (XpY > 0) return X / XpY;
+            let logX = Math.log(U) / aa;
+            let logY = Math.log(V) / bb;
+            const logM = logX > logY ? logX : logY;
+            logX -= logM;
+            logY -= logM;
+            return Math.exp(logX - Math.log(Math.exp(logX) + Math.exp(logY)));
+          }
+        }
+      }
+      const Ga = stdGamma(s, aa);
+      const Gb = stdGamma(s, bb);
+      return Ga / (Ga + Gb);
+    })];
+  r.logistic = ['self, loc=, scale=, size=', (self: any, loc: any, scale: any, size: any) =>
+    fillN(ctx, sizeArg(size), [loc, scale], [0, 1], ([mu, sc]) => {
+      const u = g(self).double();
+      return mu + sc * Math.log(u / (1 - u));
+    })];
+  r.dirichlet = ['self, alpha, size=', (self: any, alpha: any, size: any) => {
+    const al = flatNum(ctx.arr(alpha));
+    const k = al.length;
+    const sh = sizeArg(size);
+    const rows = sh === null ? 1 : sizeOf(sh);
+    const out = new Float64Array(rows * k);
+    for (let i = 0; i < rows; i++) {
+      let acc = 0;
+      for (let j = 0; j < k; j++) {
+        const v = stdGamma(g(self), al[j]);
+        out[i * k + j] = v;
+        acc += v;
+      }
+      const inv = 1 / acc;
+      for (let j = 0; j < k; j++) out[i * k + j] *= inv;
+    }
+    return mkNum(out, sh === null ? [k] : [...sh, k], 'float64');
+  }];
+  r.multinomial = ['self, n, pvals, size=', (self: any, n: any, pvals: any, size: any) => {
+    const pv = flatNum(ctx.arr(pvals));
+    const k = pv.length;
+    const nn = intArg(n);
+    const sh = sizeArg(size);
+    const rows = sh === null ? 1 : sizeOf(sh);
+    const out = new Float64Array(rows * k);
+    for (let i = 0; i < rows; i++) {
+      let remaining = 1;
+      let dn = nn;
+      for (let j = 0; j < k - 1; j++) {
+        const m = randBinomial(g(self), dn, pv[j] / remaining);
+        out[i * k + j] = m;
+        dn -= m;
+        if (dn <= 0) break;
+        remaining -= pv[j];
+      }
+      if (dn > 0) out[i * k + k - 1] = dn;
+    }
+    return mkNum(out, sh === null ? [k] : [...sh, k], 'int64');
+  }];
   r.poisson = ['self, lam=, size=', (self: any, lam: any, size: any) =>
     fillN(ctx, sizeArg(size), [lam], [1], ([l]) => {
       const L = Math.exp(-l);

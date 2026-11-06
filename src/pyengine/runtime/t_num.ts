@@ -504,6 +504,11 @@ defMethods(floatType, {
   __ge__: ['self, other', cmpMethod('>=')],
   __divmod__: ['self, other', (a: any, b: any) => floatDivmod(fv(a), b, false)],
   __rdivmod__: ['self, other', (a: any, b: any) => floatDivmod(fv(a), b, true)],
+  // Conveniencias de los escalares de NumPy (np.float64 es un float): `x.mean().round(2)`, `x.item()`...
+  round: ['self, decimals=', (a: any, nd?: any) => callObj(ops.getAttr(a, '__round__'), [nd === undefined || nd === null ? 0 : nd])],
+  item: ['self, *args', (a: any) => a],
+  tolist: ['self', (a: any) => a],
+  astype: ['self, dtype', (a: any, t: any) => callObj(t, [a])],
   __round__: ['self, ndigits=', (a: any, nd?: any) => {
     const x = fv(a);
     if (nd === undefined || nd === null) return roundHalfEvenToInt(x);

@@ -27,11 +27,11 @@ print(d.round(4), i)
 
 Xb, yb = make_blobs(n_samples=200, centers=4, cluster_std=1.0, random_state=7)
 km = KMeans(n_clusters=4, random_state=0).fit(Xb)
-print(km.cluster_centers_.round(4), km.inertia_.round(4), km.n_iter_, km.labels_[:10])
+print(km.cluster_centers_.round(4), round(km.inertia_, 4), km.n_iter_, km.labels_[:10])
 print(round(adjusted_rand_score(yb, km.labels_), 6))
 km2 = KMeans(n_clusters=3, init="random", n_init=5, random_state=1).fit(X)
 print(km2.cluster_centers_.round(3), round(km2.inertia_, 4), km2.labels_[:12], km2.predict(X[[0, 60, 120]]))
-print(KMeans(n_clusters=3, random_state=0, n_init=10).fit(X).inertia_)
+print(round(KMeans(n_clusters=3, random_state=0, n_init=10).fit(X).inertia_, 6))
 db = DBSCAN(eps=0.5, min_samples=5).fit(StandardScaler().fit_transform(X))
 print(np.unique(db.labels_, return_counts=True), len(db.core_sample_indices_))
 for link in ("ward", "average", "single", "complete"):

@@ -5,7 +5,7 @@
  * Tipos de dato: `bool`, `int64`, `float64` (y `str` para listas de etiquetas). Los datos numéricos viven
  * en un `Float64Array`; los de texto, en un `string[]`.
  */
-import { PyDict, PyFloat, PyList, PyObject, PySlice, PyTuple, PyType } from '../../runtime/objects';
+import { PyDict, PyFloat, PyList, PyObject, PyRange, PySlice, PyTuple, PyType } from '../../runtime/objects';
 import { Ellipsis } from '../../runtime/builtin_types';
 import { indexError, typeError, valueError } from '../../runtime/errors';
 import * as ops from '../../runtime/ops';
@@ -380,6 +380,7 @@ function normalizeKey(key: any): any[] {
 function toIndexArray(x: any): NdArray | null {
   if (x instanceof NdArray) return x;
   if (isSeq(x)) return fromPy(x);
+  if (x instanceof PyRange) return fromPy(ops.mkList(ops.iterToArray(x)));
   return null;
 }
 
