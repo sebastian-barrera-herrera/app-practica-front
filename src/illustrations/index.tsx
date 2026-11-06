@@ -16,6 +16,7 @@ import { AsgScale, CloudfrontFlow, ElbFlow, R53Policies, Spof } from './AwsHa';
 import { CidrCalc, DnsFlow, PacketTrace, SgVsNacl, VpcLayout } from './AwsNetwork';
 import { S3Classes, S3Security } from './AwsStorage';
 import { BroadcastView, GradientDescentView, HistBinsView, LeakageView, MonteCarloView, VectorsView } from './IaMath';
+import { CoefEffect, LinRegFit, RegMetricsView, RegModelsView, RegPathView } from './IaReg';
 import { AiMlDl, FitCurve, LearningTypes, SplitDemo } from './IaBasics';
 import { AptFlow, BootSequence, DnsLookup, NetRoute, SshHandshake, SudoFlow } from './Flows';
 import { FsTree } from './FsTree';
@@ -165,6 +166,11 @@ const MAP: Partial<Record<IllustrationId, React.ComponentType>> = {
   'ia-gradient-descent': GradientDescentView,
   'ia-hist-bins': HistBinsView,
   'ia-leakage': LeakageView,
+  'ia-linreg-fit': LinRegFit,
+  'ia-coef-effect': CoefEffect,
+  'ia-reg-metrics': RegMetricsView,
+  'ia-reg-path': RegPathView,
+  'ia-reg-models': RegModelsView,
 };
 
 export function Illustration({ id }: { id: IllustrationId }) {

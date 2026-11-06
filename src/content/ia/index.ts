@@ -2,6 +2,7 @@ import type { WorldDef } from '../types';
 import { ia1 } from './w1';
 import { ia2 } from './w2';
 import { ia3 } from './w3';
+import { ia4 } from './w4';
 
 /** Zonas del curso de IA (se añaden a medida que se escriben; ver `CURRICULUM.md`). */
-export const IA_WORLDS: WorldDef[] = [ia1, ia2, ia3];
+export const IA_WORLDS: WorldDef[] = [ia1, ia2, ia3, ia4];

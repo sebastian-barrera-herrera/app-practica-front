@@ -137,7 +137,12 @@ export type IllustrationId =
   | 'ia-montecarlo'
   | 'ia-gradient-descent'
   | 'ia-hist-bins'
-  | 'ia-leakage';
+  | 'ia-leakage'
+  | 'ia-linreg-fit'
+  | 'ia-coef-effect'
+  | 'ia-reg-metrics'
+  | 'ia-reg-path'
+  | 'ia-reg-models';
 
 // ───────────────────────── preguntas ─────────────────────────
 
