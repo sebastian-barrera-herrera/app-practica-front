@@ -28,7 +28,7 @@ describe('curso de IA: estructura', () => {
     test.skip('sin contenido todavía', () => {});
     return;
   }
-  test('ids con prefijo py, zonas completas y niveles válidos', () => {
+  test('ids con prefijo ia, zonas completas y niveles válidos', () => {
     for (const w of IA.worlds) {
       expect(w.id).toMatch(/^ia\d+$/);
       expect(w.course).toBe('ia');

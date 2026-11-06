@@ -67,7 +67,7 @@ export function PyOutput({ chunks, running, asking, onSubmitInput, onStop, empty
           </Pressable>
         ) : null}
       </View>
-      <ScrollView ref={scroll} style={{ maxHeight }} contentContainerStyle={{ padding: 12 }} nestedScrollEnabled>
+      <ScrollView ref={scroll} style={{ maxHeight: groups.some((g) => g.figure) ? Math.max(maxHeight, 380) : maxHeight }} contentContainerStyle={{ padding: 12 }} nestedScrollEnabled>
         {merged.length === 0 ? (
           <T v="small" color={darkColors.faint}>{running ? 'Ejecutando…' : emptyText}</T>
         ) : (

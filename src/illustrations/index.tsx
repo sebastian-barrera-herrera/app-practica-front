@@ -15,6 +15,8 @@ import { ApiFlow, CognitoFlow, EventRouting, LambdaLifecycle, SqsVisibility } fr
 import { AsgScale, CloudfrontFlow, ElbFlow, R53Policies, Spof } from './AwsHa';
 import { CidrCalc, DnsFlow, PacketTrace, SgVsNacl, VpcLayout } from './AwsNetwork';
 import { S3Classes, S3Security } from './AwsStorage';
+import { BroadcastView, GradientDescentView, MonteCarloView, VectorsView } from './IaMath';
+import { AiMlDl, FitCurve, LearningTypes, SplitDemo } from './IaBasics';
 import { AptFlow, BootSequence, DnsLookup, NetRoute, SshHandshake, SudoFlow } from './Flows';
 import { FsTree } from './FsTree';
 import { Missing } from './Missing';
@@ -153,6 +155,14 @@ const MAP: Partial<Record<IllustrationId, React.ComponentType>> = {
   'aws-waf-rules': WafRules,
   'aws-sec-map': SecMap,
   'aws-scp-chain': ScpChain,
+  'ia-ai-ml-dl': AiMlDl,
+  'ia-learning-types': LearningTypes,
+  'ia-split': SplitDemo,
+  'ia-fit-curve': FitCurve,
+  'ia-broadcast': BroadcastView,
+  'ia-vectors': VectorsView,
+  'ia-montecarlo': MonteCarloView,
+  'ia-gradient-descent': GradientDescentView,
 };
 
 export function Illustration({ id }: { id: IllustrationId }) {

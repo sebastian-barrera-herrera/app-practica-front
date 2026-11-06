@@ -127,7 +127,15 @@ export type IllustrationId =
   | 'aws-kms-access'
   | 'aws-waf-rules'
   | 'aws-sec-map'
-  | 'aws-scp-chain';
+  | 'aws-scp-chain'
+  | 'ia-ai-ml-dl'
+  | 'ia-learning-types'
+  | 'ia-split'
+  | 'ia-fit-curve'
+  | 'ia-broadcast'
+  | 'ia-vectors'
+  | 'ia-montecarlo'
+  | 'ia-gradient-descent';
 
 // ───────────────────────── preguntas ─────────────────────────
 
