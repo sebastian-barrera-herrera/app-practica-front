@@ -17,3 +17,4 @@ import './pylib.generated';
 import './aws';
 import './redis';
 import './flask';
+import './numpy/module';
