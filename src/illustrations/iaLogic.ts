@@ -324,3 +324,72 @@ export function gdVerdict(path: GdStep[], lr: number): GdVerdict {
   if (Math.abs(last.x - 3) > 0.3) return 'lento';
   return 'converge';
 }
+
+// ───────────────────────── histograma: el número de intervalos ─────────────────────────
+
+/** Dos grupos de clientes (ingresos en miles): datos fijos y reproducibles. */
+export function histData(): number[] {
+  const r = lcg(11);
+  const normal = (mu: number, sd: number): number => {
+    const u = Math.max(r(), 1e-9);
+    const v = r();
+    return mu + sd * Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  };
+  return [...Array.from({ length: 70 }, () => normal(30, 4)), ...Array.from({ length: 50 }, () => normal(48, 5))];
+}
+
+export interface Hist {
+  edges: number[];
+  counts: number[];
+}
+
+export function histogram(data: number[], bins: number): Hist {
+  const lo = Math.min(...data);
+  const hi = Math.max(...data);
+  const w = (hi - lo) / bins || 1;
+  const edges = Array.from({ length: bins + 1 }, (_, i) => lo + i * w);
+  const counts = new Array<number>(bins).fill(0);
+  for (const v of data) counts[Math.min(bins - 1, Math.floor((v - lo) / w))]++;
+  return { edges, counts };
+}
+
+/** Picos «reales» (máximos locales con altura relevante). */
+export function countPeaks(counts: number[]): number {
+  const max = Math.max(...counts);
+  let peaks = 0;
+  for (let i = 0; i < counts.length; i++) {
+    const l = i > 0 ? counts[i - 1] : -1;
+    const rr = i < counts.length - 1 ? counts[i + 1] : -1;
+    if (counts[i] > l && counts[i] >= rr && counts[i] >= max * 0.5) peaks++;
+  }
+  return peaks;
+}
+
+export function histVerdict(bins: number): { kind: 'pocas' | 'bien' | 'muchas'; text: string } {
+  if (bins <= 3) return { kind: 'pocas', text: 'Con tan pocas barras los dos grupos se funden en un bloque: la forma real queda escondida.' };
+  if (bins <= 18) return { kind: 'bien', text: 'Se distinguen claramente dos grupos de clientes: uno en torno a 30 y otro en torno a 48.' };
+  return { kind: 'muchas', text: 'Con demasiadas barras casi todas valen 0, 1 o 2: dibujas el ruido de la muestra, no la forma.' };
+}
+
+// ───────────────────────── fuga de datos ─────────────────────────
+
+export const LEAK_TRAIN = [10, 12, 11, 13, 12, 14, 11, 13];
+export const LEAK_TEST = [12, 60];
+
+const meanOf = (v: number[]) => v.reduce((s, x) => s + x, 0) / v.length;
+const stdOf = (v: number[]) => Math.sqrt(v.reduce((s, x) => s + (x - meanOf(v)) ** 2, 0) / v.length);
+
+export interface LeakResult {
+  mean: number;
+  std: number;
+  z: number[];
+  fitted: number[];
+}
+
+/** Estandariza el conjunto de prueba con las estadísticas de `todo` (fuga) o solo de entrenamiento (correcto). */
+export function leakDemo(fitOn: 'todo' | 'train'): LeakResult {
+  const fitted = fitOn === 'todo' ? [...LEAK_TRAIN, ...LEAK_TEST] : LEAK_TRAIN;
+  const mean = meanOf(fitted);
+  const std = stdOf(fitted);
+  return { mean, std, z: LEAK_TEST.map((x) => (x - mean) / std), fitted };
+}

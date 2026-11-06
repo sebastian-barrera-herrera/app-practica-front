@@ -135,7 +135,9 @@ export type IllustrationId =
   | 'ia-broadcast'
   | 'ia-vectors'
   | 'ia-montecarlo'
-  | 'ia-gradient-descent';
+  | 'ia-gradient-descent'
+  | 'ia-hist-bins'
+  | 'ia-leakage';
 
 // ───────────────────────── preguntas ─────────────────────────
 

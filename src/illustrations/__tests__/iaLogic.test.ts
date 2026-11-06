@@ -145,3 +145,36 @@ describe('descenso del gradiente', () => {
     expect(gdVerdict(gdPath(0, 0.01, 10), 0.01)).toBe('lento');
   });
 });
+
+import { LEAK_TEST, countPeaks, histData, histVerdict, histogram, leakDemo } from '../iaLogic';
+
+describe('histograma y número de intervalos', () => {
+  const data = histData();
+  test('los conteos suman el total y los datos son reproducibles', () => {
+    expect(data).toHaveLength(120);
+    expect(histData()).toEqual(data);
+    for (const b of [2, 5, 10, 30]) expect(histogram(data, b).counts.reduce((s, c) => s + c, 0)).toBe(120);
+  });
+  test('con pocos intervalos se pierde un grupo y con una cantidad razonable se ven dos', () => {
+    expect(countPeaks(histogram(data, 2).counts)).toBe(1);
+    expect(countPeaks(histogram(data, 12).counts)).toBe(2);
+  });
+  test('veredictos por tramos', () => {
+    expect(histVerdict(2).kind).toBe('pocas');
+    expect(histVerdict(12).kind).toBe('bien');
+    expect(histVerdict(40).kind).toBe('muchas');
+  });
+});
+
+describe('fuga de datos', () => {
+  test('ajustar con todo esconde el valor extremo de la prueba', () => {
+    const leak = leakDemo('todo');
+    const ok = leakDemo('train');
+    expect(ok.mean).toBeCloseTo(12);
+    expect(leak.mean).toBeGreaterThan(ok.mean);
+    expect(Math.abs(leak.z[1])).toBeLessThan(4);
+    expect(Math.abs(ok.z[1])).toBeGreaterThan(30);
+    expect(ok.fitted).toHaveLength(8);
+    expect(LEAK_TEST).toEqual([12, 60]);
+  });
+});

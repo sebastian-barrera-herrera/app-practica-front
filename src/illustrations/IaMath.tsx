@@ -6,7 +6,7 @@ import { select, tap } from '@/lib/haptics';
 import { FigureView } from '@/ui/Figure';
 import { T } from '@/ui/Text';
 import { colors, fonts, radius } from '@/ui/theme';
-import { SHAPE_CHOICES, broadcast, fmtShape, gdF, gdPath, gdVerdict, monteCarloPi, vecFrom, vecStats } from './iaLogic';
+import { LEAK_TEST, LEAK_TRAIN, SHAPE_CHOICES, broadcast, fmtShape, gdF, gdPath, gdVerdict, histData, histVerdict, histogram, leakDemo, monteCarloPi, vecFrom, vecStats } from './iaLogic';
 import { Callout, Explain, Frame, Meter, Pill, Row, Stepper, Tabs, axes, figJson } from './iaui';
 
 const Btn = ({ label, onPress, color, disabled }: { label: string; onPress: () => void; color: string; disabled?: boolean }) => (
@@ -205,6 +205,64 @@ export function GradientDescentView() {
       </View>
       <Row label="Paso" color={colors.dim}>{k} · x = {Number.isFinite(cur.x) ? cur.x.toFixed(3) : '∞'} · pérdida = {Number.isFinite(cur.f) ? (cur.f > 1e6 ? cur.f.toExponential(1) : cur.f.toFixed(3)) : '∞'}</Row>
       <Explain k={verdict + lr100} title={verdict === 'converge' ? '✅ Converge' : verdict === 'lento' ? '🐢 Muy lento' : verdict === 'zigzag' ? '↔️ Oscila' : '💥 Diverge'} color={vc}>{msg}</Explain>
+    </Frame>
+  );
+}
+
+// ───────────────────────── histograma: número de intervalos ─────────────────────────
+
+export function HistBinsView() {
+  const [bins, setBins] = useState(10);
+  const data = useMemo(() => histData(), []);
+  const h = useMemo(() => histogram(data, bins), [data, bins]);
+  const v = histVerdict(bins);
+  const c = v.kind === 'bien' ? colors.green : v.kind === 'pocas' ? colors.amber : colors.rose;
+  const json = useMemo(
+    () =>
+      figJson(
+        axes(
+          [{ t: 'hist', edges: h.edges, h: h.counts, color: '#A78BFA', alpha: 0.9 }],
+          { xlabel: 'ingresos (miles)', ylabel: 'clientes', xlim: [Math.floor(h.edges[0]), Math.ceil(h.edges[h.edges.length - 1])] },
+        ),
+        { h: 3 },
+      ),
+    [h],
+  );
+  return (
+    <Frame>
+      <Stepper label="Número de intervalos" value={bins} min={2} max={40} step={2} onChange={setBins} />
+      <FigureView json={json} />
+      <Explain k={v.kind} title={v.kind === 'bien' ? '✅ Se ve la forma' : v.kind === 'pocas' ? '🟧 Muy pocas barras' : '🟥 Demasiadas barras'} color={c}>{v.text}</Explain>
+    </Frame>
+  );
+}
+
+// ───────────────────────── fuga de datos ─────────────────────────
+
+export function LeakageView() {
+  const [fit, setFit] = useState<'todo' | 'train'>('todo');
+  const r = leakDemo(fit);
+  const bad = fit === 'todo';
+  const c = bad ? colors.rose : colors.green;
+  const extreme = Math.abs(r.z[1]);
+  return (
+    <Frame>
+      <Tabs items={[{ id: 'todo', label: '❌ Escalar todo y luego dividir' }, { id: 'train', label: '✅ Dividir y escalar con el entrenamiento' }]} value={fit} onChange={setFit} color={c} />
+      <View style={{ gap: 6 }}>
+        <T v="label" color={colors.dim}>Entrenamiento (8 valores)</T>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>{LEAK_TRAIN.map((x, i) => <Pill key={i} text={String(x)} color={colors.cyan} size={12} />)}</View>
+        <T v="label" color={colors.dim}>Prueba (2 valores)</T>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>{LEAK_TEST.map((x, i) => <Pill key={i} text={String(x)} color={colors.amber} size={12} solid={x === 60} />)}</View>
+      </View>
+      <Row label="El escalador vio" color={c}>{bad ? 'entrenamiento + prueba (10 valores) ← incluye el 60' : 'solo el entrenamiento (8 valores)'}</Row>
+      <Row label="Media / desv." color={c}>{r.mean.toFixed(2)} / {r.std.toFixed(2)}</Row>
+      <Meter label="z del valor 12 de la prueba" value={Math.min(1, Math.abs(r.z[0]) / 6)} color={colors.cyan} suffix={r.z[0].toFixed(2)} />
+      <Meter label="z del valor 60 de la prueba" value={Math.min(1, extreme / 6)} color={c} suffix={r.z[1].toFixed(1)} />
+      <Explain k={fit} title={bad ? '🚰 Hay fuga' : '🔒 Sin fuga'} color={c}>
+        {bad
+          ? `El 60 arrastró la media hasta ${r.mean.toFixed(1)} y ensanchó la desviación: parece un valor casi normal (z ≈ ${r.z[1].toFixed(1)}). El modelo nunca se enterará de lo raro que es.`
+          : `Con las estadísticas del entrenamiento, el 60 se ve como lo que es: ${extreme.toFixed(0)} desviaciones por encima de lo habitual. Así se comportará el modelo en producción con un dato así.`}
+      </Explain>
     </Frame>
   );
 }
