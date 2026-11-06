@@ -147,7 +147,12 @@ export type IllustrationId =
   | 'ia-tree-split'
   | 'ia-knn-region'
   | 'ia-svm'
-  | 'ia-ensemble-vote';
+  | 'ia-ensemble-vote'
+  | 'ia-confusion'
+  | 'ia-roc'
+  | 'ia-kfold'
+  | 'ia-bias-variance'
+  | 'ia-search';
 
 // ───────────────────────── preguntas ─────────────────────────
 

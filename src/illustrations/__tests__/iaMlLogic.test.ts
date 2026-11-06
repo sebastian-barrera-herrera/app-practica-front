@@ -96,3 +96,60 @@ describe('Z5 · clasificación', () => {
     expect(ensembleAccuracy(21, 0.7, 0.5)).toBeLessThan(majorityAccuracy(21, 0.7));
   });
 });
+
+import { biasVariance, bestTrial, confusionAt, foldStats, gridTrials, kfoldDemo, normCdf, randomTrials, rocAuc, rocCurve } from '../iaMlLogic';
+
+describe('Z6 · evaluación', () => {
+  it('normCdf', () => {
+    expect(normCdf(0)).toBeCloseTo(0.5, 6);
+    expect(normCdf(1.96)).toBeCloseTo(0.975, 3);
+    expect(normCdf(-3)).toBeLessThan(0.002);
+  });
+
+  it('la matriz de confusión cuadra y la exactitud engaña con pocas positivas', () => {
+    const c = confusionAt(0.9, 0.5);
+    expect(c.tp + c.fp + c.fn + c.tn).toBeCloseTo(1000, 6);
+    const hi = confusionAt(5, 0.05);
+    expect(hi.accuracy).toBeGreaterThan(0.94);
+    expect(hi.recall).toBeLessThan(0.01);
+    expect(confusionAt(-1, 0.5).recall).toBeGreaterThan(confusionAt(2, 0.5).recall);
+    expect(confusionAt(0, 0.05).precision).toBeLessThan(confusionAt(0, 0.5).precision);
+  });
+
+  it('ROC: monótona y con AUC coherente', () => {
+    const r = rocCurve(1.8);
+    for (let i = 1; i < r.length; i++) {
+      expect(r[i].fpr).toBeGreaterThanOrEqual(r[i - 1].fpr - 1e-12);
+      expect(r[i].tpr).toBeGreaterThanOrEqual(r[i - 1].tpr - 1e-12);
+    }
+    expect(rocAuc(0)).toBeCloseTo(0.5, 6);
+    expect(rocAuc(3)).toBeGreaterThan(0.98);
+    let area = 0;
+    for (let i = 1; i < r.length; i++) area += ((r[i].fpr - r[i - 1].fpr) * (r[i].tpr + r[i - 1].tpr)) / 2;
+    expect(area).toBeCloseTo(rocAuc(1.8), 2);
+  });
+
+  it('k-fold: los bloques particionan las filas', () => {
+    const f = kfoldDemo(23, 5);
+    expect(f.flatMap((x) => x.test).sort((a, b) => a - b)).toEqual(Array.from({ length: 23 }, (_, i) => i));
+    expect(foldStats(f).std).toBeGreaterThan(0);
+  });
+
+  it('sesgo-varianza: U en test, más datos ayudan', () => {
+    const lo = biasVariance(1, 30);
+    const mid = biasVariance(4, 30);
+    const hi = biasVariance(12, 30);
+    expect(mid.test).toBeLessThan(lo.test);
+    expect(mid.test).toBeLessThan(hi.test);
+    expect(lo.verdict).toBe('sesgo alto');
+    expect(hi.verdict).toBe('varianza alta');
+    expect(biasVariance(12, 300).test).toBeLessThan(hi.test);
+  });
+
+  it('búsqueda aleatoria frente a rejilla con el mismo presupuesto', () => {
+    const g = bestTrial(gridTrials(3));
+    const r = bestTrial(randomTrials(9, 5));
+    expect(gridTrials(3)).toHaveLength(9);
+    expect(r.score).toBeGreaterThan(g.score);
+  });
+});

@@ -2,6 +2,7 @@
 import type { PyRef } from '../py/reference';
 import { CLASIFICACION_REFS } from './ref/clasificacion';
 import { CONCEPTOS_REFS } from './ref/conceptos';
+import { EVALUACION_REFS } from './ref/evaluacion';
 import { MATEMATICAS_REFS } from './ref/matematicas';
 import { NUMPY_REFS } from './ref/numpy';
 import { PANDAS_REFS } from './ref/pandas';
@@ -23,6 +24,6 @@ export const IA_REF_CATEGORY: Record<IaRefCategory, string> = {
 
 export type IaRef = PyRef<IaRefCategory>;
 
-export const IA_REFERENCE: IaRef[] = [...CONCEPTOS_REFS, ...NUMPY_REFS, ...MATEMATICAS_REFS, ...PANDAS_REFS, ...PREPROCESADO_REFS, ...REGRESION_REFS, ...CLASIFICACION_REFS];
+export const IA_REFERENCE: IaRef[] = [...CONCEPTOS_REFS, ...NUMPY_REFS, ...MATEMATICAS_REFS, ...PANDAS_REFS, ...PREPROCESADO_REFS, ...REGRESION_REFS, ...CLASIFICACION_REFS, ...EVALUACION_REFS];
 
 export const iaRefByName = (name: string): IaRef | undefined => IA_REFERENCE.find((r) => r.name === name);

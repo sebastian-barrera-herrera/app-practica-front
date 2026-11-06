@@ -422,3 +422,139 @@ export function majorityAccuracy(n: number, p: number): number {
 
 /** Con correlación ρ: con probabilidad ρ todos los modelos coinciden (votan lo mismo), si no son independientes. */
 export const ensembleAccuracy = (n: number, p: number, rho: number): number => rho * p + (1 - rho) * majorityAccuracy(n, p);
+
+// ───────────────────────── Z6 · matriz de confusión y umbral ─────────────────────────
+
+/** Función de distribución de la normal estándar (aproximación de Abramowitz-Stegun, error < 1e-7). */
+export function normCdf(x: number): number {
+  const t = 1 / (1 + 0.2316419 * Math.abs(x));
+  const d = 0.3989423 * Math.exp((-x * x) / 2);
+  const p = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274))));
+  return x > 0 ? 1 - p : p;
+}
+
+export const SCORE_SEP = 1.8;
+
+export interface Confusion {
+  tp: number;
+  fp: number;
+  fn: number;
+  tn: number;
+  accuracy: number;
+  precision: number;
+  recall: number;
+  f1: number;
+}
+
+/**
+ * Puntuaciones normales: los negativos N(0, 1) y los positivos N(sep, 1). Con `n` casos y una `prevalence` de positivos,
+ * devuelve el reparto esperado en la matriz de confusión al decidir «positivo» si la puntuación ≥ `thr`.
+ */
+export function confusionAt(thr: number, prevalence: number, n = 1000, sep = SCORE_SEP): Confusion {
+  const pos = n * prevalence;
+  const neg = n - pos;
+  const tp = pos * (1 - normCdf(thr - sep));
+  const fn = pos - tp;
+  const fp = neg * (1 - normCdf(thr));
+  const tn = neg - fp;
+  const precision = tp + fp > 0 ? tp / (tp + fp) : 0;
+  const recall = pos > 0 ? tp / pos : 0;
+  return { tp, fp, fn, tn, accuracy: (tp + tn) / n, precision, recall, f1: precision + recall > 0 ? (2 * precision * recall) / (precision + recall) : 0 };
+}
+
+// ───────────────────────── Z6 · curva ROC ─────────────────────────
+
+export interface RocPoint {
+  fpr: number;
+  tpr: number;
+  thr: number;
+}
+
+/** Curva ROC de dos normales separadas `d` desviaciones típicas (negativos N(0,1), positivos N(d,1)). */
+export function rocCurve(d: number, steps = 60): RocPoint[] {
+  const out: RocPoint[] = [];
+  for (let i = 0; i <= steps; i++) {
+    const thr = 5 - (i / steps) * (5 + d + 3);
+    out.push({ thr, fpr: 1 - normCdf(thr), tpr: 1 - normCdf(thr - d) });
+  }
+  return out;
+}
+
+/** AUC exacto: P(puntuación de un positivo > puntuación de un negativo) = Φ(d / √2). */
+export const rocAuc = (d: number): number => normCdf(d / Math.SQRT2);
+
+// ───────────────────────── Z6 · validación cruzada ─────────────────────────
+
+export interface Fold {
+  index: number;
+  test: number[];
+  score: number;
+}
+
+/** Reparte `n` filas en `k` bloques consecutivos y asigna a cada uno una puntuación fija (para la ilustración). */
+export function kfoldDemo(n: number, k: number): Fold[] {
+  const g = gaussian(30 + k);
+  const base = 0.8;
+  const sizes = Array.from({ length: k }, (_, i) => Math.floor(n / k) + (i < n % k ? 1 : 0));
+  let start = 0;
+  return sizes.map((sz, i) => {
+    const test = Array.from({ length: sz }, (_, j) => start + j);
+    start += sz;
+    return { index: i, test, score: Math.max(0.5, Math.min(0.97, base + 0.07 * g())) };
+  });
+}
+
+export const foldStats = (f: Fold[]): { mean: number; std: number } => {
+  const m = f.reduce((s, x) => s + x.score, 0) / f.length;
+  return { mean: m, std: Math.sqrt(f.reduce((s, x) => s + (x.score - m) ** 2, 0) / f.length) };
+};
+
+// ───────────────────────── Z6 · sesgo y varianza ─────────────────────────
+
+export interface BiasVar {
+  complexity: number;
+  bias2: number;
+  variance: number;
+  noise: number;
+  train: number;
+  test: number;
+  verdict: 'sesgo alto' | 'equilibrio' | 'varianza alta';
+}
+
+/** Curvas de juguete: el sesgo² baja con la complejidad; la varianza sube con ella y baja al tener más datos `n`. */
+export function biasVariance(complexity: number, n: number): BiasVar {
+  const noise = 0.1;
+  const bias2 = 1.2 / (complexity * complexity);
+  const variance = (0.012 * complexity * complexity) / (n / 30);
+  const test = bias2 + variance + noise;
+  const train = Math.max(0.01, bias2 + noise - variance * 0.9);
+  const verdict: BiasVar['verdict'] = bias2 > variance * 3 && complexity <= 3 ? 'sesgo alto' : variance > bias2 * 2 ? 'varianza alta' : 'equilibrio';
+  return { complexity, bias2, variance, noise, train, test, verdict };
+}
+
+// ───────────────────────── Z6 · búsqueda de hiperparámetros ─────────────────────────
+
+/** Superficie de rendimiento: muy sensible al parámetro X (el que importa) y casi plana en Y. */
+export const searchScore = (x: number, y: number): number => 0.55 + 0.4 * Math.exp(-((x - 0.62) ** 2) / 0.012) * (0.9 + 0.1 * Math.exp(-((y - 0.3) ** 2) / 0.4));
+
+export interface Trial {
+  x: number;
+  y: number;
+  score: number;
+}
+
+export function gridTrials(side: number): Trial[] {
+  const vals = Array.from({ length: side }, (_, i) => (i + 0.5) / side);
+  return vals.flatMap((x) => vals.map((y) => ({ x, y, score: searchScore(x, y) })));
+}
+
+export function randomTrials(n: number, seed = 5): Trial[] {
+  const r = lcg(seed);
+  return Array.from({ length: n }, () => {
+    const x = r();
+    const y = r();
+    return { x, y, score: searchScore(x, y) };
+  });
+}
+
+export const bestTrial = (t: Trial[]): Trial => t.reduce((a, b) => (b.score > a.score ? b : a));

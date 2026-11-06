@@ -3,7 +3,7 @@ import { pyDemo, pyOut, pyPractice, iaWorld } from './iabuild';
 import { all, truthy, variable } from './iabuild';
 
 /** 80 clientes de una operadora: meses de antigüedad, llamadas a soporte, cuota mensual, tipo de contrato y si se dieron de baja (1). */
-const BAJAS = `meses,soporte,cuota,contrato,baja
+export const BAJAS = `meses,soporte,cuota,contrato,baja
 13,1,40,mensual,0
 23,1,60,mensual,1
 72,2,58,mensual,0

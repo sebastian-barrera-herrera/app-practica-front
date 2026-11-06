@@ -17,6 +17,7 @@ import { CidrCalc, DnsFlow, PacketTrace, SgVsNacl, VpcLayout } from './AwsNetwor
 import { S3Classes, S3Security } from './AwsStorage';
 import { BroadcastView, GradientDescentView, HistBinsView, LeakageView, MonteCarloView, VectorsView } from './IaMath';
 import { EnsembleVoteDemo, KnnRegionDemo, SigmoidDemo, SvmDemo, TreeSplitDemo } from './IaClass';
+import { BiasVarianceDemo, ConfusionDemo, KFoldDemo, RocDemo, SearchDemo } from './IaEval';
 import { CoefEffect, LinRegFit, RegMetricsView, RegModelsView, RegPathView } from './IaReg';
 import { AiMlDl, FitCurve, LearningTypes, SplitDemo } from './IaBasics';
 import { AptFlow, BootSequence, DnsLookup, NetRoute, SshHandshake, SudoFlow } from './Flows';
@@ -177,6 +178,11 @@ const MAP: Partial<Record<IllustrationId, React.ComponentType>> = {
   'ia-knn-region': KnnRegionDemo,
   'ia-svm': SvmDemo,
   'ia-ensemble-vote': EnsembleVoteDemo,
+  'ia-confusion': ConfusionDemo,
+  'ia-roc': RocDemo,
+  'ia-kfold': KFoldDemo,
+  'ia-bias-variance': BiasVarianceDemo,
+  'ia-search': SearchDemo,
 };
 
 export function Illustration({ id }: { id: IllustrationId }) {
