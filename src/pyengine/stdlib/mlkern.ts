@@ -684,6 +684,65 @@ export function smoSolve(l: number, Q: Float64Array, QD: Float64Array, p: Float6
   return { alpha, rho, iter, obj: v / 2, timedOut };
 }
 
+
+/**
+ * Agrupamiento jerárquico aglomerativo con las actualizaciones de Lance–Williams (ward, average, single, complete).
+ * `D` es la matriz de distancias n×n (al cuadrado para ward). Devuelve las fusiones (a, b, distancia, tamaño) con los
+ * mismos desempates que el algoritmo de referencia: se fusiona el par de menor valor y, a igualdad, el de menor (a, b).
+ */
+export function agglomerate(D: Float64Array, n: number, linkage: string): { a: number[]; b: number[]; d: number[]; size: number[] } {
+  const total = 2 * n;
+  const dist = new Float64Array(total * total);
+  for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) dist[i * total + j] = D[i * n + j];
+  const sizes = new Float64Array(total).fill(1);
+  const act: number[] = Array.from({ length: n }, (_, i) => i);
+  const out = { a: [] as number[], b: [] as number[], d: [] as number[], size: [] as number[] };
+  let nxt = n;
+  while (act.length > 1) {
+    let best = Infinity;
+    let ba = -1;
+    let bb = -1;
+    for (let x = 0; x < act.length; x++) {
+      const i = act[x];
+      for (let y = x + 1; y < act.length; y++) {
+        const v = dist[i * total + act[y]];
+        if (v < best) {
+          best = v;
+          ba = i;
+          bb = act[y];
+        }
+      }
+    }
+    const na = sizes[ba];
+    const nb = sizes[bb];
+    for (const c of act) {
+      if (c === ba || c === bb) continue;
+      const dac = dist[ba * total + c];
+      const dbc = dist[bb * total + c];
+      let nd: number;
+      if (linkage === 'single') nd = Math.min(dac, dbc);
+      else if (linkage === 'complete') nd = Math.max(dac, dbc);
+      else if (linkage === 'average') nd = (na * dac + nb * dbc) / (na + nb);
+      else {
+        const nc = sizes[c];
+        nd = ((na + nc) * dac + (nb + nc) * dbc - nc * best) / (na + nb + nc);
+      }
+      dist[nxt * total + c] = nd;
+      dist[c * total + nxt] = nd;
+    }
+    act.splice(act.indexOf(ba), 1);
+    act.splice(act.indexOf(bb), 1);
+    act.push(nxt);
+    sizes[nxt] = na + nb;
+    out.a.push(ba);
+    out.b.push(bb);
+    out.d.push(linkage === 'ward' ? Math.sqrt(best) : best);
+    out.size.push(na + nb);
+    nxt++;
+  }
+  return out;
+}
+
 const i64 = (a: number[]): NdArray => mkNum(Float64Array.from(a), [a.length], 'int64');
 const f64 = (a: number[]): NdArray => mkNum(Float64Array.from(a), [a.length], 'float64');
 
@@ -719,6 +778,14 @@ registerNative('_mlkern', (_I, m) => {
     const l = qa.shape[0];
     const r = smoSolve(l, flatNum(qa) as Float64Array, Float64Array.from(flatNum(arr(QD))), Float64Array.from(flatNum(arr(p))), Int8Array.from(flatNum(arr(y))), Float64Array.from(flatNum(arr(alpha))), Float64Array.from(flatNum(arr(C))), numArg(eps), intArg(maxIter));
     return new PyTuple([f64(Array.from(r.alpha)), new PyFloat(r.rho), r.iter, new PyFloat(r.obj), r.timedOut]);
+  });
+
+
+  mfn(m, 'agglomerate', 'D, linkage', (D: any, linkage: any) => {
+    const A = arr(D);
+    const n = A.shape[0];
+    const r = agglomerate(Float64Array.from(flatNum(A)), n, String(linkage));
+    return new PyTuple([i64(r.a), i64(r.b), f64(r.d), i64(r.size)]);
   });
 
   mfn(m, 'tree_apply', 'X, left, right, feature, threshold', (X: any, l: any, r: any, f: any, t: any) => {

@@ -152,7 +152,12 @@ export type IllustrationId =
   | 'ia-roc'
   | 'ia-kfold'
   | 'ia-bias-variance'
-  | 'ia-search';
+  | 'ia-search'
+  | 'ia-kmeans'
+  | 'ia-elbow'
+  | 'ia-dbscan'
+  | 'ia-pca'
+  | 'ia-recommender';
 
 // ───────────────────────── preguntas ─────────────────────────
 

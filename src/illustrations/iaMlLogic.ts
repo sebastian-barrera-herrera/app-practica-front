@@ -558,3 +558,242 @@ export function randomTrials(n: number, seed = 5): Trial[] {
 }
 
 export const bestTrial = (t: Trial[]): Trial => t.reduce((a, b) => (b.score > a.score ? b : a));
+
+// ───────────────────────── Z7 · k-means ─────────────────────────
+
+export interface Pt {
+  x: number;
+  y: number;
+}
+
+/** Tres nubes de puntos en [0, 1]² (45 puntos fijos). */
+export function cloud3(): Pt[] {
+  const g = gaussian(17);
+  const centers: Pt[] = [{ x: 0.22, y: 0.3 }, { x: 0.75, y: 0.28 }, { x: 0.5, y: 0.78 }];
+  const pts: Pt[] = [];
+  for (let i = 0; i < 15; i++) for (const c of centers) pts.push({ x: Math.max(0.02, Math.min(0.98, c.x + 0.07 * g())), y: Math.max(0.02, Math.min(0.98, c.y + 0.07 * g())) });
+  return pts;
+}
+
+export interface KmState {
+  phase: 'inicio' | 'asignar' | 'actualizar' | 'fin';
+  centers: Pt[];
+  labels: number[];
+  inertia: number;
+  iter: number;
+}
+
+const d2 = (a: Pt, b: Pt): number => (a.x - b.x) ** 2 + (a.y - b.y) ** 2;
+
+function assign(pts: Pt[], centers: Pt[]): number[] {
+  return pts.map((p) => {
+    let best = 0;
+    for (let c = 1; c < centers.length; c++) if (d2(p, centers[c]) < d2(p, centers[best])) best = c;
+    return best;
+  });
+}
+
+export function kmInertia(pts: Pt[], centers: Pt[], labels: number[]): number {
+  return pts.reduce((s, p, i) => s + d2(p, centers[labels[i]]), 0);
+}
+
+/** Todos los pasos de Lloyd (asignar → actualizar) con `k` centros iniciales elegidos al azar con la semilla dada. */
+export function kmeansSteps(pts: Pt[], k: number, seed: number): KmState[] {
+  const r = lcg(seed * 97 + 13);
+  const idx = new Set<number>();
+  while (idx.size < k) idx.add(Math.floor(r() * pts.length));
+  let centers = [...idx].map((i) => ({ ...pts[i] }));
+  const states: KmState[] = [{ phase: 'inicio', centers, labels: assign(pts, centers), inertia: Infinity, iter: 0 }];
+  states[0].inertia = kmInertia(pts, centers, states[0].labels);
+  for (let it = 1; it <= 20; it++) {
+    const labels = assign(pts, centers);
+    states.push({ phase: 'asignar', centers, labels, inertia: kmInertia(pts, centers, labels), iter: it });
+    const next = centers.map((c, j) => {
+      const mine = pts.filter((_, i) => labels[i] === j);
+      return mine.length ? { x: mine.reduce((s, p) => s + p.x, 0) / mine.length, y: mine.reduce((s, p) => s + p.y, 0) / mine.length } : c;
+    });
+    const moved = next.some((c, j) => d2(c, centers[j]) > 1e-12);
+    states.push({ phase: 'actualizar', centers: next, labels, inertia: kmInertia(pts, next, labels), iter: it });
+    centers = next;
+    if (!moved) break;
+  }
+  const last = states[states.length - 1];
+  states.push({ ...last, phase: 'fin' });
+  return states;
+}
+
+/** K-means completo con la mejor de varias inicializaciones. */
+export function kmeansBest(pts: Pt[], k: number, tries = 8): KmState {
+  let best: KmState | null = null;
+  for (let s = 1; s <= tries; s++) {
+    const st = kmeansSteps(pts, k, s);
+    const end = st[st.length - 1];
+    if (!best || end.inertia < best.inertia) best = end;
+  }
+  return best as KmState;
+}
+
+/** Coeficiente de silueta medio. */
+export function silhouette(pts: Pt[], labels: number[], k: number): number {
+  if (k < 2) return 0;
+  let total = 0;
+  pts.forEach((p, i) => {
+    const sums = new Array<number>(k).fill(0);
+    const cnt = new Array<number>(k).fill(0);
+    pts.forEach((q, j) => {
+      if (i === j) return;
+      sums[labels[j]] += Math.sqrt(d2(p, q));
+      cnt[labels[j]]++;
+    });
+    const own = labels[i];
+    const a = cnt[own] ? sums[own] / cnt[own] : 0;
+    let b = Infinity;
+    for (let c = 0; c < k; c++) if (c !== own && cnt[c]) b = Math.min(b, sums[c] / cnt[c]);
+    total += cnt[own] ? (b - a) / Math.max(a, b) : 0;
+  });
+  return total / pts.length;
+}
+
+export interface ElbowRow {
+  k: number;
+  inertia: number;
+  silhouette: number;
+}
+
+export function elbowTable(pts: Pt[], kmax = 7): ElbowRow[] {
+  return Array.from({ length: kmax }, (_, i) => {
+    const k = i + 1;
+    const st = kmeansBest(pts, k);
+    return { k, inertia: st.inertia, silhouette: silhouette(pts, st.labels, k) };
+  });
+}
+
+// ───────────────────────── Z7 · DBSCAN ─────────────────────────
+
+/** Dos lunas con ruido más unos puntos sueltos (anomalías). */
+export function moonsNoisy(): Pt[] {
+  const g = gaussian(23);
+  const pts: Pt[] = [];
+  for (let i = 0; i < 24; i++) {
+    const a = (i / 23) * Math.PI;
+    pts.push({ x: 0.5 + 0.3 * Math.cos(a) - 0.1 + 0.015 * g(), y: 0.4 + 0.25 * Math.sin(a) + 0.015 * g() });
+    pts.push({ x: 0.5 - 0.3 * Math.cos(a) + 0.1 + 0.015 * g(), y: 0.62 - 0.25 * Math.sin(a) + 0.015 * g() });
+  }
+  pts.push({ x: 0.06, y: 0.92 }, { x: 0.95, y: 0.08 }, { x: 0.93, y: 0.9 }, { x: 0.08, y: 0.08 });
+  return pts.map((p) => ({ x: Math.max(0.02, Math.min(0.98, p.x)), y: Math.max(0.02, Math.min(0.98, p.y)) }));
+}
+
+export interface DbResult {
+  labels: number[];
+  clusters: number;
+  noise: number;
+  core: boolean[];
+}
+
+export function dbscan(pts: Pt[], eps: number, minSamples: number): DbResult {
+  const n = pts.length;
+  const near = pts.map((p) => pts.map((q, j) => (d2(p, q) <= eps * eps ? j : -1)).filter((j) => j >= 0));
+  const core = near.map((nb) => nb.length >= minSamples);
+  const labels = new Array<number>(n).fill(-1);
+  let cid = 0;
+  for (let i = 0; i < n; i++) {
+    if (labels[i] !== -1 || !core[i]) continue;
+    labels[i] = cid;
+    const stack = [i];
+    while (stack.length) {
+      const j = stack.pop() as number;
+      if (!core[j]) continue;
+      for (const nb of near[j]) {
+        if (labels[nb] === -1) {
+          labels[nb] = cid;
+          stack.push(nb);
+        }
+      }
+    }
+    cid++;
+  }
+  return { labels, clusters: cid, noise: labels.filter((l) => l === -1).length, core };
+}
+
+// ───────────────────────── Z7 · PCA ─────────────────────────
+
+/** 60 puntos con una correlación positiva marcada (la elipse apunta a unos 35°). */
+export function ellipse2D(): Pt[] {
+  const g = gaussian(8);
+  const a = (35 * Math.PI) / 180;
+  const pts = Array.from({ length: 60 }, () => {
+    const u = 2.2 * g();
+    const v = 0.55 * g();
+    return { x: u * Math.cos(a) - v * Math.sin(a), y: u * Math.sin(a) + v * Math.cos(a) };
+  });
+  const mx = pts.reduce((s, p) => s + p.x, 0) / pts.length;
+  const my = pts.reduce((s, p) => s + p.y, 0) / pts.length;
+  return pts.map((p) => ({ x: p.x - mx, y: p.y - my }));
+}
+
+/** Varianza de los puntos proyectados sobre un eje con el ángulo dado (en grados). */
+export function projVariance(pts: Pt[], deg: number): number {
+  const a = (deg * Math.PI) / 180;
+  const proj = pts.map((p) => p.x * Math.cos(a) + p.y * Math.sin(a));
+  const m = proj.reduce((s, v) => s + v, 0) / proj.length;
+  return proj.reduce((s, v) => s + (v - m) ** 2, 0) / proj.length;
+}
+
+export function pcaAngle(pts: Pt[]): { deg: number; varMax: number; varTotal: number } {
+  let best = 0;
+  let v = -Infinity;
+  for (let d = 0; d < 180; d += 0.5) {
+    const s = projVariance(pts, d);
+    if (s > v) {
+      v = s;
+      best = d;
+    }
+  }
+  return { deg: best, varMax: v, varTotal: projVariance(pts, 0) + projVariance(pts, 90) };
+}
+
+// ───────────────────────── Z7 · recomendador ─────────────────────────
+
+export const FILMS = ['Matrix', 'Titanic', 'Alien', 'Up', 'Amélie', 'Gladiator'];
+
+/** Valoraciones 1–5 de cinco usuarios conocidos (0 = sin ver). */
+export const RATINGS: number[][] = [
+  [5, 1, 5, 0, 1, 4],
+  [4, 2, 5, 1, 0, 5],
+  [1, 5, 0, 5, 4, 1],
+  [0, 5, 1, 4, 5, 2],
+  [5, 0, 4, 2, 1, 5],
+];
+
+export const cosine = (a: number[], b: number[]): number => {
+  const dot = a.reduce((s, v, i) => s + v * b[i], 0);
+  const na = Math.hypot(...a);
+  const nb = Math.hypot(...b);
+  return na && nb ? dot / (na * nb) : 0;
+};
+
+export interface Recs {
+  sims: number[];
+  scores: { film: number; score: number }[];
+}
+
+/** Usuario nuevo con valoraciones `mine` (0 = no la ha visto): similitud coseno con los demás y predicción ponderada para las no vistas. */
+export function recommend(mine: number[]): Recs {
+  const sims = RATINGS.map((r) => cosine(mine, r));
+  const scores = mine
+    .map((v, f) => ({ film: f, v }))
+    .filter((o) => o.v === 0)
+    .map(({ film }) => {
+      let num = 0;
+      let den = 0;
+      RATINGS.forEach((r, u) => {
+        if (r[film] > 0) {
+          num += sims[u] * r[film];
+          den += sims[u];
+        }
+      });
+      return { film, score: den ? num / den : 0 };
+    })
+    .sort((a, b) => b.score - a.score);
+  return { sims, scores };
+}

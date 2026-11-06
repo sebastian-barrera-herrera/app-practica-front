@@ -156,7 +156,7 @@ Igual que en la regresión regularizada, **escala las variables** y usa un pipel
         'Predecir bajas',
         [
           [`${CARGA}from sklearn.linear_model import LogisticRegression\nfrom sklearn.model_selection import train_test_split\nfrom sklearn.pipeline import make_pipeline\nfrom sklearn.preprocessing import StandardScaler\n\nXtr, Xte, ytr, yte = train_test_split(X, y, test_size=0.25, random_state=0, stratify=y)\nmodelo = make_pipeline(StandardScaler(), LogisticRegression()).fit(Xtr, ytr)\nprint(round(modelo.score(Xte, yte), 2))`, '85 % de aciertos en clientes que el modelo no había visto'],
-          ['lr = modelo[-1]\nprint(dict(zip(X.columns, lr.coef_[0].round(2))))', 'Más llamadas a soporte (+1.23) ⇒ más probabilidad de baja; más antigüedad (−0.91) ⇒ menos'],
+          ['lr = modelo[-1]\nprint(dict(zip(X.columns, lr.coef_[0].round(2).tolist())))', 'Más llamadas a soporte (+1.23) ⇒ más probabilidad de baja; más antigüedad (−0.91) ⇒ menos'],
           ['print(modelo.predict_proba(Xte)[:3].round(2))', 'Cada fila: [P(se queda), P(se va)]. Suman 1'],
         ],
         FILES,
@@ -236,7 +236,7 @@ Para cada pregunta se calcula el Gini de los dos grupos (ponderado por su tamañ
         'Un árbol que se puede leer',
         [
           [`${DIV}from sklearn.tree import DecisionTreeClassifier, export_text\n\narbol = DecisionTreeClassifier(max_depth=2, random_state=0).fit(Xtr, ytr)\nprint(export_text(arbol, feature_names=list(X.columns)))`, 'Las reglas: pocas llamadas a soporte y poca antigüedad ⇒ baja; muchas llamadas y cuota alta ⇒ baja…'],
-          ['print(dict(zip(X.columns, arbol.feature_importances_.round(2))))', 'La importancia de cada variable: cuánto ha reducido la impureza. El contrato no se usó en este árbol'],
+          ['print(dict(zip(X.columns, arbol.feature_importances_.round(2).tolist())))', 'La importancia de cada variable: cuánto ha reducido la impureza. El contrato no se usó en este árbol'],
         ],
         FILES,
       ),
@@ -505,7 +505,7 @@ Con \`n_estimators\` mayor, el bosque nunca empeora (solo tarda más); el boosti
         'Árbol, bosque y boosting',
         [
           [`${DIV}from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier\nfrom sklearn.model_selection import cross_val_score\nfrom sklearn.tree import DecisionTreeClassifier\n\nmodelos = {\n    "árbol": DecisionTreeClassifier(random_state=0),\n    "bosque": RandomForestClassifier(n_estimators=100, random_state=0),\n    "boosting": GradientBoostingClassifier(random_state=0),\n}\nfor nombre, m in modelos.items():\n    print(nombre, round(cross_val_score(m, X, y, cv=5).mean(), 3))`, 'El bosque supera al árbol solo (0.76 contra 0.69), como se esperaba. El boosting por defecto, con tan pocos datos, queda entre ambos'],
-          ['bosque = modelos["bosque"].fit(Xtr, ytr)\nprint(dict(zip(X.columns, bosque.feature_importances_.round(2))))', '`feature_importances_`: la variable más usada es la antigüedad (`meses`), seguida de soporte y cuota'],
+          ['bosque = modelos["bosque"].fit(Xtr, ytr)\nprint(dict(zip(X.columns, bosque.feature_importances_.round(2).tolist())))', '`feature_importances_`: la variable más usada es la antigüedad (`meses`), seguida de soporte y cuota'],
         ],
         FILES,
       ),

@@ -13,10 +13,10 @@ Cada lección: 7+ pasos, ≥3 preguntas, al menos un reto de código `pyPractice
 - **Z3 · Datos y preprocesado** — tablas (pandas mini), limpieza, valores nulos, escalado, codificación, ingeniería de variables, train/test.
 
 ## Intermedio (aprendizaje automático clásico)
-- **Z4 · Regresión** — regresión lineal (fórmula cerrada y descenso del gradiente), polinómica, regularización L1/L2, función de pérdida.
-- **Z5 · Clasificación** — logística, k-NN, árboles, bosques, Naive Bayes, SVM, umbral de decisión.
-- **Z6 · Evaluación y optimización** — métricas, matriz de confusión, ROC/AUC, validación cruzada, sobreajuste, búsqueda de hiperparámetros, pipelines.
-- **Z7 · Aprendizaje no supervisado** — k-means, jerárquico, PCA, detección de anomalías, sistemas de recomendación.
+- **Z4 · Regresión** ✅ — recta de mínimos cuadrados, varias variables (escalado, one-hot, polinomios), métricas (MAE/RMSE/R²) y línea base, Ridge/Lasso, KNN/árboles/bosques para curvas. Datos: `casas.csv`.
+- **Z5 · Clasificación** ✅ — logística y umbral, árboles (Gini), KNN, SVM (margen, C, gamma, kernels), bosques y boosting. Datos: `bajas.csv`.
+- **Z6 · Evaluación y optimización** ✅ — matriz de confusión, precisión/recall/F1 y clases raras, ROC/AUC, validación cruzada, sesgo-varianza (curvas de validación y aprendizaje), GridSearchCV y RandomizedSearchCV.
+- **Z7 · Aprendizaje no supervisado** ✅ — k-means (codo y silueta), DBSCAN y jerárquico, PCA, anomalías (z-score, IQR, distancia al centro) y recomendador por similitud coseno. Datos: `tienda.csv`.
 
 ## Avanzado (deep learning y IA generativa)
 - **Z8 · Redes neuronales desde cero** — neurona, capas, activaciones, retropropagación, entrenar con NumPy, optimizadores.
@@ -33,4 +33,7 @@ Cada lección: 7+ pasos, ≥3 preguntas, al menos un reto de código `pyPractice
 |---|---|
 | NumPy nativo (nd, fmt, rng, ops, linalg, random) | hecho |
 | Canal de figuras + matplotlib.pyplot (line, scatter, bar, hist, imshow, pie, box…) | hecho |
-| pandas mini · sklearn mini · torch mini · `dojo_ai` | por hacer (se añaden con cada fase) |
+| pandas mini | hecho |
+| scikit-learn mini (preprocesado, modelos lineales, árboles y bosques con el constructor de árboles portado a TS, SVM con el SMO de libsvm portado a TS, MLP, KNN, Naive Bayes, K-means/DBSCAN/jerárquico, PCA, texto, pipelines, búsquedas, métricas) | hecho · contrastado con la librería real en `__tests__/golden/sklearn_*.py` |
+| SciPy mínimo (`stats`, `special`, `spatial.distance`, `optimize`) | hecho |
+| torch mini · `dojo_ai` | por hacer (se añaden con las zonas 8–11) |

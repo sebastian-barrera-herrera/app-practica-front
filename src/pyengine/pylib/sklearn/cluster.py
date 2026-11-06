@@ -219,42 +219,14 @@ class AgglomerativeClustering(ClusterMixin, BaseEstimator):
         self.compute_distances = compute_distances
 
     def fit(self, X, y=None):
+        import _mlkern
         X = self._validate_data(X)
         n = X.shape[0]
-        clusters = {i: [i] for i in range(n)}
         D = np.sqrt(_sq_dists(X, X))
         if self.linkage == 'ward':
             D = D ** 2
-        dist = {(i, j): D[i, j] for i in range(n) for j in range(i + 1, n)}
-        sizes = {i: 1 for i in range(n)}
-        nxt = n
-        merges = []
-        while len(clusters) > 1:
-            (a, b), dab = min(dist.items(), key=lambda kv: (kv[1], kv[0]))
-            na, nb = sizes[a], sizes[b]
-            for c in clusters:
-                if c in (a, b):
-                    continue
-                dac = dist[(min(a, c), max(a, c))]
-                dbc = dist[(min(b, c), max(b, c))]
-                if self.linkage == 'single':
-                    nd = min(dac, dbc)
-                elif self.linkage == 'complete':
-                    nd = max(dac, dbc)
-                elif self.linkage == 'average':
-                    nd = (na * dac + nb * dbc) / (na + nb)
-                else:
-                    nc = sizes[c]
-                    nd = ((na + nc) * dac + (nb + nc) * dbc - nc * dab) / (na + nb + nc)
-                dist[(min(nxt, c), max(nxt, c))] = nd
-            clusters.pop(a)
-            clusters.pop(b)
-            for key in [k for k in dist if a in k or b in k]:
-                del dist[key]
-            clusters[nxt] = True
-            sizes[nxt] = na + nb
-            merges.append((a, b, math.sqrt(dab) if self.linkage == 'ward' else dab, na + nb))
-            nxt += 1
+        ma, mb, md, ms = _mlkern.agglomerate(D, self.linkage)
+        merges = list(zip(ma.tolist(), mb.tolist(), md.tolist(), ms.tolist()))
         self.children_ = np.array([[m[0], m[1]] for m in merges])
         self.distances_ = np.array([m[2] for m in merges])
         self.n_leaves_ = n

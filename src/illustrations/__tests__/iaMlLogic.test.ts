@@ -153,3 +153,55 @@ describe('Z6 · evaluación', () => {
     expect(r.score).toBeGreaterThan(g.score);
   });
 });
+
+import { FILMS, cloud3, cosine, dbscan, elbowTable, ellipse2D, kmInertia, kmeansBest, kmeansSteps, moonsNoisy, pcaAngle, projVariance, recommend, silhouette } from '../iaMlLogic';
+
+describe('Z7 · no supervisado', () => {
+  it('k-means converge y reduce la inercia en cada paso de actualización', () => {
+    const pts = cloud3();
+    expect(pts).toHaveLength(45);
+    const st = kmeansSteps(pts, 3, 1);
+    expect(st[0].phase).toBe('inicio');
+    expect(st[st.length - 1].phase).toBe('fin');
+    const upd = st.filter((s) => s.phase === 'actualizar').map((s) => s.inertia);
+    const asg = st.filter((s) => s.phase === 'asignar').map((s) => s.inertia);
+    for (let i = 0; i < upd.length; i++) expect(upd[i]).toBeLessThanOrEqual(asg[i] + 1e-12);
+    const best = kmeansBest(pts, 3);
+    expect(kmInertia(pts, best.centers, best.labels)).toBeCloseTo(best.inertia, 9);
+  });
+
+  it('el codo y la silueta señalan k = 3', () => {
+    const pts = cloud3();
+    const t = elbowTable(pts, 6);
+    for (let i = 1; i < t.length; i++) expect(t[i].inertia).toBeLessThanOrEqual(t[i - 1].inertia + 1e-9);
+    const bestK = t.slice(1).reduce((a, b) => (b.silhouette > a.silhouette ? b : a)).k;
+    expect(bestK).toBe(3);
+    expect(silhouette(pts, kmeansBest(pts, 3).labels, 3)).toBeGreaterThan(0.6);
+  });
+
+  it('DBSCAN encuentra dos lunas y marca los puntos sueltos como ruido', () => {
+    const pts = moonsNoisy();
+    const ok = dbscan(pts, 0.08, 4);
+    expect(ok.clusters).toBe(2);
+    expect(ok.noise).toBeGreaterThanOrEqual(4);
+    expect(dbscan(pts, 0.02, 4).clusters).toBeGreaterThanOrEqual(0);
+    expect(dbscan(pts, 0.6, 4).clusters).toBe(1);
+  });
+
+  it('PCA: el primer eje es el de mayor varianza y las dos varianzas suman lo mismo', () => {
+    const pts = ellipse2D();
+    const a = pcaAngle(pts);
+    expect(a.deg).toBeGreaterThan(20);
+    expect(a.deg).toBeLessThan(50);
+    expect(projVariance(pts, a.deg + 90)).toBeCloseTo(a.varTotal - projVariance(pts, a.deg), 3);
+    expect(a.varMax).toBeGreaterThan(projVariance(pts, a.deg + 45));
+  });
+
+  it('el recomendador sugiere lo que gusta a los usuarios parecidos', () => {
+    expect(cosine([1, 0], [1, 0])).toBeCloseTo(1, 9);
+    const mine = [5, 0, 5, 0, 0, 0];
+    const r = recommend(mine);
+    expect(FILMS[r.scores[0].film]).toBe('Gladiator');
+    expect(r.sims[0]).toBeGreaterThan(r.sims[2]);
+  });
+});

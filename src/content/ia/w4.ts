@@ -185,7 +185,7 @@ El código es idéntico al de una variable: solo cambia que \`X\` tiene varias c
       pyDemo(
         'Cuatro variables a la vez',
         [
-          ['import pandas as pd\nfrom sklearn.linear_model import LinearRegression\n\ndf = pd.read_csv("casas.csv")\nVARS = ["superficie", "habitaciones", "antiguedad", "distancia"]\nX = df[VARS]\ny = df["precio"]\n\nmodelo = LinearRegression().fit(X, y)\nprint(dict(zip(VARS, modelo.coef_.round(2))))\nprint(round(modelo.intercept_, 1))', 'Cada m² suma ~2.2 mil €, cada habitación ~9.3, cada año resta ~1.2 y cada km al centro resta ~2.4'],
+          ['import pandas as pd\nfrom sklearn.linear_model import LinearRegression\n\ndf = pd.read_csv("casas.csv")\nVARS = ["superficie", "habitaciones", "antiguedad", "distancia"]\nX = df[VARS]\ny = df["precio"]\n\nmodelo = LinearRegression().fit(X, y)\nprint(dict(zip(VARS, modelo.coef_.round(2).tolist())))\nprint(round(modelo.intercept_, 1))', 'Cada m² suma ~2.2 mil €, cada habitación ~9.3, cada año resta ~1.2 y cada km al centro resta ~2.4'],
           ['casa = pd.DataFrame({"superficie": [100], "habitaciones": [3], "antiguedad": [10], "distancia": [5.0]})\nprint(modelo.predict(casa).round(1))\nprint(round(modelo.score(X, y), 3))', 'Una casa de 100 m², 3 hab., 10 años y a 5 km: unos 260 mil €. R² = 0.958 (mejor que con solo la superficie, 0.91)'],
         ],
         FILES,
@@ -206,7 +206,7 @@ Escalar tampoco cambia las predicciones de una regresión lineal: solo la interp
       pyDemo(
         'Pesos comparables',
         [
-          [`${PRE}from sklearn.preprocessing import StandardScaler\n\nXs = StandardScaler().fit_transform(X)\nm2 = LinearRegression().fit(Xs, y)\nprint(dict(zip(VARS, m2.coef_.round(1))))`, 'Ahora sí: la superficie (72.7) domina con diferencia; las habitaciones (10.0) pesan poco una vez descontada la superficie'],
+          [`${PRE}from sklearn.preprocessing import StandardScaler\n\nXs = StandardScaler().fit_transform(X)\nm2 = LinearRegression().fit(Xs, y)\nprint(dict(zip(VARS, m2.coef_.round(1).tolist())))`, 'Ahora sí: la superficie (72.7) domina con diferencia; las habitaciones (10.0) pesan poco una vez descontada la superficie'],
           ['print(round(m2.score(Xs, y), 3))', 'Mismo R² (0.958) que sin escalar: las predicciones no cambian'],
         ],
         FILES,
@@ -225,7 +225,7 @@ La columna \`zona\` (norte, centro, sur) es texto: un modelo necesita números. 
         'Añadir la zona',
         [
           [`${PRE}Xz = pd.get_dummies(df.drop(columns="precio"), columns=["zona"], dtype=int)\nprint(list(Xz.columns))\nm3 = LinearRegression().fit(Xz, y)\nprint(round(m3.score(Xz, y), 3))`, 'R² sube de 0.958 a 0.980: la zona aporta información'],
-          ['print(dict(zip(Xz.columns, m3.coef_.round(1))))', 'Las casas del centro cuestan ~18 mil € más que la media y las del sur ~17 mil € menos, con todo lo demás igual'],
+          ['print(dict(zip(Xz.columns, m3.coef_.round(1).tolist())))', 'Las casas del centro cuestan ~18 mil € más que la media y las del sur ~17 mil € menos, con todo lo demás igual'],
         ],
         FILES,
       ),

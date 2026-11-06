@@ -3,6 +3,7 @@ export const PYOUT: Record<string, string> = {
   "022aa312": "ab",
   "0373a6d1": "32",
   "0396a69f": "False True False True",
+  "0b1d9b16": "[0.1, 10.1] 0.04",
   "0f261d56": "[0 1 0]",
   "1035ff68": "setUp\na\nsetUp\nb",
   "1b20cab7": "6 12",
