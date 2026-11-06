@@ -471,7 +471,7 @@ Más sofisticados: *Isolation Forest*, *LOF*, autoencoders.
         'z-score contra IQR',
         [
           ['import numpy as np\n\nimportes = np.array([12, 15, 14, 13, 16, 15, 14, 250, 13, 15, 17, 14, 12, 16, 15, -40, 14, 13], dtype=float)\nz = (importes - importes.mean()) / importes.std()\nprint(round(float(importes.mean()), 1), round(float(importes.std()), 1))\nprint(round(float(z[7]), 2), round(float(z[15]), 2))', 'El 250 tiene z = 4.0 (se detecta) pero el −40 tiene solo z = −1.15: el propio 250 ha inflado la media y la desviación y "enmascara" al otro atípico'],
-          ['q1, q3 = np.percentile(importes, [25, 75])\niqr = q3 - q1\nlimites = (q1 - 1.5 * iqr, q3 + 1.5 * iqr)\nfuera = (importes < limites[0]) | (importes > limites[1])\nprint(limites, importes[fuera].tolist())', 'La regla del IQR usa cuartiles y no se deja engañar: marca los dos valores (250 y −40)'],
+          ['q1, q3 = np.percentile(importes, [25, 75])\niqr = q3 - q1\nlimites = (q1 - 1.5 * iqr, q3 + 1.5 * iqr)\nfuera = (importes < limites[0]) | (importes > limites[1])\nprint(tuple(float(v) for v in limites), importes[fuera].tolist())', 'La regla del IQR usa cuartiles y no se deja engañar: marca los dos valores (250 y −40)'],
         ],
       ),
       mc('Un valor se aleja mucho del resto, pero los cuartiles de los datos apenas cambian por su culpa. ¿Qué regla lo detecta mejor?', ['El z-score con la media y la desviación', 'La regla del IQR', 'Ninguna: no se puede detectar', 'Elevar todo al cuadrado'], 1, 'La regla del IQR se basa en percentiles, que casi no se mueven por unos pocos extremos; la media y la desviación sí se dejan arrastrar.'),
@@ -479,7 +479,7 @@ Más sofisticados: *Isolation Forest*, *LOF*, autoencoders.
       pyDemo(
         'Lejos de su grupo',
         [
-          [`${CARGA}from sklearn.cluster import KMeans\n\nkm = KMeans(3, n_init=10, random_state=0).fit(Xs)\nd = np.linalg.norm(Xs - km.cluster_centers_[km.labels_], axis=1)\nprint(round(float(d.mean()), 2), round(float(d.max()), 2))\nprint(int((d > 2).sum()), int(d.argmax()))\nprint(df.iloc[int(d.argmax())].tolist())`, 'Distancia media al centro 0.71; un cliente (la fila 57) está a 2.15, más del triple. Es un cliente atípico dentro de su segmento'],
+          [`${CARGA}from sklearn.cluster import KMeans\n\nkm = KMeans(3, n_init=10, random_state=0).fit(Xs)\nd = np.linalg.norm(Xs - km.cluster_centers_[km.labels_], axis=1)\nprint(round(float(d.mean()), 2), round(float(d.max()), 2))\nprint(int((d > 2).sum()), int(d.argmax()))\nfila = int(d.argmax())\nprint(df.loc[fila, F].tolist(), df.loc[fila, "grupo"])`, 'Distancia media al centro 0.71; un cliente (la fila 57) está a 2.15, más del triple. Es un cliente atípico dentro de su segmento'],
         ],
         FILES,
       ),

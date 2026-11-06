@@ -11,7 +11,7 @@ import { mfn } from '../helpers';
 import { axisArg, bool, intArg, isNone, numArg, shapeArg } from './args';
 import * as nd from './nd';
 import { NdArray, flatNum, mkNum, scalarToPy, sizeOf, type DType } from './nd';
-import { MT19937, PCG64 } from './rng';
+import { MT19937, PCG64, seedState64, zigExp } from './rng';
 
 interface Ctx {
   arr: (x: any) => NdArray;
@@ -22,6 +22,10 @@ interface Ctx {
 interface Sampler {
   double(): number;
   gauss(): number;
+  /** exponencial estándar: `-log(1-U)` en la API antigua, zigurat en `Generator` */
+  exp(): number;
+  /** exponencial estándar por zigurat (la usa `geometric` también en la API antigua) */
+  zexp(): number;
   /** entero en [lo, hi) */
   randint(lo: number, hi: number): number;
   interval(max: number): number;
@@ -35,6 +39,8 @@ class RS extends PyObject {
     this.s = {
       double: () => this.mt.double(),
       gauss: () => this.mt.legacyGauss(),
+      exp: () => -Math.log(1 - this.mt.double()),
+      zexp: () => zigExp(this.mt),
       randint: (lo, hi) => this.mt.randint(lo, hi),
       interval: (max) => this.mt.interval(max),
     };
@@ -44,12 +50,14 @@ class RS extends PyObject {
 class GenObj extends PyObject {
   pcg: PCG64;
   s: Sampler;
-  constructor(cls: PyType, seed: bigint) {
+  constructor(cls: PyType, seed: bigint | number[]) {
     super(cls);
     this.pcg = new PCG64(seed);
     this.s = {
       double: () => this.pcg.double(),
       gauss: () => this.pcg.stdNormal(),
+      exp: () => this.pcg.stdExp(),
+      zexp: () => this.pcg.stdExp(),
       randint: (lo, hi) => this.pcg.integers(lo, hi),
       interval: (max) => this.pcg.interval(max),
     };
@@ -112,14 +120,43 @@ function fillN(ctx: Ctx, size: number[] | null, params: any[], defs: number[], f
   return mkNum(out, shape, dtype);
 }
 
-function seedOf(v: any): bigint {
+/** palabras de 32 bits (menos significativa primero) de un entero no negativo, como `SeedSequence` */
+function wordsOf(b: bigint): number[] {
+  if (b === 0n) return [0];
+  const out: number[] = [];
+  while (b > 0n) {
+    out.push(Number(b & 0xffffffffn));
+    b >>= 32n;
+  }
+  return out;
+}
+
+/** semilla de `default_rng`: un entero, una secuencia de enteros o un `SeedSequence` */
+function seedOf(v: any): bigint | number[] {
   if (isNone(v)) return 0x5eedn;
+  if (v instanceof SeqObj) return v.words;
+  if (v instanceof PyList || v instanceof PyTuple) {
+    const out: number[] = [];
+    for (const x of v.a) {
+      const n = ops.intValue(x);
+      if (n === undefined) throw makeExc(E.TypeError, ['SeedSequence expects int or sequence of ints for entropy not ' + ops.repr(v)]);
+      if (BigInt(n) < 0n) throw valueError('expected non-negative integer');
+      out.push(...wordsOf(BigInt(n)));
+    }
+    return out;
+  }
   const n = ops.intValue(v);
   if (n === undefined) throw makeExc(E.TypeError, ['SeedSequence expects int or sequence of ints for entropy not ' + ops.repr(v)]);
   const b = BigInt(n);
   if (b < 0n) throw valueError('expected non-negative integer');
   return b;
 }
+
+class SeqObj extends PyObject {
+  words: bigint | number[] = 0n;
+  entropy: any = null;
+}
+let seqType: PyType | null = null;
 
 /** baraja una lista de Python o un array a lo largo del primer eje con Fisher–Yates como NumPy */
 function shuffleInPlace(x: any, s: Sampler): void {
@@ -281,7 +318,7 @@ function cholLower(cov: NdArray): Float64Array {
 
 /** exponencial estándar de `RandomState` (`legacy_standard_exponential`) */
 function stdExp(s: Sampler): number {
-  return -Math.log(1 - s.double());
+  return s.exp();
 }
 
 /** gamma estándar como `legacy_standard_gamma` de NumPy (Marsaglia–Tsang para shape > 1) */
@@ -362,7 +399,7 @@ function distributions(ctx: Ctx, get: (self: any) => Sampler, legacy: boolean): 
     fillN(ctx, sizeArg(size), [loc, scale], [0, 1], ([mu, sd]) => mu + sd * g(self).gauss())];
   r.standard_normal = ['self, size=', (self: any, size: any) => fill(sizeArg(size), () => g(self).gauss())];
   r.exponential = ['self, scale=, size=', (self: any, scale: any, size: any) =>
-    fillN(ctx, sizeArg(size), [scale], [1], ([sc]) => -sc * Math.log(1 - g(self).double()))];
+    fillN(ctx, sizeArg(size), [scale], [1], ([sc]) => sc * g(self).exp())];
   r.lognormal = ['self, mean=, sigma=, size=', (self: any, mean: any, sigma: any, size: any) =>
     fillN(ctx, sizeArg(size), [mean, sigma], [0, 1], ([mu, sd]) => Math.exp(mu + sd * g(self).gauss()))];
   r.laplace = ['self, loc=, scale=, size=', (self: any, loc: any, scale: any, size: any) =>
@@ -468,7 +505,25 @@ function distributions(ctx: Ctx, get: (self: any) => Sampler, legacy: boolean): 
       return k - 1;
     }, 'int64')];
   r.geometric = ['self, p, size=', (self: any, p: any, size: any) =>
-    fillN(ctx, sizeArg(size), [p], [0.5], ([pp]) => Math.ceil(Math.log(1 - g(self).double()) / Math.log(1 - pp)), 'int64')];
+    fillN(ctx, sizeArg(size), [p], [0.5], ([pp]) => {
+      const sm = g(self);
+      if (pp >= 0.333333333333333333333333) {
+        // búsqueda secuencial (random_geometric_search)
+        let X = 1;
+        let sum = pp;
+        let prod = pp;
+        const q = 1 - pp;
+        const U = sm.double();
+        while (U > sum) {
+          prod *= q;
+          sum += prod;
+          X++;
+        }
+        return X;
+      }
+      // inversión: la API antigua usa log(1-U); `Generator` usa la exponencial por zigurat
+      return legacy ? Math.ceil(Math.log(1 - sm.double()) / Math.log1p(-pp)) : Math.ceil(-sm.zexp() / Math.log1p(-pp));
+    }, 'int64')];
   r.choice = ['self, a, size=, replace=, p=', (self: any, a: any, size: any, replace: any, p: any) => choice(ctx, g(self), a, size, bool(replace, true), p, legacy)];
   r.permutation = ['self, x', (self: any, x: any) => permutation(ctx, g(self), x)];
   r.shuffle = ['self, x', (self: any, x: any) => {
@@ -543,11 +598,36 @@ export function installRandom(m: PyModule, ctx: Ctx): void {
     }, 'Generator');
     genType.dict!.set('__new__', mkNative('__new__', 'cls, *args, **kw', (cls: PyType, args: PyTuple) => new GenObj(cls, seedOf(args.a[0])), { owner: 'Generator' }));
   }
+  if (!seqType) {
+    seqType = newNativeType('SeedSequence', 'numpy.random.bit_generator', [objectType]);
+    seqType.dict!.set('__new__', mkNative('__new__', 'cls, *args, **kw', (cls: PyType, args: PyTuple) => {
+      const o = new SeqObj(cls);
+      o.entropy = args.a.length ? args.a[0] : null;
+      o.words = seedOf(args.a.length ? args.a[0] : null);
+      return o;
+    }, { owner: 'SeedSequence' }));
+    seqType.dict!.set('generate_state', mkNative('generate_state', 'self, n_words, dtype=', (self: SeqObj, n: any, dtype: any) => {
+      const count = intArg(n);
+      const wide = !isNone(dtype) && /64/.test(ops.repr(dtype));
+      const pairs = wide ? count : Math.ceil(count / 2);
+      const st = seedState64(self.words, pairs);
+      if (wide) return mkNum(Float64Array.from(st, (v) => Number(v)), [count], 'int64');
+      const words: number[] = [];
+      for (const v of st) words.push(Number(v & 0xffffffffn), Number(v >> 32n));
+      return mkNum(Float64Array.from(words.slice(0, count)), [count], 'int64');
+    }, { method: true, owner: 'SeedSequence' }));
+    seqType.dict!.set('entropy', null);
+    seqType.dict!.set('__getattr__', mkNative('__getattr__', 'self, name', (self: SeqObj, name: any) => {
+      if (name === 'entropy') return self.entropy;
+      throw makeExc(E.AttributeError, [`'SeedSequence' object has no attribute '${name}'`]);
+    }, { method: true, owner: 'SeedSequence' }));
+  }
   globalRS ??= new RS(rsType);
   const gl = globalRS;
   const f = (name: string, sig: string, impl: (...a: any[]) => any): void => mfn(m, name, sig, impl);
   m.dict!.set('RandomState', rsType);
   m.dict!.set('Generator', genType);
+  m.dict!.set('SeedSequence', seqType);
   const bound = (name: string, spec: [string, (...a: any[]) => any]): void => {
     const sig = spec[0].replace(/^self,?\s*/, '');
     f(name, sig, (...a: any[]) => spec[1](gl, ...a));

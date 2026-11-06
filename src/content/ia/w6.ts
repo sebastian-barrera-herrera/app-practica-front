@@ -231,7 +231,7 @@ La solución es pasar a \`cross_val_score\` el **pipeline completo**: así, en c
       pyDemo(
         'Estratificar y mezclar',
         [
-          [`${CARGA}from sklearn.linear_model import LogisticRegression\nfrom sklearn.model_selection import KFold, StratifiedKFold, cross_val_score\nfrom sklearn.pipeline import make_pipeline\nfrom sklearn.preprocessing import StandardScaler\n\nmodelo = make_pipeline(StandardScaler(), LogisticRegression())\nnormal = cross_val_score(modelo, X, y, cv=KFold(5, shuffle=True, random_state=0))\nestrat = cross_val_score(modelo, X, y, cv=StratifiedKFold(5, shuffle=True, random_state=0))\nprint(normal.round(3), round(normal.mean(), 3))\nprint(estrat.round(3), round(estrat.mean(), 3))`, 'Con 80 filas cada bloque tiene 16: los resultados cambian mucho según el reparto (0.44–0.94 sin estratificar). Estratificar los estabiliza y evita bloques con casi una sola clase'],
+          [`${CARGA}from sklearn.linear_model import LogisticRegression\nfrom sklearn.model_selection import KFold, StratifiedKFold, cross_val_score\nfrom sklearn.pipeline import make_pipeline\nfrom sklearn.preprocessing import StandardScaler\n\nmodelo = make_pipeline(StandardScaler(), LogisticRegression())\nnormal = cross_val_score(modelo, X, y, cv=KFold(5, shuffle=True, random_state=0))\nestrat = cross_val_score(modelo, X, y, cv=StratifiedKFold(5, shuffle=True, random_state=0))\nprint(normal.round(3), round(float(normal.mean()), 3))\nprint(estrat.round(3), round(float(estrat.mean()), 3))`, 'Con 80 filas cada bloque tiene 16: los resultados cambian mucho según el reparto (0.44–0.94 sin estratificar). Estratificar los estabiliza y evita bloques con casi una sola clase'],
         ],
         FILES,
       ),
@@ -305,7 +305,7 @@ Una **curva de validación** muestra la puntuación de entrenamiento y la de val
       pyDemo(
         'Profundidad del árbol',
         [
-          [`${CARGA}from sklearn.model_selection import validation_curve\nfrom sklearn.tree import DecisionTreeClassifier\n\nprofundidades = [1, 2, 3, 4, 6, 8]\ntrain, val = validation_curve(DecisionTreeClassifier(random_state=0), X, y, param_name="max_depth", param_range=profundidades, cv=5)\nfor d, a, b in zip(profundidades, train.mean(axis=1), val.mean(axis=1)):\n    print(d, round(a, 3), round(b, 3))`, 'El entrenamiento sube hasta 0.99 al crecer el árbol; la validación sube a 0.75 con profundidad 4 y luego baja: sobreajuste'],
+          [`${CARGA}from sklearn.model_selection import validation_curve\nfrom sklearn.tree import DecisionTreeClassifier\n\nprofundidades = [1, 2, 3, 4, 6, 8]\ntrain, val = validation_curve(DecisionTreeClassifier(random_state=0), X, y, param_name="max_depth", param_range=profundidades, cv=5)\nfor d, a, b in zip(profundidades, train.mean(axis=1), val.mean(axis=1)):\n    print(d, round(float(a), 3), round(float(b), 3))`, 'El entrenamiento sube hasta 0.99 al crecer el árbol; la validación sube a 0.75 con profundidad 4 y luego baja: sobreajuste'],
         ],
         FILES,
       ),

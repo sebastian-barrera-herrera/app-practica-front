@@ -124,7 +124,7 @@ Los atributos que terminan en guion bajo (\`coef_\`, \`intercept_\`) son lo que 
       pyDemo(
         'Ajustar precio ~ superficie',
         [
-          ['import pandas as pd\nfrom sklearn.linear_model import LinearRegression\n\ndf = pd.read_csv("casas.csv")\nX = df[["superficie"]]   # 2-D: doble corchete\ny = df["precio"]\n\nmodelo = LinearRegression().fit(X, y)\nprint(modelo.coef_, modelo.intercept_)', 'Cada m² añade unos 2.4 mil € al precio; la ordenada (−4.8) no tiene interpretación real porque no existen casas de 0 m²'],
+          ['import pandas as pd\nfrom sklearn.linear_model import LinearRegression\n\ndf = pd.read_csv("casas.csv")\nX = df[["superficie"]]   # 2-D: doble corchete\ny = df["precio"]\n\nmodelo = LinearRegression().fit(X, y)\nprint(modelo.coef_.round(4), round(float(modelo.intercept_), 4))', 'Cada m² añade unos 2.4 mil € al precio; la ordenada (−4.8) no tiene interpretación real porque no existen casas de 0 m²'],
           ['print(modelo.predict(pd.DataFrame({"superficie": [100, 150]})))', 'Predicciones para casas de 100 y 150 m²'],
           ['print(round(modelo.score(X, y), 3))', 'R² ≈ 0.91: la superficie por sí sola explica el 91 % de la variación del precio'],
         ],

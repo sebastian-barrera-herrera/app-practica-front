@@ -348,7 +348,7 @@ No se puede elegir \`k\` mirando el entrenamiento (siempre ganaría \`k = 1\`). 
       pyDemo(
         'Buscar un buen k',
         [
-          [`${DIV}from sklearn.model_selection import cross_val_score\nfrom sklearn.neighbors import KNeighborsClassifier\nfrom sklearn.pipeline import make_pipeline\nfrom sklearn.preprocessing import StandardScaler\n\nfor k in [1, 3, 5, 7, 9, 11]:\n    m = make_pipeline(StandardScaler(), KNeighborsClassifier(k))\n    print(k, round(cross_val_score(m, X, y, cv=5).mean(), 3))`, 'La mejor media en validación cruzada se da con k = 7 (0.825); k = 1 es claramente peor (0.70)'],
+          [`${DIV}from sklearn.model_selection import cross_val_score\nfrom sklearn.neighbors import KNeighborsClassifier\nfrom sklearn.pipeline import make_pipeline\nfrom sklearn.preprocessing import StandardScaler\n\nfor k in [1, 3, 5, 7, 9, 11]:\n    m = make_pipeline(StandardScaler(), KNeighborsClassifier(k))\n    print(k, round(float(cross_val_score(m, X, y, cv=5).mean()), 3))`, 'La mejor media en validación cruzada se da con k = 7 (0.825); k = 1 es claramente peor (0.70)'],
         ],
         FILES,
       ),
@@ -504,7 +504,7 @@ Con \`n_estimators\` mayor, el bosque nunca empeora (solo tarda más); el boosti
       pyDemo(
         'Árbol, bosque y boosting',
         [
-          [`${DIV}from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier\nfrom sklearn.model_selection import cross_val_score\nfrom sklearn.tree import DecisionTreeClassifier\n\nmodelos = {\n    "árbol": DecisionTreeClassifier(random_state=0),\n    "bosque": RandomForestClassifier(n_estimators=100, random_state=0),\n    "boosting": GradientBoostingClassifier(random_state=0),\n}\nfor nombre, m in modelos.items():\n    print(nombre, round(cross_val_score(m, X, y, cv=5).mean(), 3))`, 'El bosque supera al árbol solo (0.76 contra 0.69), como se esperaba. El boosting por defecto, con tan pocos datos, queda entre ambos'],
+          [`${DIV}from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier\nfrom sklearn.model_selection import cross_val_score\nfrom sklearn.tree import DecisionTreeClassifier\n\nmodelos = {\n    "árbol": DecisionTreeClassifier(random_state=0),\n    "bosque": RandomForestClassifier(n_estimators=100, random_state=0),\n    "boosting": GradientBoostingClassifier(random_state=0),\n}\nfor nombre, m in modelos.items():\n    print(nombre, round(float(cross_val_score(m, X, y, cv=5).mean()), 3))`, 'El bosque supera al árbol solo (0.76 contra 0.69), como se esperaba. El boosting por defecto, con tan pocos datos, queda entre ambos'],
           ['bosque = modelos["bosque"].fit(Xtr, ytr)\nprint(dict(zip(X.columns, bosque.feature_importances_.round(2).tolist())))', '`feature_importances_`: la variable más usada es la antigüedad (`meses`), seguida de soporte y cuota'],
         ],
         FILES,

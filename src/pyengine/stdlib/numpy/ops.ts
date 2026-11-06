@@ -172,8 +172,34 @@ export function where3(cond: NdArray, x: NdArray, y: NdArray): NdArray {
 
 const sumDtype = (d: DType): DType => (d === 'float64' ? 'float64' : 'int64');
 
+/**
+ * ¿Se reducen solo los ejes finales (los de zancada más pequeña)? Entonces NumPy suma por pares cada grupo contiguo;
+ * si se reduce otro eje (p. ej. `axis=0` de una matriz), suma fila a fila en secuencia. Los ejes de longitud 1 no cuentan.
+ */
+function reducesTrailing(a: NdArray, axes: number[] | null): boolean {
+  if (axes === null) return true;
+  const ax = axes.map((x) => normAxis(x, a.ndim));
+  let seenReduced = false;
+  for (let i = 0; i < a.ndim; i++) {
+    if (a.shape[i] <= 1) continue;
+    if (ax.includes(i)) seenReduced = true;
+    else if (seenReduced) return false;
+  }
+  return true;
+}
+
+const seqSum = (v: Float64Array): number => {
+  let r = 0;
+  for (let i = 0; i < v.length; i++) r += v[i];
+  return r;
+};
+
 export function sum(a: NdArray, axes: number[] | null, keepdims: boolean): NdArray {
   if (a.dtype === 'str') throw typeError(`cannot perform reduce with flexible type`);
+  if (a.dtype === 'float64') {
+    const f = reducesTrailing(a, axes) ? sumPairwise : seqSum;
+    return reduceAxes(a, axes, { group: (v) => f(v) }, 'float64', keepdims);
+  }
   return reduceAxes(a, axes, { init: 0, step: (acc, v) => acc + v }, sumDtype(a.dtype), keepdims);
 }
 
@@ -182,8 +208,8 @@ export function prod(a: NdArray, axes: number[] | null, keepdims: boolean): NdAr
 }
 
 export function mean(a: NdArray, axes: number[] | null, keepdims: boolean): NdArray {
-  const s = reduceAxes(a, axes, { group: (v) => (v.length === 0 ? NaN : sumPairwise(v) / v.length) }, 'float64', keepdims);
-  return s;
+  const f = reducesTrailing(a, axes) ? sumPairwise : seqSum;
+  return reduceAxes(a, axes, { group: (v) => (v.length === 0 ? NaN : f(v) / v.length) }, 'float64', keepdims);
 }
 
 /** suma por pares (como NumPy) para que los redondeos coincidan en vectores largos */
@@ -208,6 +234,7 @@ export function sumPairwise(v: Float64Array, lo = 0, hi = v.length): number {
 }
 
 export function variance(a: NdArray, axes: number[] | null, ddof: number, keepdims: boolean): NdArray {
+  const f = reducesTrailing(a, axes) ? sumPairwise : seqSum;
   return reduceAxes(
     a,
     axes,
@@ -215,10 +242,10 @@ export function variance(a: NdArray, axes: number[] | null, ddof: number, keepdi
       group: (v) => {
         const n = v.length;
         if (n - ddof <= 0) return NaN;
-        const m = sumPairwise(v) / n;
+        const m = f(v) / n;
         const d = new Float64Array(n);
         for (let i = 0; i < n; i++) d[i] = (v[i] - m) * (v[i] - m);
-        return sumPairwise(d) / (n - ddof);
+        return f(d) / (n - ddof);
       },
     },
     'float64',

@@ -433,7 +433,7 @@ En este curso las figuras de \`matplotlib\` se dibujan **dentro de la salida**: 
         'Distribución y atípicos',
         [
           ['import pandas as pd\nimport matplotlib.pyplot as plt\ndf = pd.read_csv("clientes.csv").drop_duplicates()\nplt.hist(df["ingresos"].dropna(), bins=5, color="#A78BFA")\nplt.title("Ingresos")\nplt.xlabel("euros")\nplt.show()', 'Cada barra cuenta cuántos clientes caen en un tramo de ingresos'],
-          ['plt.boxplot([df["edad"].dropna()], labels=["edad"])\nplt.title("Edad")\nplt.show()', 'La caja cubre del cuartil 1 al 3; los puntos sueltos son atípicos: ahí está el cliente de 200 años'],
+          ['plt.boxplot([df["edad"].dropna()])\nplt.xticks([1], ["edad"])\nplt.title("Edad")\nplt.show()', 'La caja cubre del cuartil 1 al 3; los puntos sueltos son atípicos: ahí está el cliente de 200 años'],
         ],
         FILES,
       ),

@@ -2053,7 +2053,7 @@ class DataFrame:
         else:
             name_row = str(self.index.name) if self.index.name is not None else ''
             has_names = self.index.name is not None
-        iw = max([len(x) for x in labels] + [len(name_row)])
+        iw = max([len(x) for x in labels] + [len(name_row)] + [len(str(self._colname)) if self._colname is not None else 0])
         if not index:
             iw = 0
         # celdas de todas las columnas (con las filas ya recortadas)

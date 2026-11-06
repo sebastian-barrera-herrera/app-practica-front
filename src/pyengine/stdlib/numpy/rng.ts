@@ -3,8 +3,58 @@
  *  - `RandomState` (la API antigua `np.random.seed/rand/randn/randint…`): Mersenne Twister MT19937 con los mismos
  *    algoritmos que NumPy, así que `np.random.seed(0); np.random.rand(3)` da los mismos números que el NumPy real.
  *  - `Generator` (`np.random.default_rng(seed)`): PCG64 con `SeedSequence` como el real. `random()`, `integers()`,
- *    `shuffle()` y `permutation()` coinciden con NumPy; las distribuciones normales usan Box–Muller (no el zigurat).
+ *    `shuffle()` y `permutation()` coinciden con NumPy, igual que `normal()`/`exponential()` (algoritmo del zigurat con las
+ *    mismas tablas) y las distribuciones derivadas (gamma, beta, chi², t…).
  */
+import { FE_DOUBLE, FI_DOUBLE, KE_DOUBLE, KI_DOUBLE, WE_DOUBLE, WI_DOUBLE } from './zigtables';
+
+// ───────────────────────── zigurat (normal y exponencial) ─────────────────────────
+
+const ZIG_NOR_R = 3.6541528853610088;
+const ZIG_NOR_INV_R = 0.27366123732975828;
+const ZIG_EXP_R = 7.69711747013104972;
+
+interface Bits64 {
+  next64(): bigint;
+  double(): number;
+}
+
+/** `random_standard_normal` de NumPy (zigurat de 256 capas). */
+export function zigNormal(g: Bits64): number {
+  for (;;) {
+    let r = g.next64();
+    const idx = Number(r & 0xffn);
+    r >>= 8n;
+    const sign = Number(r & 1n);
+    const rabs = Number((r >> 1n) & 0xfffffffffffffn);
+    let x = rabs * WI_DOUBLE[idx];
+    if (sign) x = -x;
+    if (rabs < KI_DOUBLE[idx]) return x;
+    if (idx === 0) {
+      for (;;) {
+        const xx = -ZIG_NOR_INV_R * Math.log1p(-g.double());
+        const yy = -Math.log1p(-g.double());
+        if (yy + yy > xx * xx) return Math.floor(rabs / 256) % 2 === 1 ? -(ZIG_NOR_R + xx) : ZIG_NOR_R + xx;
+      }
+    } else if ((FI_DOUBLE[idx - 1] - FI_DOUBLE[idx]) * g.double() + FI_DOUBLE[idx] < Math.exp(-0.5 * x * x)) {
+      return x;
+    }
+  }
+}
+
+/** `random_standard_exponential` de NumPy (zigurat de 256 capas). */
+export function zigExp(g: Bits64): number {
+  for (;;) {
+    let ri = g.next64() >> 3n;
+    const idx = Number(ri & 0xffn);
+    ri >>= 8n;
+    const rn = Number(ri);
+    const x = rn * WE_DOUBLE[idx];
+    if (rn < KE_DOUBLE[idx]) return x;
+    if (idx === 0) return ZIG_EXP_R - Math.log1p(-g.double());
+    if ((FE_DOUBLE[idx - 1] - FE_DOUBLE[idx]) * g.double() + FE_DOUBLE[idx] < Math.exp(-x)) return x;
+  }
+}
 
 // ───────────────────────── MT19937 ─────────────────────────
 
@@ -82,6 +132,10 @@ export class MT19937 {
     y ^= (y << 15) & 0xefc60000;
     y ^= y >>> 18;
     return y >>> 0;
+  }
+
+  next64(): bigint {
+    return (BigInt(this.next32()) << 32n) | BigInt(this.next32());
   }
 
   double(): number {
@@ -183,7 +237,8 @@ const mix32 = (x: number, y: number): number => {
   return r;
 };
 
-function entropyWords(seed: bigint): number[] {
+function entropyWords(seed: bigint | number[]): number[] {
+  if (Array.isArray(seed)) return seed.length ? seed : [0];
   if (seed === 0n) return [0];
   const out: number[] = [];
   while (seed > 0n) {
@@ -194,7 +249,7 @@ function entropyWords(seed: bigint): number[] {
 }
 
 /** `SeedSequence(seed).generate_state(n, uint64)` */
-function seedState64(seed: bigint, n: number): bigint[] {
+export function seedState64(seed: bigint | number[], n: number): bigint[] {
   const entropy = entropyWords(seed);
   const pool = [0, 0, 0, 0];
   const hm = hashmixMaker(0x43b0d7e5, 0x931e8875);
@@ -228,7 +283,7 @@ export class PCG64 {
   hasGauss = false;
   gauss = 0;
 
-  constructor(seed: bigint) {
+  constructor(seed: bigint | number[]) {
     const s = seedState64(seed, 4);
     const initstate = (s[0] << 64n) | s[1];
     const initseq = (s[2] << 64n) | s[3];
@@ -268,19 +323,14 @@ export class PCG64 {
     return Number(this.next64() >> 11n) / 9007199254740992;
   }
 
-  /** gaussiana estándar por Box–Muller (con caché); NumPy usa el zigurat, así que los valores difieren */
+  /** gaussiana estándar (zigurat, igual que `Generator.standard_normal`) */
   stdNormal(): number {
-    if (this.hasGauss) {
-      this.hasGauss = false;
-      return this.gauss;
-    }
-    let u1 = this.double();
-    while (u1 <= 1e-300) u1 = this.double();
-    const u2 = this.double();
-    const r = Math.sqrt(-2 * Math.log(u1));
-    this.gauss = r * Math.sin(2 * Math.PI * u2);
-    this.hasGauss = true;
-    return r * Math.cos(2 * Math.PI * u2);
+    return zigNormal(this);
+  }
+
+  /** exponencial estándar (zigurat, igual que `Generator.standard_exponential`) */
+  stdExp(): number {
+    return zigExp(this);
   }
 
   interval(max: number): number {
