@@ -774,6 +774,27 @@ function install(m: PyModule): void {
     }
     return out;
   });
+  f('put_along_axis', 'arr, indices, values, axis', (a: any, i: any, v: any, ax: any) => {
+    const A = arr(a);
+    const I = arr(i);
+    const axis = nd.normAxis(intArg(ax), A.ndim);
+    let V = arr(v);
+    if (V.shape.length !== I.shape.length || V.shape.some((s, d) => s !== I.shape[d])) V = nd.broadcastTo(V, I.shape);
+    const ia = flatNum(I);
+    const va = flatNum(V);
+    const coord = new Array<number>(I.ndim).fill(0);
+    for (let p = 0; p < ia.length; p++) {
+      let dst = A.offset;
+      for (let d = 0; d < A.ndim; d++) dst += (d === axis ? (ia[p] < 0 ? ia[p] + A.shape[axis] : ia[p]) : coord[d]) * A.strides[d];
+      A.num[dst] = va[p];
+      for (let d = I.ndim - 1; d >= 0; d--) {
+        coord[d]++;
+        if (coord[d] < I.shape[d]) break;
+        coord[d] = 0;
+      }
+    }
+    return null;
+  });
   f('compress', 'condition, a, axis=', (c: any, a: any, ax: any) => {
     const idx = nd.nonzero(arr(c))[0];
     return O.takeAxis(isNone(ax) ? nd.reshapeTo(arr(a), [arr(a).size]) : arr(a), flatNum(idx), isNone(ax) ? 0 : intArg(ax));
@@ -854,6 +875,133 @@ function install(m: PyModule): void {
   binf('fmin', 'min');
   binf('arctan2', 'arctan2');
   binf('hypot', 'hypot');
+  // objetos «ufunc» con `.at`, `.reduce`, `.accumulate` y `.outer` para las operaciones binarias más usadas
+  {
+    const ufuncType = newNativeType('ufunc', 'numpy', [objectType]);
+    const mk = (name: string, op: O.ArithOp, fn: (x: number, y: number) => number, reduceName: string): void => {
+      const base = m.dict!.get(name);
+      const obj = new PyObject(ufuncType) as any;
+      obj.fn = base;
+      const put = (k: string, sig: string, impl: (...a: any[]) => any): void => ufuncType.dict!.set(k, mkNative(k, sig, impl, { method: true, owner: 'ufunc' }));
+      if (!ufuncType.dict!.has('__call__')) {
+        put('__call__', 'self, *args', (self: any, args: PyTuple) => callObj(self.fn, args.a.slice()));
+        put('__repr__', 'self', (self: any) => `<ufunc '${self.fn.name}'>`);
+        put('at', 'self, a, indices, b=', (self: any, a: any, indices: any, b: any) => {
+          const A = a as NdArray;
+          const vals = isNone(b) ? null : flatNum(arr(b));
+          const apply = (self.fnImpl as (x: number, y: number) => number);
+          const idxs = indices instanceof PyTuple ? indices.a.map((x: any) => arr(x)) : [arr(indices)];
+          const first = idxs[0];
+          const cnt = first.size;
+          const rows = idxs.map((ix) => flatNum(nd.broadcastTo(ix, first.shape)));
+          const rest = idxs.length >= A.ndim ? 1 : sizeOf(A.shape.slice(idxs.length));
+          for (let k = 0; k < cnt; k++) {
+            let off = A.offset;
+            for (let d = 0; d < idxs.length; d++) {
+              let v = rows[d][k];
+              if (v < 0) v += A.shape[d];
+              if (v < 0 || v >= A.shape[d]) throw indexError(`index ${rows[d][k]} is out of bounds for axis ${d} with size ${A.shape[d]}`);
+              off += v * A.strides[d];
+            }
+            if (rest === 1) {
+              const y = vals ? vals[vals.length === 1 ? 0 : k] : 0;
+              (A.buf as Float64Array)[off] = apply((A.buf as Float64Array)[off], y);
+            } else {
+              const sub = A.shape.slice(idxs.length);
+              const subStr = A.strides.slice(idxs.length);
+              const pos = new Array<number>(sub.length).fill(0);
+              for (let r = 0; r < rest; r++) {
+                let o2 = off;
+                for (let d = 0; d < sub.length; d++) o2 += pos[d] * subStr[d];
+                const y = vals ? vals[vals.length === 1 ? 0 : k * rest + r] : 0;
+                (A.buf as Float64Array)[o2] = apply((A.buf as Float64Array)[o2], y);
+                for (let d = sub.length - 1; d >= 0; d--) {
+                  if (++pos[d] < sub[d]) break;
+                  pos[d] = 0;
+                }
+              }
+            }
+          }
+          return null;
+        });
+        put('reduce', 'self, a, axis=', (self: any, a: any, axis: any) => callObj(m.dict!.get(self.reduceName), [a, isNone(axis) ? 0 : axis]));
+        put('accumulate', 'self, a, axis=', (self: any, a: any, axis: any) => {
+          const A = arr(a);
+          const ax = isNone(axis) ? 0 : intArg(axis);
+          const sl = (i: number): NdArray => arr(nd.getItem(A, new PyTuple([...Array.from({ length: (ax < 0 ? ax + A.ndim : ax) }, () => ops.makeSlice(null, null, null)), i])));
+          const n = A.shape[ax < 0 ? ax + A.ndim : ax];
+          const out: NdArray[] = [];
+          let acc: NdArray = sl(0);
+          out.push(acc);
+          for (let i = 1; i < n; i++) {
+            acc = O.arith(self.op, acc, sl(i)) as NdArray;
+            out.push(acc);
+          }
+          return callObj(m.dict!.get('stack'), [new PyList(out), ax]);
+        });
+        put('outer', 'self, a, b', (self: any, a: any, b: any) => {
+          const A = arr(a);
+          const B = arr(b);
+          const ra = nd.reshapeTo(A, [...A.shape, ...new Array<number>(B.ndim).fill(1)]);
+          return O.arith(self.op, ra, B);
+        });
+      }
+      obj.fnImpl = fn;
+      obj.op = op;
+      obj.reduceName = reduceName;
+      m.dict!.set(name, obj);
+    };
+    mk('add', 'add', (x, y) => x + y, 'sum');
+    mk('subtract', 'sub', (x, y) => x - y, 'sum');
+    mk('multiply', 'mul', (x, y) => x * y, 'prod');
+    mk('maximum', 'max', (x, y) => (x !== x || y !== y ? NaN : Math.max(x, y)), 'max');
+    mk('minimum', 'min', (x, y) => (x !== x || y !== y ? NaN : Math.min(x, y)), 'min');
+  }
+  f('logaddexp', 'x1, x2', (a: any, b: any) => ret(nd.ewBinary(arr(a), arr(b), (x, y) => (x === y && !isFinite(x) ? x : Math.max(x, y) + Math.log1p(Math.exp(-Math.abs(x - y)))), 'float64')));
+  f('pad', 'array, pad_width, mode=, constant_values=', (a: any, pw: any, mode: any, cv: any) => {
+    const A = arr(a);
+    const md = isNone(mode) ? 'constant' : String(mode);
+    let widths: [number, number][];
+    const raw = pw instanceof PyTuple || pw instanceof PyList ? (pw as PyTuple).a : [pw];
+    if (raw.length === 1 && !(raw[0] instanceof PyTuple || raw[0] instanceof PyList)) widths = A.shape.map(() => [intArg(raw[0]), intArg(raw[0])] as [number, number]);
+    else if (raw.length === 2 && !(raw[0] instanceof PyTuple || raw[0] instanceof PyList)) widths = A.shape.map(() => [intArg(raw[0]), intArg(raw[1])] as [number, number]);
+    else widths = raw.map((w: any) => { const t = w.a ?? w; return t.length === 1 ? [intArg(t[0]), intArg(t[0])] as [number, number] : [intArg(t[0]), intArg(t[1])] as [number, number]; });
+    if (widths.length === 1 && A.ndim > 1) widths = A.shape.map(() => widths[0]);
+    const outShape = A.shape.map((s, i) => s + widths[i][0] + widths[i][1]);
+    const fill = isNone(cv) ? 0 : numArg(cv);
+    const out = new Float64Array(sizeOf(outShape));
+    if (md === 'constant') out.fill(fill);
+    const src = flatNum(A);
+    const oStr = nd.cStrides(outShape);
+    const idx = new Array<number>(A.ndim).fill(0);
+    const total = sizeOf(A.shape);
+    for (let k = 0; k < total; k++) {
+      let off = 0;
+      for (let d = 0; d < A.ndim; d++) off += (idx[d] + widths[d][0]) * oStr[d];
+      out[off] = src[k];
+      for (let d = A.ndim - 1; d >= 0; d--) {
+        if (++idx[d] < A.shape[d]) break;
+        idx[d] = 0;
+      }
+    }
+    if (md === 'edge') {
+      const pos = new Array<number>(outShape.length).fill(0);
+      for (let k = 0; k < out.length; k++) {
+        let off = 0;
+        for (let d = 0; d < A.ndim; d++) {
+          const c = Math.min(Math.max(pos[d] - widths[d][0], 0), A.shape[d] - 1);
+          off += c * A.strides[d];
+        }
+        const inside = pos.every((p, d) => p >= widths[d][0] && p < widths[d][0] + A.shape[d]);
+        if (!inside) out[k] = (A.buf as Float64Array)[A.offset + off];
+        for (let d = outShape.length - 1; d >= 0; d--) {
+          if (++pos[d] < outShape[d]) break;
+          pos[d] = 0;
+        }
+      }
+    }
+    return ret(mkNum(out, outShape, A.dtype === 'bool' ? 'bool' : A.dtype));
+  });
   f('fmod', 'x1, x2', (a: any, b: any) => ret(nd.ewBinary(arr(a), arr(b), (x, y) => x % y, nd.promote(arr(a).dtype, arr(b).dtype))));
   f('copysign', 'x1, x2', (a: any, b: any) => ret(nd.ewBinary(arr(a), arr(b), (x, y) => Math.abs(x) * (y < 0 || Object.is(y, -0) ? -1 : 1), 'float64')));
   for (const [name, op] of [['equal', 'eq'], ['not_equal', 'ne'], ['less', 'lt'], ['less_equal', 'le'], ['greater', 'gt'], ['greater_equal', 'ge']] as [string, O.CmpOp][]) f(name, 'x1, x2, out=', (a: any, b: any) => ret(O.compare(op, arr(a), arr(b))));
