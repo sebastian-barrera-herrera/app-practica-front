@@ -5,7 +5,7 @@
  * el mismo orden de visita de características (generador xorshift `rand_r`), los mismos criterios (gini, entropía,
  * error cuadrático, Friedman) y el mismo desempate, de modo que los árboles salen idénticos a los de scikit-learn.
  */
-import { PyList, PyTuple } from '../runtime/objects';
+import { PyFloat, PyList, PyTuple } from '../runtime/objects';
 import { registerNative } from './registry';
 import { mfn } from './helpers';
 import { arr, intArg, isNone, numArg } from './numpy/args';
@@ -418,6 +418,272 @@ export function buildTree(X: Float32Array, n: number, d: number, y: Float64Array
   return out;
 }
 
+
+/**
+ * Puerto de `Solver::Solve` de libsvm (SMO con selección de conjunto de trabajo de segundo orden y «shrinking»).
+ * `Q` son los valores `y_i y_j K(i, j)` que libsvm guarda en `float` de 32 bits; `QD` es la diagonal en doble precisión.
+ * Los vectores se indexan por posición original y `act` lleva la permutación del conjunto activo (como `active_set`).
+ */
+export function smoSolve(l: number, Q: Float64Array, QD: Float64Array, p: Float64Array, y: Int8Array, alpha0: Float64Array, C: Float64Array, eps: number, maxIter: number, shrinking = true): { alpha: Float64Array; rho: number; iter: number; obj: number; timedOut: boolean } {
+  const TAU = 1e-12;
+  const alpha = Float64Array.from(alpha0);
+  const Qf = new Float32Array(Q.length);
+  for (let k = 0; k < Q.length; k++) Qf[k] = Q[k];
+  const act = new Int32Array(l);
+  for (let k = 0; k < l; k++) act[k] = k;
+  let activeSize = l;
+  let unshrink = false;
+  const G = Float64Array.from(p);
+  const Gbar = new Float64Array(l);
+  const upper = (i: number): boolean => alpha[i] >= C[i];
+  const lower = (i: number): boolean => alpha[i] <= 0;
+  const free = (i: number): boolean => !upper(i) && !lower(i);
+  for (let i = 0; i < l; i++) {
+    if (!lower(i)) {
+      const a = alpha[i];
+      for (let j = 0; j < l; j++) G[j] += a * Qf[i * l + j];
+      if (upper(i)) for (let j = 0; j < l; j++) Gbar[j] += C[i] * Qf[i * l + j];
+    }
+  }
+  const reconstruct = (): void => {
+    if (activeSize === l) return;
+    for (let j = activeSize; j < l; j++) {
+      const jj = act[j];
+      G[jj] = Gbar[jj] + p[jj];
+    }
+    let nrFree = 0;
+    for (let j = 0; j < activeSize; j++) if (free(act[j])) nrFree++;
+    if (nrFree * l > 2 * activeSize * (l - activeSize)) {
+      for (let i = activeSize; i < l; i++) {
+        const ii = act[i];
+        for (let j = 0; j < activeSize; j++) {
+          const jj = act[j];
+          if (free(jj)) G[ii] += alpha[jj] * Qf[ii * l + jj];
+        }
+      }
+    } else {
+      for (let i = 0; i < activeSize; i++) {
+        const ii = act[i];
+        if (free(ii)) {
+          const ai = alpha[ii];
+          for (let j = activeSize; j < l; j++) {
+            const jj = act[j];
+            G[jj] += ai * Qf[ii * l + jj];
+          }
+        }
+      }
+    }
+  };
+  const beShrunk = (i: number, Gmax1: number, Gmax2: number): boolean => {
+    if (upper(i)) return y[i] === 1 ? -G[i] > Gmax1 : -G[i] > Gmax2;
+    if (lower(i)) return y[i] === 1 ? G[i] > Gmax2 : G[i] > Gmax1;
+    return false;
+  };
+  const doShrinking = (): void => {
+    let Gmax1 = -Infinity;
+    let Gmax2 = -Infinity;
+    for (let t = 0; t < activeSize; t++) {
+      const i = act[t];
+      if (y[i] === 1) {
+        if (!upper(i) && -G[i] >= Gmax1) Gmax1 = -G[i];
+        if (!lower(i) && G[i] >= Gmax2) Gmax2 = G[i];
+      } else {
+        if (!upper(i) && -G[i] >= Gmax2) Gmax2 = -G[i];
+        if (!lower(i) && G[i] >= Gmax1) Gmax1 = G[i];
+      }
+    }
+    if (!unshrink && Gmax1 + Gmax2 <= eps * 10) {
+      unshrink = true;
+      reconstruct();
+      activeSize = l;
+    }
+    for (let t = 0; t < activeSize; t++) {
+      if (beShrunk(act[t], Gmax1, Gmax2)) {
+        activeSize--;
+        while (activeSize > t) {
+          if (!beShrunk(act[activeSize], Gmax1, Gmax2)) {
+            const tmp = act[t];
+            act[t] = act[activeSize];
+            act[activeSize] = tmp;
+            break;
+          }
+          activeSize--;
+        }
+      }
+    }
+  };
+  let selI = -1;
+  let selJ = -1;
+  const select = (): boolean => {
+    let Gmax = -Infinity;
+    let Gmax2 = -Infinity;
+    let gi = -1;
+    let gj = -1;
+    let objMin = Infinity;
+    for (let t = 0; t < activeSize; t++) {
+      const k = act[t];
+      if (y[k] === 1) {
+        if (!upper(k) && -G[k] >= Gmax) {
+          Gmax = -G[k];
+          gi = k;
+        }
+      } else if (!lower(k) && G[k] >= Gmax) {
+        Gmax = G[k];
+        gi = k;
+      }
+    }
+    if (gi !== -1) {
+      for (let t = 0; t < activeSize; t++) {
+        const j = act[t];
+        if (y[j] === 1) {
+          if (!lower(j)) {
+            const gd = Gmax + G[j];
+            if (G[j] >= Gmax2) Gmax2 = G[j];
+            if (gd > 0) {
+              const qc = QD[gi] + QD[j] - 2.0 * y[gi] * Qf[gi * l + j];
+              const od = qc > 0 ? -(gd * gd) / qc : -(gd * gd) / TAU;
+              if (od <= objMin) {
+                gj = j;
+                objMin = od;
+              }
+            }
+          }
+        } else if (!upper(j)) {
+          const gd = Gmax - G[j];
+          if (-G[j] >= Gmax2) Gmax2 = -G[j];
+          if (gd > 0) {
+            const qc = QD[gi] + QD[j] + 2.0 * y[gi] * Qf[gi * l + j];
+            const od = qc > 0 ? -(gd * gd) / qc : -(gd * gd) / TAU;
+            if (od <= objMin) {
+              gj = j;
+              objMin = od;
+            }
+          }
+        }
+      }
+    }
+    if (Gmax + Gmax2 < eps || gj === -1) return false;
+    selI = gi;
+    selJ = gj;
+    return true;
+  };
+  let iter = 0;
+  let counter = Math.min(l, 1000) + 1;
+  let timedOut = false;
+  for (;;) {
+    if (maxIter !== -1 && iter >= maxIter) {
+      timedOut = true;
+      break;
+    }
+    if (--counter === 0) {
+      counter = Math.min(l, 1000);
+      if (shrinking) doShrinking();
+    }
+    if (!select()) {
+      reconstruct();
+      activeSize = l;
+      if (!select()) break;
+      counter = 1;
+    }
+    const i = selI;
+    const j = selJ;
+    iter++;
+    const Ci = C[i];
+    const Cj = C[j];
+    const oldI = alpha[i];
+    const oldJ = alpha[j];
+    if (y[i] !== y[j]) {
+      let qc = QD[i] + QD[j] + 2 * Qf[i * l + j];
+      if (qc <= 0) qc = TAU;
+      const delta = (-G[i] - G[j]) / qc;
+      const diff = alpha[i] - alpha[j];
+      alpha[i] += delta;
+      alpha[j] += delta;
+      if (diff > 0) {
+        if (alpha[j] < 0) {
+          alpha[j] = 0;
+          alpha[i] = diff;
+        }
+      } else if (alpha[i] < 0) {
+        alpha[i] = 0;
+        alpha[j] = -diff;
+      }
+      if (diff > Ci - Cj) {
+        if (alpha[i] > Ci) {
+          alpha[i] = Ci;
+          alpha[j] = Ci - diff;
+        }
+      } else if (alpha[j] > Cj) {
+        alpha[j] = Cj;
+        alpha[i] = Cj + diff;
+      }
+    } else {
+      let qc = QD[i] + QD[j] - 2 * Qf[i * l + j];
+      if (qc <= 0) qc = TAU;
+      const delta = (G[i] - G[j]) / qc;
+      const sum = alpha[i] + alpha[j];
+      alpha[i] -= delta;
+      alpha[j] += delta;
+      if (sum > Ci) {
+        if (alpha[i] > Ci) {
+          alpha[i] = Ci;
+          alpha[j] = sum - Ci;
+        }
+      } else if (alpha[j] < 0) {
+        alpha[j] = 0;
+        alpha[i] = sum;
+      }
+      if (sum > Cj) {
+        if (alpha[j] > Cj) {
+          alpha[j] = Cj;
+          alpha[i] = sum - Cj;
+        }
+      } else if (alpha[i] < 0) {
+        alpha[i] = 0;
+        alpha[j] = sum;
+      }
+    }
+    const dI = alpha[i] - oldI;
+    const dJ = alpha[j] - oldJ;
+    for (let t = 0; t < activeSize; t++) {
+      const k = act[t];
+      G[k] += Qf[i * l + k] * dI + Qf[j * l + k] * dJ;
+    }
+    const ui = oldI >= Ci;
+    const uj = oldJ >= Cj;
+    if (ui !== upper(i)) {
+      if (ui) for (let k = 0; k < l; k++) Gbar[k] -= Ci * Qf[i * l + k];
+      else for (let k = 0; k < l; k++) Gbar[k] += Ci * Qf[i * l + k];
+    }
+    if (uj !== upper(j)) {
+      if (uj) for (let k = 0; k < l; k++) Gbar[k] -= Cj * Qf[j * l + k];
+      else for (let k = 0; k < l; k++) Gbar[k] += Cj * Qf[j * l + k];
+    }
+  }
+  let nrFree = 0;
+  let ub = Infinity;
+  let lb = -Infinity;
+  let sumFree = 0;
+  for (let t = 0; t < activeSize; t++) {
+    const i = act[t];
+    const yG = y[i] * G[i];
+    if (upper(i)) {
+      if (y[i] === -1) ub = Math.min(ub, yG);
+      else lb = Math.max(lb, yG);
+    } else if (lower(i)) {
+      if (y[i] === 1) ub = Math.min(ub, yG);
+      else lb = Math.max(lb, yG);
+    } else {
+      nrFree++;
+      sumFree += yG;
+    }
+  }
+  const rho = nrFree > 0 ? sumFree / nrFree : (ub + lb) / 2;
+  let v = 0;
+  for (let i = 0; i < l; i++) v += alpha[i] * (G[i] + p[i]);
+  return { alpha, rho, iter, obj: v / 2, timedOut };
+}
+
 const i64 = (a: number[]): NdArray => mkNum(Float64Array.from(a), [a.length], 'int64');
 const f64 = (a: number[]): NdArray => mkNum(Float64Array.from(a), [a.length], 'float64');
 
@@ -445,6 +711,14 @@ registerNative('_mlkern', (_I, m) => {
     const nn = res.left.length;
     const value = mkNum(Float64Array.from(res.value), [nn, nOut, res.maxC], 'float64');
     return new PyTuple([i64(res.left), i64(res.right), i64(res.feature), f64(res.threshold), f64(res.impurity), i64(res.nNode), f64(res.wNode), value]);
+  });
+
+
+  mfn(m, 'svm_solve', 'Q, QD, p, y, alpha, C, eps, max_iter', (Q: any, QD: any, p: any, y: any, alpha: any, C: any, eps: any, maxIter: any) => {
+    const qa = arr(Q);
+    const l = qa.shape[0];
+    const r = smoSolve(l, flatNum(qa) as Float64Array, Float64Array.from(flatNum(arr(QD))), Float64Array.from(flatNum(arr(p))), Int8Array.from(flatNum(arr(y))), Float64Array.from(flatNum(arr(alpha))), Float64Array.from(flatNum(arr(C))), numArg(eps), intArg(maxIter));
+    return new PyTuple([f64(Array.from(r.alpha)), new PyFloat(r.rho), r.iter, new PyFloat(r.obj), r.timedOut]);
   });
 
   mfn(m, 'tree_apply', 'X, left, right, feature, threshold', (X: any, l: any, r: any, f: any, t: any) => {
