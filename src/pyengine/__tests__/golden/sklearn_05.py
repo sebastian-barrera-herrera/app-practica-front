@@ -1,0 +1,42 @@
+import numpy as np
+from sklearn.datasets import load_iris, load_wine, load_diabetes, make_classification
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor, BaggingClassifier, AdaBoostClassifier, GradientBoostingClassifier, GradientBoostingRegressor, VotingClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.tree import DecisionTreeClassifier
+
+X, y = load_wine(return_X_y=True)
+Xtr, Xte, ytr, yte = train_test_split(X, y, test_size=0.3, random_state=42)
+rf = RandomForestClassifier(n_estimators=20, random_state=0).fit(Xtr, ytr)
+print(rf.score(Xte, yte), rf.predict(Xte[:8]), rf.predict_proba(Xte[:2]).round(3))
+print(rf.feature_importances_.round(4))
+print(rf.estimators_[0].get_depth(), rf.estimators_[3].get_n_leaves())
+rf2 = RandomForestClassifier(n_estimators=15, max_depth=3, oob_score=True, random_state=1).fit(Xtr, ytr)
+print(round(rf2.oob_score_, 6), rf2.score(Xte, yte))
+print(RandomForestClassifier(n_estimators=5, random_state=0))
+Xd, yd = load_diabetes(return_X_y=True)
+Xtr, Xte, ytr, yte = train_test_split(Xd, yd, test_size=0.25, random_state=0)
+rr = RandomForestRegressor(n_estimators=10, random_state=0).fit(Xtr, ytr)
+print(round(rr.score(Xte, yte), 6), rr.predict(Xte[:3]).round(2))
+bg = BaggingClassifier(n_estimators=8, random_state=0).fit(*train_test_split(X, y, test_size=0.3, random_state=42)[::2])
+print(bg.n_estimators, len(bg.estimators_))
+Xtr, Xte, ytr, yte = train_test_split(X, y, test_size=0.3, random_state=42)
+bg = BaggingClassifier(n_estimators=8, random_state=0).fit(Xtr, ytr)
+print(bg.score(Xte, yte), bg.predict_proba(Xte[:2]).round(3))
+ab = AdaBoostClassifier(n_estimators=10, random_state=0).fit(Xtr, ytr)
+print(ab.score(Xte, yte), ab.estimator_weights_.round(4)[:5], ab.predict(Xte[:6]))
+Xb, yb = make_classification(n_samples=300, n_features=8, n_informative=4, random_state=0)
+Xbt, Xbe, ybt, ybe = train_test_split(Xb, yb, random_state=0)
+gb = GradientBoostingClassifier(n_estimators=30, random_state=0).fit(Xbt, ybt)
+print(round(gb.score(Xbe, ybe), 6), gb.predict_proba(Xbe[:3]).round(4), gb.train_score_[:3].round(5))
+print(int(gb.feature_importances_.argmax()), round(float(gb.feature_importances_.sum()), 6))
+gm = GradientBoostingClassifier(n_estimators=15, random_state=0, max_depth=2).fit(Xtr, ytr)
+print(round(gm.score(Xte, yte), 6), gm.predict_proba(Xte[:2]).round(4))
+Xtr, Xte, ytr, yte = train_test_split(Xd, yd, test_size=0.25, random_state=0)
+gr = GradientBoostingRegressor(n_estimators=40, random_state=0).fit(Xtr, ytr)
+print(round(gr.score(Xte, yte), 1), gr.predict(Xte[:3]).round(0), gr.train_score_[:3].round(-2))
+gs = GradientBoostingRegressor(n_estimators=20, subsample=0.7, random_state=1).fit(Xtr, ytr)
+print(round(gs.score(Xte, yte), 1))
+vc = VotingClassifier([("t1", DecisionTreeClassifier(max_depth=2, random_state=0)), ("dt", DecisionTreeClassifier(max_depth=3, random_state=0))], voting="soft")
+Xtr, Xte, ytr, yte = train_test_split(X, y, test_size=0.3, random_state=42)
+print(round(vc.fit(Xtr, ytr).score(Xte, yte), 4))

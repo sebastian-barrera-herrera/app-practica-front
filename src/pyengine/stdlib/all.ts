@@ -20,3 +20,4 @@ import './flask';
 import './numpy/module';
 import './dojo';
 import './matplotlib';
+import './mlkern';

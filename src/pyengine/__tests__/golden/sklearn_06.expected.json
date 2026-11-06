@@ -1,0 +1,4 @@
+{
+ "stdout": "1 0.9777777777777777 [2 2 0 0 1 0]\n3 1.0 [2 2 0 0 1 0]\n7 1.0 [2 2 0 0 1 0]\n1.0 [[0. 0. 1.]\n [0. 0. 1.]\n [1. 0. 0.]]\nKNeighborsClassifier(n_neighbors=4)\n[-0.4919 -0.0854  0.1831] 0.809602\n[[0.2449 0.3873 0.4359]\n [0.     0.3606 0.4796]] [[ 58   2   0]\n [ 89  31 100]]\n",
+ "stderr": "Traceback (most recent call last):\n  File \"sklearn_06.py\", line 30, in <module>\n    print(km.cluster_centers_.round(4), km.inertia_.round(4), km.n_iter_, km.labels_[:10])\n                                        ^^^^^^^^^^^^^^^^^\nAttributeError: 'float' object has no attribute 'round'\n"
+}

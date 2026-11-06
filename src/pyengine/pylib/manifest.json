@@ -177,12 +177,24 @@
     "pandas": "own:pandas.py",
     "sklearn": "own:sklearn/__init__.py!pkg",
     "sklearn.exceptions": "own:sklearn/exceptions.py",
-    "sklearn.utils": "own:sklearn/utils.py",
     "sklearn.base": "own:sklearn/base.py",
     "sklearn._data": "own:sklearn/_data.py",
     "sklearn.preprocessing": "own:sklearn/preprocessing.py",
     "sklearn.impute": "own:sklearn/impute.py",
     "sklearn.model_selection": "own:sklearn/model_selection.py",
-    "sklearn.datasets": "own:sklearn/datasets.py"
+    "sklearn.datasets": "own:sklearn/datasets.py",
+    "sklearn.utils": "own:sklearn/utils/__init__.py!pkg",
+    "sklearn.utils.validation": "own:sklearn/utils/validation.py",
+    "sklearn.utils.multiclass": "own:sklearn/utils/multiclass.py",
+    "sklearn.utils.class_weight": "own:sklearn/utils/class_weight.py",
+    "sklearn.metrics": "own:sklearn/metrics/__init__.py!pkg",
+    "sklearn.metrics.pairwise": "own:sklearn/metrics/pairwise.py",
+    "sklearn.linear_model": "own:sklearn/linear_model.py",
+    "sklearn.tree": "own:sklearn/tree.py",
+    "sklearn.ensemble": "own:sklearn/ensemble.py",
+    "sklearn.neighbors": "own:sklearn/neighbors.py",
+    "sklearn.cluster": "own:sklearn/cluster.py",
+    "sklearn.decomposition": "own:sklearn/decomposition.py",
+    "sklearn.naive_bayes": "own:sklearn/naive_bayes.py"
   }
 }
