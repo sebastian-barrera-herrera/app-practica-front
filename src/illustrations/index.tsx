@@ -16,6 +16,7 @@ import { AsgScale, CloudfrontFlow, ElbFlow, R53Policies, Spof } from './AwsHa';
 import { CidrCalc, DnsFlow, PacketTrace, SgVsNacl, VpcLayout } from './AwsNetwork';
 import { S3Classes, S3Security } from './AwsStorage';
 import { BroadcastView, GradientDescentView, HistBinsView, LeakageView, MonteCarloView, VectorsView } from './IaMath';
+import { EnsembleVoteDemo, KnnRegionDemo, SigmoidDemo, SvmDemo, TreeSplitDemo } from './IaClass';
 import { CoefEffect, LinRegFit, RegMetricsView, RegModelsView, RegPathView } from './IaReg';
 import { AiMlDl, FitCurve, LearningTypes, SplitDemo } from './IaBasics';
 import { AptFlow, BootSequence, DnsLookup, NetRoute, SshHandshake, SudoFlow } from './Flows';
@@ -171,6 +172,11 @@ const MAP: Partial<Record<IllustrationId, React.ComponentType>> = {
   'ia-reg-metrics': RegMetricsView,
   'ia-reg-path': RegPathView,
   'ia-reg-models': RegModelsView,
+  'ia-sigmoid': SigmoidDemo,
+  'ia-tree-split': TreeSplitDemo,
+  'ia-knn-region': KnnRegionDemo,
+  'ia-svm': SvmDemo,
+  'ia-ensemble-vote': EnsembleVoteDemo,
 };
 
 export function Illustration({ id }: { id: IllustrationId }) {

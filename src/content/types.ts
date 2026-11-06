@@ -142,7 +142,12 @@ export type IllustrationId =
   | 'ia-coef-effect'
   | 'ia-reg-metrics'
   | 'ia-reg-path'
-  | 'ia-reg-models';
+  | 'ia-reg-models'
+  | 'ia-sigmoid'
+  | 'ia-tree-split'
+  | 'ia-knn-region'
+  | 'ia-svm'
+  | 'ia-ensemble-vote';
 
 // ───────────────────────── preguntas ─────────────────────────
 

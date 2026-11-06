@@ -1,4 +1,5 @@
 /** Lógica pura de las ilustraciones de aprendizaje automático (zonas 4–7 del curso de IA). Se prueba aparte. */
+import { smoSolve } from '@/pyengine/stdlib/mlkern';
 import { lcg } from './iaLogic';
 
 const mean = (a: number[]): number => a.reduce((s, v) => s + v, 0) / Math.max(1, a.length);
@@ -247,3 +248,177 @@ export function fitRegressor1D(kind: ModelKind, param: number, d: Curve1D = curv
   const te = rmse(d.test);
   return { curve, trainRmse: tr, testRmse: te, verdict: tr > 0.38 ? 'infraajuste' : te > Math.max(tr * 1.8, tr + 0.12) ? 'sobreajuste' : 'bien' };
 }
+
+// ───────────────────────── Z5 · regresión logística ─────────────────────────
+
+export const sigmoid = (z: number): number => 1 / (1 + Math.exp(-z));
+
+/** Llamadas al servicio de soporte del último año y si el cliente se dio de baja (1) o no (0). */
+export const SIG_POINTS: [number, 0 | 1][] = [[0, 0], [0, 0], [1, 0], [1, 0], [1, 1], [2, 0], [2, 0], [3, 0], [3, 1], [4, 1], [4, 0], [5, 1], [5, 1], [6, 1], [7, 1], [8, 1]];
+
+export interface SigmoidView {
+  accuracy: number;
+  tp: number;
+  fp: number;
+  fn: number;
+  tn: number;
+  boundary: number | null;
+  probs: number[];
+}
+
+/** Evalúa el modelo p(x) = σ(w·x + b) con un umbral de decisión `t`. */
+export function sigmoidView(w: number, b: number, t: number): SigmoidView {
+  const probs = SIG_POINTS.map(([x]) => sigmoid(w * x + b));
+  let tp = 0;
+  let fp = 0;
+  let fn = 0;
+  let tn = 0;
+  SIG_POINTS.forEach(([, y], i) => {
+    const pred = probs[i] >= t ? 1 : 0;
+    if (pred && y) tp++;
+    else if (pred && !y) fp++;
+    else if (!pred && y) fn++;
+    else tn++;
+  });
+  const logit = Math.log(t / (1 - t));
+  return { accuracy: (tp + tn) / SIG_POINTS.length, tp, fp, fn, tn, boundary: Math.abs(w) < 1e-9 ? null : (logit - b) / w, probs };
+}
+
+// ───────────────────────── Z5 · impureza de Gini ─────────────────────────
+
+/** Impureza de Gini de un nodo con `a` ejemplos de una clase y `b` de la otra. */
+export function gini(a: number, b: number): number {
+  const n = a + b;
+  if (n === 0) return 0;
+  const pa = a / n;
+  const pb = b / n;
+  return 1 - pa * pa - pb * pb;
+}
+
+export interface SplitScore {
+  left: [number, number];
+  right: [number, number];
+  giniL: number;
+  giniR: number;
+  weighted: number;
+  gain: number;
+}
+
+export function giniSplit(pts: [number, 0 | 1][], thr: number): SplitScore {
+  const l: [number, number] = [0, 0];
+  const r: [number, number] = [0, 0];
+  for (const [x, y] of pts) (x <= thr ? l : r)[y]++;
+  const n = pts.length;
+  const total: [number, number] = [l[0] + r[0], l[1] + r[1]];
+  const giniL = gini(l[0], l[1]);
+  const giniR = gini(r[0], r[1]);
+  const weighted = ((l[0] + l[1]) / n) * giniL + ((r[0] + r[1]) / n) * giniR;
+  return { left: l, right: r, giniL, giniR, weighted, gain: gini(total[0], total[1]) - weighted };
+}
+
+export const bestThreshold = (pts: [number, 0 | 1][]): number => {
+  const xs = [...new Set(pts.map((p) => p[0]))].sort((a, b) => a - b);
+  let best = xs[0];
+  let g = -Infinity;
+  for (let i = 0; i < xs.length - 1; i++) {
+    const t = (xs[i] + xs[i + 1]) / 2;
+    const s = giniSplit(pts, t).gain;
+    if (s > g + 1e-12) {
+      g = s;
+      best = t;
+    }
+  }
+  return best;
+};
+
+// ───────────────────────── Z5 · vecinos y regiones ─────────────────────────
+
+export interface P2 {
+  x: number;
+  y: number;
+  c: 0 | 1;
+}
+
+/** Dos «lunas» con ruido, 44 puntos fijos en [0, 1]². */
+export function moons2D(): P2[] {
+  const g = gaussian(9);
+  const pts: P2[] = [];
+  for (let i = 0; i < 22; i++) {
+    const a = (i / 21) * Math.PI;
+    pts.push({ x: 0.5 + 0.34 * Math.cos(a) - 0.12 + 0.06 * g(), y: 0.38 + 0.3 * Math.sin(a) + 0.06 * g(), c: 0 });
+    pts.push({ x: 0.5 - 0.34 * Math.cos(a) + 0.12 + 0.06 * g(), y: 0.62 - 0.3 * Math.sin(a) + 0.06 * g(), c: 1 });
+  }
+  return pts.map((p) => ({ ...p, x: Math.max(0.02, Math.min(0.98, p.x)), y: Math.max(0.02, Math.min(0.98, p.y)) }));
+}
+
+/** Clase mayoritaria (y fracción de la clase 1) entre los k vecinos más cercanos. */
+export function knnVote(pts: P2[], x: number, y: number, k: number): number {
+  const idx = pts.map((p, i) => ({ d: (p.x - x) ** 2 + (p.y - y) ** 2, i })).sort((a, b) => a.d - b.d || a.i - b.i).slice(0, k);
+  return idx.reduce((s, o) => s + pts[o.i].c, 0) / idx.length;
+}
+
+export function knnGrid(pts: P2[], k: number, nx = 22, ny = 16): { cells: number[][]; acc: number } {
+  const cells = Array.from({ length: ny }, (_, j) => Array.from({ length: nx }, (_, i) => knnVote(pts, (i + 0.5) / nx, (j + 0.5) / ny, k)));
+  const acc = pts.filter((p) => (knnVote(pts, p.x, p.y, k) >= 0.5 ? 1 : 0) === p.c).length / pts.length;
+  return { cells, acc };
+}
+
+// ───────────────────────── Z5 · SVM ─────────────────────────
+
+export type SvmKernel = 'lineal' | 'rbf';
+
+export interface SvmResult {
+  cells: number[][];
+  sv: number[];
+  acc: number;
+}
+
+/** Entrena una SVM con el mismo SMO que usa la mini-librería de Python (kernel lineal o RBF) sobre `pts`. */
+export function svmFit(pts: P2[], kernel: SvmKernel, C: number, gamma: number, nx = 22, ny = 16): SvmResult {
+  const n = pts.length;
+  const k = (a: P2, b: { x: number; y: number }): number => (kernel === 'lineal' ? a.x * b.x + a.y * b.y : Math.exp(-gamma * ((a.x - b.x) ** 2 + (a.y - b.y) ** 2)));
+  const y = Int8Array.from(pts.map((p) => (p.c === 1 ? 1 : -1)));
+  const Q = new Float64Array(n * n);
+  const QD = new Float64Array(n);
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) Q[i * n + j] = y[i] * y[j] * k(pts[i], pts[j]);
+    QD[i] = k(pts[i], pts[i]);
+  }
+  const r = smoSolve(n, Q, QD, new Float64Array(n).fill(-1), y, new Float64Array(n), new Float64Array(n).fill(C), 1e-3, 100000);
+  const decide = (x: number, yy: number): number => {
+    let s = -r.rho;
+    for (let i = 0; i < n; i++) if (r.alpha[i] > 0) s += r.alpha[i] * y[i] * k(pts[i], { x, y: yy });
+    return s;
+  };
+  const cells = Array.from({ length: ny }, (_, j) => Array.from({ length: nx }, (_, i) => decide((i + 0.5) / nx, (j + 0.5) / ny)));
+  const sv = pts.map((_, i) => i).filter((i) => r.alpha[i] > 1e-9);
+  const acc = pts.filter((p) => (decide(p.x, p.y) > 0 ? 1 : 0) === p.c).length / n;
+  return { cells, sv, acc };
+}
+
+/** Dos nubes que se solapan un poco (24 puntos). */
+export function blobs2D(): P2[] {
+  const g = gaussian(4);
+  const pts: P2[] = [];
+  for (let i = 0; i < 14; i++) {
+    pts.push({ x: 0.3 + 0.13 * g(), y: 0.35 + 0.13 * g(), c: 0 });
+    pts.push({ x: 0.68 + 0.13 * g(), y: 0.62 + 0.13 * g(), c: 1 });
+  }
+  return pts.map((p) => ({ ...p, x: Math.max(0.03, Math.min(0.97, p.x)), y: Math.max(0.03, Math.min(0.97, p.y)) }));
+}
+
+// ───────────────────────── Z5 · el voto del conjunto ─────────────────────────
+
+/** P(más de la mitad de n votantes independientes, cada uno con acierto p, acierta). n impar. */
+export function majorityAccuracy(n: number, p: number): number {
+  let total = 0;
+  let logC = 0;
+  for (let k = 0; k <= n; k++) {
+    if (k > 0) logC += Math.log(n - k + 1) - Math.log(k);
+    if (k > n / 2) total += Math.exp(logC + k * Math.log(p) + (n - k) * Math.log(1 - p));
+  }
+  return total;
+}
+
+/** Con correlación ρ: con probabilidad ρ todos los modelos coinciden (votan lo mismo), si no son independientes. */
+export const ensembleAccuracy = (n: number, p: number, rho: number): number => rho * p + (1 - rho) * majorityAccuracy(n, p);
