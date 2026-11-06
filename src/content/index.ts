@@ -1,6 +1,7 @@
 import type { AnyChallenge, CourseId, LevelDef, Lesson, Step, WorldDef } from './types';
 import { PY_WORLDS } from './py';
 import { AWS_WORLDS } from './aws';
+import { IA_WORLDS } from './ia';
 import { SQL_WORLDS } from './sql';
 import { w1 } from './worlds/w1';
 import { w2 } from './worlds/w2';
@@ -30,7 +31,7 @@ export interface CourseDef {
   emoji: string;
   tagline: string;
   /** Laboratorio de práctica libre. */
-  lab: { title: string; emoji: string; kind: 'terminal' | 'python' | 'sql' | 'aws'; blurb: string };
+  lab: { title: string; emoji: string; kind: 'terminal' | 'python' | 'sql' | 'aws' | 'ia'; blurb: string };
   /** Sustantivos del curso para textos de la interfaz. */
   nouns: { challenge: string; challenges: string; library: string; libraryBlurb: string; item: string };
   worlds: WorldDef[];
@@ -81,9 +82,19 @@ export const COURSES: Record<CourseId, CourseDef> = {
     worlds: AWS_WORLDS,
     levels: LEVELS,
   }),
+  ia: mk({
+    id: 'ia',
+    name: 'IA',
+    emoji: '🧠',
+    tagline: 'Machine learning, deep learning, IA generativa, RAG y agentes: programando de verdad',
+    lab: { title: 'Laboratorio', emoji: '🧪', kind: 'ia', blurb: 'Python con NumPy, matplotlib y miniaturas de scikit-learn y PyTorch para entrenar, graficar y probar modelos en el móvil.' },
+    nouns: { challenge: 'reto de IA', challenges: 'retos de IA', library: 'Biblioteca de IA', libraryBlurb: 'Conceptos, algoritmos y funciones con ejemplos que se ejecutan', item: 'concepto' },
+    worlds: IA_WORLDS,
+    levels: LEVELS,
+  }),
 };
 
-export const COURSE_IDS: CourseId[] = ['linux', 'python', 'sql', 'aws'];
+export const COURSE_IDS: CourseId[] = ['linux', 'python', 'sql', 'aws', 'ia'];
 export const COURSE_LIST: CourseDef[] = COURSE_IDS.map((id) => COURSES[id]);
 export const courseDef = (id: CourseId): CourseDef => COURSES[id];
 

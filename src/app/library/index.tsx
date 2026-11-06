@@ -16,6 +16,7 @@ export default function LibraryRoute() {
   const { course } = useLocalSearchParams<{ course?: string }>();
   if (course === 'sql') return <SqlLibrary />;
   if (course === 'aws') return <AwsLibrary />;
+  if (course === 'ia') return <PyLibrary course="ia" />;
   return course === 'python' ? <PyLibrary /> : <Library />;
 }
 

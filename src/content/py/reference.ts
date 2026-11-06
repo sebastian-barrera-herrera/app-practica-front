@@ -31,11 +31,11 @@ export const PY_REF_CATEGORY: Record<PyRefCategory, string> = {
   avanzado: '🚀 Avanzado',
 };
 
-export interface PyRef {
+export interface PyRef<C extends string = PyRefCategory> {
   /** Nombre único: «len», «str.split», «list.append», «for», «json.dumps»… */
   name: string;
   kind: 'función' | 'método' | 'sentencia' | 'módulo' | 'tipo' | 'concepto';
-  category: PyRefCategory;
+  category: C;
   /** 1 = básico · 2 = intermedio · 3 = avanzado */
   level: 1 | 2 | 3;
   /** Una línea: qué hace. */

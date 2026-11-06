@@ -20,6 +20,7 @@ export default function CommandRoute() {
   const { cmd, course } = useLocalSearchParams<{ cmd: string; course?: string }>();
   if (course === 'sql') return <SqlRefSheet name={cmd} />;
   if (course === 'aws') return <AwsRefSheet name={cmd} />;
+  if (course === 'ia') return <PyRefSheet name={cmd} course="ia" />;
   return course === 'python' ? <PyRefSheet name={cmd} /> : <CommandSheet />;
 }
 

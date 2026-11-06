@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, TextInput, View, type ScrollViewInstance } from 'react-native';
 import type { OutChunk } from '@/lib/pyrun';
+import { FigureView } from './Figure';
 import { T } from './Text';
 import { darkColors, fonts, radius } from './theme';
 
@@ -25,11 +26,25 @@ export function PyOutput({ chunks, running, asking, onSubmitInput, onStop, empty
     const out: OutChunk[] = [];
     for (const c of chunks) {
       const last = out[out.length - 1];
-      if (last && last.err === c.err && last.kind === c.kind) last.text += c.text;
+      if (last && c.kind !== 'figure' && last.err === c.err && last.kind === c.kind) last.text += c.text;
       else out.push({ ...c });
     }
     return out;
   }, [chunks]);
+
+  // las figuras cortan el texto en bloques: texto, figura, texto…
+  const groups = useMemo(() => {
+    const out: { chunks: OutChunk[]; figure?: string }[] = [];
+    for (const c of merged) {
+      if (c.kind === 'figure') out.push({ chunks: [], figure: c.text });
+      else {
+        const last = out[out.length - 1];
+        if (last && !last.figure) last.chunks.push(c);
+        else out.push({ chunks: [c] });
+      }
+    }
+    return out;
+  }, [merged]);
 
   useEffect(() => {
     const t = setTimeout(() => scroll.current?.scrollToEnd({ animated: false }), 30);
@@ -56,11 +71,19 @@ export function PyOutput({ chunks, running, asking, onSubmitInput, onStop, empty
         {merged.length === 0 ? (
           <T v="small" color={darkColors.faint}>{running ? 'Ejecutando…' : emptyText}</T>
         ) : (
-          <T selectable style={{ fontFamily: fonts.mono, fontSize: 13, lineHeight: 19 }} color={darkColors.termText}>
-            {merged.map((c, i) => (
-              <T key={i} selectable style={{ fontFamily: fonts.mono, fontSize: 13, lineHeight: 19 }} color={c.err ? '#FF9AA5' : c.kind === 'echo' ? darkColors.mint : darkColors.termText}>{c.text}</T>
-            ))}
-          </T>
+          groups.map((g, gi) =>
+            g.figure ? (
+              <View key={gi} style={{ marginVertical: 8 }}>
+                <FigureView json={g.figure} dark />
+              </View>
+            ) : (
+              <T key={gi} selectable style={{ fontFamily: fonts.mono, fontSize: 13, lineHeight: 19 }} color={darkColors.termText}>
+                {g.chunks.map((c, i) => (
+                  <T key={i} selectable style={{ fontFamily: fonts.mono, fontSize: 13, lineHeight: 19 }} color={c.err ? '#FF9AA5' : c.kind === 'echo' ? darkColors.mint : darkColors.termText}>{c.text}</T>
+                ))}
+              </T>
+            ),
+          )
         )}
       </ScrollView>
       {asking && (

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Modal, Pressable, ScrollView, TextInput, View } from 'react-native';
-import { PY_SAMPLES } from '@/content/py/samples';
+import { samplesFor, type PyLikeCourse } from '@/content/pyRefs';
 import { useCourse, useGame } from '@/game/store';
 import { pyEngine } from '@/lib/pyrun';
 import { useStudyContext } from '@/lib/studyClock';
@@ -30,13 +30,24 @@ nombre = "Dojo"
 print(f"¡Hola, {nombre}!")
 `;
 
+const DEFAULT_IA = `# Laboratorio de IA: numpy como np, matplotlib como plt
+import numpy as np
+import matplotlib.pyplot as plt
+
+x = np.linspace(-3, 3, 50)
+plt.plot(x, x ** 2)
+plt.show()
+`;
+
 /** Laboratorio de Python: un editor con salida y un intérprete interactivo (REPL). Todo corre en el móvil. */
-export function PyLab() {
-  const { course } = useCourse('python');
-  useStudyContext('python');
-  const saved = (useGame.getState().courses.python.sandbox ?? {}) as Saved;
+export function PyLab({ course: id = 'python' }: { course?: PyLikeCourse }) {
+  const { course } = useCourse(id);
+  useStudyContext(id);
+  const ia = id === 'ia';
+  const samplesList = samplesFor(id);
+  const saved = (useGame.getState().courses[id].sandbox ?? {}) as Saved;
   const [mode, setMode] = useState<Mode>(saved.mode ?? 'editor');
-  const [code, setCode] = useState(saved.code ?? DEFAULT_CODE);
+  const [code, setCode] = useState(saved.code ?? (ia ? DEFAULT_IA : DEFAULT_CODE));
   const [samples, setSamples] = useState(false);
   const [confirm, setConfirm] = useState(false);
   const history = useRef<string[]>(saved.history ?? []);
@@ -46,11 +57,11 @@ export function PyLab() {
     (patch: Saved) => {
       if (timer.current) clearTimeout(timer.current);
       timer.current = setTimeout(() => {
-        const cur = (useGame.getState().courses.python.sandbox ?? {}) as Saved;
-        useGame.getState().setSandbox('python', { ...cur, ...patch, history: history.current.slice(-60) });
+        const cur = (useGame.getState().courses[id].sandbox ?? {}) as Saved;
+        useGame.getState().setSandbox(id, { ...cur, ...patch, history: history.current.slice(-60) });
       }, 1200);
     },
-    [],
+    [id],
   );
   useEffect(() => () => {
     if (timer.current) clearTimeout(timer.current);
@@ -58,14 +69,14 @@ export function PyLab() {
 
   const count = () => {
     const g = useGame.getState();
-    g.bump('python', { commands: 1, sandboxCommands: 1 });
+    g.bump(id, { commands: 1, sandboxCommands: 1 });
   };
 
   return (
     <Screen padded={false}>
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 40, gap: 12 }}>
         <CourseSwitcher />
-        <CourseHeader course={course} title={mode === 'editor' ? 'Editor de Python' : 'Intérprete (REPL)'} subtitle="Escribe y ejecuta Python al instante, sin conexión." />
+        <CourseHeader course={course} title={mode === 'editor' ? (ia ? 'Laboratorio de IA' : 'Editor de Python') : 'Intérprete (REPL)'} subtitle={ia ? 'NumPy, gráficas y modelos de juguete: todo corre en tu móvil, sin conexión.' : 'Escribe y ejecuta Python al instante, sin conexión.'} />
         <View style={{ flexDirection: 'row', gap: 8 }}>
           <Chip label="📝 Editor" active={mode === 'editor'} color={colors.cyan} onPress={() => { setMode('editor'); persist({ mode: 'editor' }); }} />
           <Chip label="⌨️ REPL" active={mode === 'repl'} color={colors.violet} onPress={() => { setMode('repl'); persist({ mode: 'repl' }); }} />
@@ -79,7 +90,7 @@ export function PyLab() {
             onRun={count}
           />
         ) : (
-          <ReplMode onRun={count} onHistory={(h) => { history.current = h; persist({}); }} initialHistory={history.current} />
+          <ReplMode ia={ia} onRun={count} onHistory={(h) => { history.current = h; persist({}); }} initialHistory={history.current} />
         )}
       </ScrollView>
 
@@ -89,7 +100,7 @@ export function PyLab() {
             <T v="h2">Programas de ejemplo</T>
             <T v="small" color={colors.dim}>Se cargan en el editor (tu código actual se sustituye).</T>
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-              {PY_SAMPLES.map((s) => (
+              {samplesList.map((s) => (
                 <Card
                   key={s.id}
                   pad={12}
@@ -170,7 +181,7 @@ function EditorMode({ code, onChange, onSamples, onClear, onRun }: { code: strin
 
 const REPL_KEYS = [':', '(', ')', '[', ']', '{', '}', '"', "'", '=', ',', '.'];
 
-function ReplMode({ onRun, onHistory, initialHistory }: { onRun: () => void; onHistory: (h: string[]) => void; initialHistory: string[] }) {
+function ReplMode({ ia, onRun, onHistory, initialHistory }: { ia: boolean; onRun: () => void; onHistory: (h: string[]) => void; initialHistory: string[] }) {
   const runner = usePyRunner();
   const session = useRef<PySessionApi | null>(null);
   const pending = useRef<string[]>([]);
@@ -178,7 +189,10 @@ function ReplMode({ onRun, onHistory, initialHistory }: { onRun: () => void; onH
   const [prompt, setPrompt] = useState('>>> ');
   const hist = useRef<string[]>(initialHistory);
   const hpos = useRef(initialHistory.length);
-  const welcome = useMemo(() => 'Python 3.13 (Dev Dojo) · escribe código y pulsa Enter.\nPrueba: 2 ** 10   ·   "hola".upper()   ·   [x * x for x in range(5)]\n', []);
+  const welcome = useMemo(
+    () => (ia ? 'Python 3.13 (Dev Dojo · IA) · escribe código y pulsa Enter.\nPrueba: import numpy as np   ·   np.arange(6).reshape(2, 3)   ·   np.random.default_rng(0).normal(size=3)\n' : 'Python 3.13 (Dev Dojo) · escribe código y pulsa Enter.\nPrueba: 2 ** 10   ·   "hola".upper()   ·   [x * x for x in range(5)]\n'),
+    [ia],
+  );
 
   useEffect(() => {
     runner.push({ text: welcome, err: false });

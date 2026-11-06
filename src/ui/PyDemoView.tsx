@@ -6,6 +6,7 @@ import { pyEngine } from '@/lib/pyrun';
 import { splitReplChunks, withPrompts } from '@/lib/pyrepl';
 import type { PyOptions, PySessionApi } from '@/pyengine/types';
 import { Button } from './Button';
+import { FigureView } from './Figure';
 import { PyCode } from './PyCode';
 import { Inline } from './RichText';
 import { T } from './Text';
@@ -15,7 +16,21 @@ interface Done {
   cell: PyCell;
   /** Texto mostrado: el código (con prompts si es REPL). */
   shown: string;
-  out: { text: string; err: boolean }[];
+  out: { text: string; err: boolean; figure?: string }[];
+}
+
+/** Parte la salida en bloques de texto y figuras, conservando el orden. */
+function groupOut(out: Done['out']): { items: Done['out']; figure?: string }[] {
+  const res: { items: Done['out']; figure?: string }[] = [];
+  for (const o of out) {
+    if (o.figure) res.push({ items: [], figure: o.figure });
+    else {
+      const last = res[res.length - 1];
+      if (last && !last.figure) last.items.push(o);
+      else res.push({ items: [o] });
+    }
+  }
+  return res;
 }
 
 /** Celdas de Python que se ejecutan una a una con el intérprete real, compartiendo estado (como un cuaderno). */
@@ -48,19 +63,20 @@ export function PyDemoView({ cells, setup, intro, onComplete }: { cells: PyCell[
     const eng = pyEngine();
     session.current ??= new eng.PySession(setup);
     const s = session.current;
-    const out: { text: string; err: boolean }[] = [];
+    const out: { text: string; err: boolean; figure?: string }[] = [];
+    const onFigure = (json: string) => out.push({ text: '', err: false, figure: json });
     let shown = cell.code.replace(/\n$/, '');
     try {
       if (cell.repl) {
         const chunks = splitReplChunks(cell.code, eng.isIncomplete);
         shown = chunks.map(withPrompts).join('\n');
         for (const chunk of chunks) {
-          const r = await s.run(chunk + '\n', { mode: 'repl', onOutput: (text, err) => out.push({ text, err }) });
+          const r = await s.run(chunk + '\n', { mode: 'repl', onOutput: (text, err) => out.push({ text, err }), onFigure });
           if (r.value !== undefined) out.push({ text: r.value + '\n', err: false });
           if (!r.ok && r.error && !out.some((o) => o.err)) out.push({ text: r.error.traceback + '\n', err: true });
         }
       } else {
-        const r = await s.run(cell.code, { mode: 'exec', filename: 'demo.py', onOutput: (text, err) => out.push({ text, err }) });
+        const r = await s.run(cell.code, { mode: 'exec', filename: 'demo.py', onOutput: (text, err) => out.push({ text, err }), onFigure });
         if (!r.ok && r.error && !out.some((o) => o.err)) out.push({ text: r.error.traceback + '\n', err: true });
       }
     } catch (e) {
@@ -96,11 +112,19 @@ export function PyDemoView({ cells, setup, intro, onComplete }: { cells: PyCell[
               <PyCode code={d.shown} flush />
               {d.out.length > 0 && (
                 <View style={{ paddingLeft: 8, borderLeftWidth: 2, borderLeftColor: d.out.some((o) => o.err) ? '#FF9AA5' : darkColors.mint + '88' }}>
-                  <T selectable style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 13, lineHeight: 19 }} color={darkColors.termText}>
-                    {d.out.map((o, k) => (
-                      <T key={k} selectable style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 13, lineHeight: 19 }} color={o.err ? '#FF9AA5' : darkColors.termText}>{o.text}</T>
-                    ))}
-                  </T>
+                  {groupOut(d.out).map((g, gi) =>
+                    g.figure ? (
+                      <View key={gi} style={{ marginVertical: 6 }}>
+                        <FigureView json={g.figure} dark />
+                      </View>
+                    ) : (
+                      <T key={gi} selectable style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 13, lineHeight: 19 }} color={darkColors.termText}>
+                        {g.items.map((o, k) => (
+                          <T key={k} selectable style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 13, lineHeight: 19 }} color={o.err ? '#FF9AA5' : darkColors.termText}>{o.text}</T>
+                        ))}
+                      </T>
+                    ),
+                  )}
                 </View>
               )}
               {d.cell.note ? (

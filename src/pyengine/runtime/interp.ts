@@ -37,6 +37,18 @@ export class Interp {
   /** secuencia ordenada de escrituras: (texto, esError) */
   runLog: { text: string; isErr: boolean }[] = [];
   onWrite: ((text: string, isErr: boolean) => void) | null = null;
+  /** figuras (gráficos de matplotlib) emitidas en esta ejecución, como JSON */
+  figures: string[] = [];
+  onFigure: ((json: string) => void) | null = null;
+  /** al reejecutar tras un input(): cuántas figuras ya se entregaron (se omiten) y cuántas lleva esta pasada */
+  figSkip = 0;
+  figCount = 0;
+
+  emitFigure(json: string): void {
+    if (this.figCount++ < this.figSkip) return;
+    this.figures.push(json);
+    if (this.onFigure) this.onFigure(json);
+  }
   /** caracteres (en orden de escritura) que ya se emitieron y deben omitirse al reejecutar */
   skipChars = 0;
   written = 0;

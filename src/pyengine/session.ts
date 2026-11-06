@@ -81,11 +81,13 @@ export class PySession implements PySessionApi {
     const baseOut = I.allOut;
     const baseErr = I.allErr;
     let emitted = 0;
+    let figEmitted = 0;
     let attempt = 0;
     for (;;) {
       if (attempt > 0 && restore) restore();
       I.stdinPos = startPos;
       I.skipChars = emitted;
+      I.figSkip = figEmitted;
       I.written = 0;
       I.allOut = baseOut;
       I.allErr = baseErr;
@@ -96,6 +98,7 @@ export class PySession implements PySessionApi {
         : null;
       const r = this.runOnce(code, mode, filename, o);
       emitted += I.written;
+      figEmitted = Math.max(figEmitted, I.figCount);
       if (r.need !== undefined) {
         // el programa pide una línea: se muestra el aviso y se espera la respuesta
         if (r.need) {
@@ -139,6 +142,9 @@ export class PySession implements PySessionApi {
     I.errChunks = [];
     I.runLog = [];
     I.onWrite = o.onOutput ?? null;
+    I.onFigure = o.onFigure ?? null;
+    I.figures = [];
+    I.figCount = 0;
     I.signal = o.signal ?? null;
     I.replValue = undefined;
     const prev = setActive(I);
@@ -160,9 +166,11 @@ export class PySession implements PySessionApi {
       }
     } finally {
       I.onWrite = null;
+      I.onFigure = null;
       setActive(prev);
     }
     I.flushFiles();
+    if (I.figures.length) res.figures = I.figures.slice();
     res.stdout = I.outChunks.join('');
     res.stderr = I.errChunks.join('');
     return { result: res };

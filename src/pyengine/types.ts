@@ -63,6 +63,8 @@ export interface PyRunResult {
   timedOut?: boolean;
   /** Código de salida si el programa llamó a sys.exit()/exit()/quit(). */
   exitCode?: number;
+  /** Figuras (gráficos) que dibujó el programa en esta ejecución, como JSON. */
+  figures?: string[];
 }
 
 export interface RunOptions {
@@ -76,6 +78,8 @@ export interface RunOptions {
   filename?: string;
   /** Salida en streaming (se invoca a medida que el programa escribe). Útil para la UI. */
   onOutput?: (text: string, isErr: boolean) => void;
+  /** Cada vez que el programa dibuja una figura (matplotlib): su descripción en JSON. */
+  onFigure?: (json: string) => void;
   /**
    * Entrada interactiva. Se llama cuando input()/sys.stdin necesita una línea y `stdin` está agotado.
    * Devuelve la línea (sin "\n") o null para EOF. La implementación puede reejecutar el programa de forma

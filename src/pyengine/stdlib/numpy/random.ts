@@ -70,6 +70,48 @@ function fill(size: number[] | null, f: () => number, dtype: DType = 'float64'):
   return mkNum(out, size, dtype);
 }
 
+
+/**
+ * Como `fill`, pero los parámetros de la distribución pueden ser escalares o array-like (se difunden entre sí y con `size`),
+ * igual que en NumPy: `rng.normal([0, 3], 0.5, size=(100, 2))`.
+ */
+function fillN(ctx: Ctx, size: number[] | null, params: any[], defs: number[], f: (v: number[]) => number, dtype: DType = 'float64'): any {
+  const isArr = (p: any) => p instanceof NdArray || p instanceof PyList || p instanceof PyTuple;
+  const scal: (number | null)[] = [];
+  const arrs: (NdArray | null)[] = [];
+  let shape: number[] = size ?? [];
+  params.forEach((p, i) => {
+    if (isNone(p)) {
+      scal.push(defs[i]);
+      arrs.push(null);
+    } else if (isArr(p)) {
+      const A = ctx.arr(p);
+      if (A.ndim === 0) {
+        scal.push(flatNum(A)[0]);
+        arrs.push(null);
+      } else {
+        scal.push(null);
+        arrs.push(A);
+        shape = nd.broadcastShapes(shape, A.shape);
+      }
+    } else {
+      scal.push(numArg(p));
+      arrs.push(null);
+    }
+  });
+  if (!arrs.some((a) => a !== null)) return fill(size, () => f(scal as number[]), dtype);
+  if (size !== null && (shape.length !== size.length || shape.some((d, i) => d !== size[i]))) throw valueError(`shape mismatch: objects cannot be broadcast to a single shape.  Mismatch is between arg 0 with shape (${shape.join(', ')}) and arg 1 with shape (${size.join(', ')}).`);
+  const flat = arrs.map((a) => (a ? flatNum(nd.broadcastTo(a, shape)) : null));
+  const n = sizeOf(shape);
+  const out = new Float64Array(n);
+  const vals = new Array<number>(params.length);
+  for (let i = 0; i < n; i++) {
+    for (let k = 0; k < vals.length; k++) vals[k] = flat[k] ? flat[k]![i] : (scal[k] as number);
+    out[i] = f(vals);
+  }
+  return mkNum(out, shape, dtype);
+}
+
 function seedOf(v: any): bigint {
   if (isNone(v)) return 0x5eedn;
   const n = ops.intValue(v);
@@ -240,57 +282,39 @@ function cholLower(cov: NdArray): Float64Array {
 function distributions(ctx: Ctx, get: (self: any) => Sampler, legacy: boolean): Record<string, [string, (...a: any[]) => any]> {
   const g = get;
   const r: Record<string, [string, (...a: any[]) => any]> = {};
-  r.uniform = ['self, low=, high=, size=', (self: any, lo: any, hi: any, size: any) => {
-    const l = isNone(lo) ? 0 : numArg(lo);
-    const h = isNone(hi) ? 1 : numArg(hi);
-    return fill(sizeArg(size), () => l + (h - l) * g(self).double());
-  }];
-  r.normal = ['self, loc=, scale=, size=', (self: any, loc: any, scale: any, size: any) => {
-    const mu = isNone(loc) ? 0 : numArg(loc);
-    const sd = isNone(scale) ? 1 : numArg(scale);
-    return fill(sizeArg(size), () => mu + sd * g(self).gauss());
-  }];
+  r.uniform = ['self, low=, high=, size=', (self: any, lo: any, hi: any, size: any) =>
+    fillN(ctx, sizeArg(size), [lo, hi], [0, 1], ([l, h]) => l + (h - l) * g(self).double())];
+  r.normal = ['self, loc=, scale=, size=', (self: any, loc: any, scale: any, size: any) =>
+    fillN(ctx, sizeArg(size), [loc, scale], [0, 1], ([mu, sd]) => mu + sd * g(self).gauss())];
   r.standard_normal = ['self, size=', (self: any, size: any) => fill(sizeArg(size), () => g(self).gauss())];
-  r.exponential = ['self, scale=, size=', (self: any, scale: any, size: any) => {
-    const sc = isNone(scale) ? 1 : numArg(scale);
-    return fill(sizeArg(size), () => -sc * Math.log(1 - g(self).double()));
-  }];
-  r.lognormal = ['self, mean=, sigma=, size=', (self: any, mean: any, sigma: any, size: any) => {
-    const mu = isNone(mean) ? 0 : numArg(mean);
-    const sd = isNone(sigma) ? 1 : numArg(sigma);
-    return fill(sizeArg(size), () => Math.exp(mu + sd * g(self).gauss()));
-  }];
-  r.laplace = ['self, loc=, scale=, size=', (self: any, loc: any, scale: any, size: any) => {
-    const mu = isNone(loc) ? 0 : numArg(loc);
-    const sc = isNone(scale) ? 1 : numArg(scale);
-    return fill(sizeArg(size), () => {
+  r.exponential = ['self, scale=, size=', (self: any, scale: any, size: any) =>
+    fillN(ctx, sizeArg(size), [scale], [1], ([sc]) => -sc * Math.log(1 - g(self).double()))];
+  r.lognormal = ['self, mean=, sigma=, size=', (self: any, mean: any, sigma: any, size: any) =>
+    fillN(ctx, sizeArg(size), [mean, sigma], [0, 1], ([mu, sd]) => Math.exp(mu + sd * g(self).gauss()))];
+  r.laplace = ['self, loc=, scale=, size=', (self: any, loc: any, scale: any, size: any) =>
+    fillN(ctx, sizeArg(size), [loc, scale], [0, 1], ([mu, sc]) => {
       const u = g(self).double() - 0.5;
       return mu - sc * Math.sign(u) * Math.log(1 - 2 * Math.abs(u));
-    });
-  }];
-  r.binomial = ['self, n, p, size=', (self: any, n: any, p: any, size: any) => {
-    const nn = intArg(n);
-    const pp = numArg(p);
-    return fill(sizeArg(size), () => {
+    })];
+  r.binomial = ['self, n, p, size=', (self: any, n: any, p: any, size: any) =>
+    fillN(ctx, sizeArg(size), [n, p], [0, 0], ([nn, pp]) => {
       let k = 0;
       for (let i = 0; i < nn; i++) if (g(self).double() < pp) k++;
       return k;
-    }, 'int64');
-  }];
-  r.poisson = ['self, lam=, size=', (self: any, lam: any, size: any) => {
-    const l = isNone(lam) ? 1 : numArg(lam);
-    return fill(sizeArg(size), () => {
+    }, 'int64')];
+  r.poisson = ['self, lam=, size=', (self: any, lam: any, size: any) =>
+    fillN(ctx, sizeArg(size), [lam], [1], ([l]) => {
       const L = Math.exp(-l);
       let k = 0;
-      let p = 1;
+      let pr = 1;
       do {
         k++;
-        p *= g(self).double();
-      } while (p > L);
+        pr *= g(self).double();
+      } while (pr > L);
       return k - 1;
-    }, 'int64');
-  }];
-  r.geometric = ['self, p, size=', (self: any, p: any, size: any) => fill(sizeArg(size), () => Math.ceil(Math.log(1 - g(self).double()) / Math.log(1 - numArg(p))), 'int64')];
+    }, 'int64')];
+  r.geometric = ['self, p, size=', (self: any, p: any, size: any) =>
+    fillN(ctx, sizeArg(size), [p], [0.5], ([pp]) => Math.ceil(Math.log(1 - g(self).double()) / Math.log(1 - pp)), 'int64')];
   r.choice = ['self, a, size=, replace=, p=', (self: any, a: any, size: any, replace: any, p: any) => choice(ctx, g(self), a, size, bool(replace, true), p, legacy)];
   r.permutation = ['self, x', (self: any, x: any) => permutation(ctx, g(self), x)];
   r.shuffle = ['self, x', (self: any, x: any) => {

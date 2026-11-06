@@ -22,8 +22,8 @@ export function pyEngine(): PyEngine {
 export interface OutChunk {
   text: string;
   err: boolean;
-  /** 'echo' = lo que escribió el alumno (prompt >>>); se pinta aparte de la salida del programa. */
-  kind?: 'echo';
+  /** 'echo' = lo que escribió el alumno (prompt >>>); 'figure' = una figura de matplotlib (el JSON va en `text`). */
+  kind?: 'echo' | 'figure';
 }
 
 /** Ejecuta código en una sesión nueva (o la dada) y devuelve resultado + salida en orden. */

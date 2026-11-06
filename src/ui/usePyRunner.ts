@@ -69,6 +69,7 @@ export function usePyRunner() {
             if (isErr) emittedErr.current = true;
             push({ text, err: isErr });
           },
+          onFigure: (json) => push({ text: json, err: false, kind: 'figure' }),
           onInput: (prompt) =>
             new Promise<string | null>((resolve) => {
               flush();

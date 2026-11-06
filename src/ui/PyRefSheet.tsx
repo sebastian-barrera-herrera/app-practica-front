@@ -1,7 +1,8 @@
 import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
-import { PY_REF_CATEGORY, refByName, type PyRef } from '@/content/py/reference';
+import type { PyRef } from '@/content/py/reference';
+import { refFor, refSource, type PyLikeCourse } from '@/content/pyRefs';
 import { useGame } from '@/game/store';
 import { pyEngine } from '@/lib/pyrun';
 import { splitReplChunks } from '@/lib/pyrepl';
@@ -29,7 +30,7 @@ async function runExample(runner: ReturnType<typeof usePyRunner>, code: string) 
   }
 }
 
-function Example({ code, note }: { code: string; note?: string }) {
+function Example({ code, note, course }: { code: string; note?: string; course: PyLikeCourse }) {
   const runner = usePyRunner();
   const [shown, setShown] = useState(false);
   return (
@@ -56,9 +57,9 @@ function Example({ code, note }: { code: string; note?: string }) {
             kind="secondary"
             onPress={() => {
               const g = useGame.getState();
-              const cur = (g.courses.python.sandbox ?? {}) as Record<string, unknown>;
-              g.setSandbox('python', { ...cur, code: code + '\n', mode: 'editor' });
-              g.setActive('python');
+              const cur = (g.courses[course].sandbox ?? {}) as Record<string, unknown>;
+              g.setSandbox(course, { ...cur, code: code + '\n', mode: 'editor' });
+              g.setActive(course);
               router.push('/(tabs)/lab');
             }}
           />
@@ -74,18 +75,19 @@ function Example({ code, note }: { code: string; note?: string }) {
 }
 
 /** Ficha de la biblioteca de Python. */
-export function PyRefSheet({ name }: { name: string }) {
-  useStudyContext('python');
-  const ref: PyRef | undefined = refByName(name);
+export function PyRefSheet({ name, course = 'python' }: { name: string; course?: PyLikeCourse }) {
+  useStudyContext(course);
+  const src = refSource(course);
+  const ref: PyRef<string> | undefined = refFor(course, name);
   useEffect(() => {
-    if (ref) useGame.getState().bump('python', { libraryViews: 1 });
-  }, [ref]);
+    if (ref) useGame.getState().bump(course, { libraryViews: 1 });
+  }, [ref, course]);
 
   return (
     <Screen edges={['top', 'bottom']}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingTop: 8, paddingBottom: 6 }}>
         <Pressable onPress={() => router.back()} hitSlop={12} accessibilityLabel="Volver"><T style={{ fontSize: 22 }} color={colors.dim}>←</T></Pressable>
-        <T v="tiny" color={colors.dim}>Biblioteca de Python</T>
+        <T v="tiny" color={colors.dim}>{src.title}</T>
       </View>
       {!ref ? (
         <View style={{ gap: 16, paddingTop: 30 }}>
@@ -98,7 +100,7 @@ export function PyRefSheet({ name }: { name: string }) {
             <T style={{ fontFamily: fonts.monoBold, fontSize: 30, lineHeight: 38 }} color={ink('#5AA9FF')}>{ref.name}</T>
             <T color={colors.dim}>{ref.summary}</T>
             <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
-              <Chip label={PY_REF_CATEGORY[ref.category]} color={colors.cyan} />
+              <Chip label={src.categories[ref.category] ?? ref.category} color={colors.cyan} />
               <Chip label={ref.kind} color={colors.violet} />
               <Chip label={['', 'Básico', 'Intermedio', 'Avanzado'][ref.level]} color={colors.mint} />
             </View>
@@ -110,14 +112,14 @@ export function PyRefSheet({ name }: { name: string }) {
           {ref.details ? <RichText body={ref.details} size={15} /> : null}
           <T v="label" color={colors.dim}>Ejemplos</T>
           {ref.examples.map(([code, note], i) => (
-            <Example key={i} code={code} note={note} />
+            <Example key={i} code={code} note={note} course={course} />
           ))}
           {ref.seeAlso?.length ? (
             <View>
               <T v="label" color={colors.dim} style={{ marginBottom: 6 }}>Mira también</T>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                 {ref.seeAlso.map((s) => (
-                  <Chip key={s} label={s} mono color={colors.cyan} onPress={() => router.push({ pathname: '/library/[cmd]', params: { cmd: s, course: 'python' } })} />
+                  <Chip key={s} label={s} mono color={colors.cyan} onPress={() => router.push({ pathname: '/library/[cmd]', params: { cmd: s, course } })} />
                 ))}
               </View>
             </View>

@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import { FlatList, Pressable, ScrollView, TextInput, View } from 'react-native';
-import { PY_REF_CATEGORY, PY_REFERENCE, type PyRefCategory } from '@/content/py/reference';
+import { refSource, type PyLikeCourse } from '@/content/pyRefs';
 import { Card } from './Card';
 import { Chip } from './Chip';
 import { Screen } from './Screen';
@@ -12,28 +12,29 @@ const LEVEL_LABEL = ['', 'Básico', 'Intermedio', 'Avanzado'];
 const levelColor = (l: number) => [colors.mint, colors.mint, colors.cyan, colors.violet][l] ?? colors.mint;
 
 /** Biblioteca de Python: busca funciones, métodos, sentencias y módulos con ejemplos ejecutables. */
-export function PyLibrary() {
+export function PyLibrary({ course = 'python' }: { course?: PyLikeCourse }) {
+  const src = useMemo(() => refSource(course), [course]);
   const [q, setQ] = useState('');
-  const [cat, setCat] = useState<PyRefCategory | null>(null);
-  const cats = useMemo(() => [...new Set(PY_REFERENCE.map((r) => r.category))], []);
+  const [cat, setCat] = useState<string | null>(null);
+  const cats = useMemo(() => [...new Set(src.refs.map((r) => r.category))], [src]);
   const shown = useMemo(() => {
     const t = q.trim().toLowerCase();
-    return PY_REFERENCE.filter((r) => (cat ? r.category === cat : true) && (!t || r.name.toLowerCase().includes(t) || r.summary.toLowerCase().includes(t))).sort((a, b) => a.name.localeCompare(b.name));
-  }, [q, cat]);
+    return src.refs.filter((r) => (cat ? r.category === cat : true) && (!t || r.name.toLowerCase().includes(t) || r.summary.toLowerCase().includes(t))).sort((a, b) => a.name.localeCompare(b.name));
+  }, [q, cat, src]);
 
   return (
     <Screen edges={['top', 'bottom']}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingTop: 8, paddingBottom: 10 }}>
         <Pressable onPress={() => router.back()} hitSlop={12} accessibilityLabel="Volver"><T style={{ fontSize: 22 }} color={colors.dim}>←</T></Pressable>
         <View style={{ flex: 1 }}>
-          <T v="h1">Biblioteca de Python</T>
-          <T v="tiny" color={colors.dim}>{PY_REFERENCE.length} fichas con ejemplos que puedes ejecutar</T>
+          <T v="h1">{src.title}</T>
+          <T v="tiny" color={colors.dim}>{src.refs.length} fichas con ejemplos que puedes ejecutar</T>
         </View>
       </View>
       <TextInput
         value={q}
         onChangeText={setQ}
-        placeholder="Buscar función, método o palabra…"
+        placeholder={src.placeholder}
         placeholderTextColor={colors.faint}
         autoCapitalize="none"
         autoCorrect={false}
@@ -44,7 +45,7 @@ export function PyLibrary() {
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, alignItems: 'center', paddingVertical: 10 }}>
           <Chip label="Todos" active={cat === null} onPress={() => setCat(null)} />
           {cats.map((c) => (
-            <Chip key={c} label={PY_REF_CATEGORY[c]} color={colors.cyan} active={cat === c} onPress={() => setCat(cat === c ? null : c)} />
+            <Chip key={c} label={src.categories[c] ?? c} color={colors.cyan} active={cat === c} onPress={() => setCat(cat === c ? null : c)} />
           ))}
         </ScrollView>
       </View>
@@ -56,7 +57,7 @@ export function PyLibrary() {
         contentContainerStyle={{ gap: 8, paddingBottom: 30 }}
         ListEmptyComponent={<T color={colors.dim} center style={{ marginTop: 30 }}>Nada coincide con «{q}».</T>}
         renderItem={({ item: r }) => (
-          <Card pad={12} onPress={() => router.push({ pathname: '/library/[cmd]', params: { cmd: r.name, course: 'python' } })}>
+          <Card pad={12} onPress={() => router.push({ pathname: '/library/[cmd]', params: { cmd: r.name, course } })}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
               <View style={{ flex: 1 }}>
                 <T style={{ fontFamily: fonts.monoBold, fontSize: 16 }} color={ink('#5AA9FF')}>

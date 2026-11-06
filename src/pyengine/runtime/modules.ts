@@ -127,7 +127,7 @@ function searchPath(I: Interp): string[] {
   return out;
 }
 
-const THIRD_PARTY = new Set(['flask', 'requests', 'boto3', 'botocore', 'redis', 'yaml', 'PIL', 'numpy', 'pandas', 'gunicorn', 'werkzeug', 'jinja2']);
+const THIRD_PARTY = new Set(['flask', 'requests', 'boto3', 'botocore', 'redis', 'yaml', 'PIL', 'numpy', 'pandas', 'matplotlib', 'sklearn', 'torch', 'scipy', 'gunicorn', 'werkzeug', 'jinja2']);
 
 function loadModule(I: Interp, abs: string, parent: PyModule | null): PyModule {
   const leaf = abs.slice(abs.lastIndexOf('.') + 1);

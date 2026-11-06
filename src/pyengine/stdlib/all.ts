@@ -18,3 +18,5 @@ import './aws';
 import './redis';
 import './flask';
 import './numpy/module';
+import './dojo';
+import './matplotlib';

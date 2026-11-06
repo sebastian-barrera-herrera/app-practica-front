@@ -60,7 +60,7 @@ export function world(
   const course: CourseId = w.course ?? 'linux';
   const sqlSetup = (s: SqlSetup | string): SqlSetup => (typeof s === 'string' ? { db: s } : s);
   const boss: AnyChallenge | undefined = w.boss
-    ? course === 'python'
+    ? course === 'python' || course === 'ia'
       ? ({ ...(w.boss as PyPracticeInput), lang: 'py', id: w.boss.id ?? `${w.id}-boss` } as PyChallenge)
       : course === 'sql'
         ? ({ ...(w.boss as SqlPracticeInput), lang: 'sql', setup: sqlSetup((w.boss as SqlPracticeInput).setup), id: w.boss.id ?? `${w.id}-boss` } as SqlChallenge)

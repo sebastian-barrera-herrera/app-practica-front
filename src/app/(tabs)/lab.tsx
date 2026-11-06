@@ -64,6 +64,7 @@ export default function LabTab() {
   const { course } = useCourse();
   if (course.lab.kind === 'sql') return <SqlLab />;
   if (course.lab.kind === 'aws') return <TerminalLab id="aws" />;
+  if (course.lab.kind === 'ia') return <PyLab course="ia" />;
   return course.lab.kind === 'terminal' ? <TerminalLab id="linux" /> : <PyLab />;
 }
 
