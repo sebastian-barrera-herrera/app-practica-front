@@ -173,6 +173,16 @@
     "concurrent.futures.thread": "own:concurrent/futures/thread.py",
     "concurrent.futures.process": "own:concurrent/futures/process.py",
     "socket": "own:socket.py",
-    "subprocess": "own:subprocess.py"
+    "subprocess": "own:subprocess.py",
+    "pandas": "own:pandas.py",
+    "sklearn": "own:sklearn/__init__.py!pkg",
+    "sklearn.exceptions": "own:sklearn/exceptions.py",
+    "sklearn.utils": "own:sklearn/utils.py",
+    "sklearn.base": "own:sklearn/base.py",
+    "sklearn._data": "own:sklearn/_data.py",
+    "sklearn.preprocessing": "own:sklearn/preprocessing.py",
+    "sklearn.impute": "own:sklearn/impute.py",
+    "sklearn.model_selection": "own:sklearn/model_selection.py",
+    "sklearn.datasets": "own:sklearn/datasets.py"
   }
 }

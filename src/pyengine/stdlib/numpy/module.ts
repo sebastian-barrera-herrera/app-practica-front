@@ -1174,6 +1174,41 @@ function install(m: PyModule): void {
       void sp;
     }
   });
+  // finfo / iinfo: límites numéricos (solo los tipos de 64 bits y los habituales)
+  const typeNameOf = (dt: any, dflt: string): string => {
+    if (dt === undefined || dt === null) return dflt;
+    try {
+      const n = ops.getAttr(dt, '__name__');
+      if (typeof n === 'string') return n;
+    } catch {
+      /* se prueba el nombre del dtype */
+    }
+    try {
+      return String(dtypeName(dt));
+    } catch {
+      return dflt;
+    }
+  };
+  const infoType = newNativeType('finfo', 'numpy', [objectType]);
+  const mkInfo = (props: Record<string, any>): any => {
+    const o = new PyObject(infoType);
+    o.dict = new PyDict();
+    for (const [k, v] of Object.entries(props)) o.dict.set(k, v);
+    return o;
+  };
+  f('finfo', 'dtype=', (dt?: any) => {
+    const nm = typeNameOf(dt, 'float64');
+    const single = /32|single/.test(String(nm));
+    return mkInfo(single
+      ? { eps: F(1.1920929e-07), max: F(3.4028234663852886e38), min: F(-3.4028234663852886e38), tiny: F(1.1754943508222875e-38), smallest_normal: F(1.1754943508222875e-38), bits: 32, precision: 6, resolution: F(1e-6), dtype: 'float32' }
+      : { eps: F(2.220446049250313e-16), max: F(1.7976931348623157e308), min: F(-1.7976931348623157e308), tiny: F(2.2250738585072014e-308), smallest_normal: F(2.2250738585072014e-308), bits: 64, precision: 15, resolution: F(1e-15), dtype: 'float64' });
+  });
+  f('iinfo', 'dtype=', (dt?: any) => {
+    const nm = typeNameOf(dt, 'int64');
+    const bits = /8/.test(nm) ? 8 : /16/.test(nm) ? 16 : /32/.test(nm) ? 32 : 64;
+    const hi = bits === 64 ? 9223372036854775807n : (1n << BigInt(bits - 1)) - 1n;
+    return mkInfo({ bits, max: hi > BigInt(Number.MAX_SAFE_INTEGER) ? hi : Number(hi), min: -hi - 1n > BigInt(-Number.MAX_SAFE_INTEGER) ? Number(-hi - 1n) : -hi - 1n, dtype: 'int' + bits });
+  });
   f('seterr', '**kw', () => new PyDict());
   f('geterr', '', () => new PyDict());
   f('may_share_memory', 'a, b', (a: any, b: any) => a instanceof NdArray && b instanceof NdArray && (a.buf === b.buf));
