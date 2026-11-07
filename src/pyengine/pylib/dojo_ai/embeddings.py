@@ -1,4 +1,4 @@
-"""Embeddings de juguete (64 dimensiones) para practicar búsqueda semántica sin descargar modelos.
+"""Embeddings de juguete (128 dimensiones) para practicar búsqueda semántica sin descargar modelos.
 
 No es un modelo entrenado: parte de un léxico curado en español (``_lexicon.py``) en el que cada palabra pertenece a
 conceptos. Aun así se comporta como un embedding de verdad: palabras de significado parecido quedan cerca (coseno alto),
@@ -14,7 +14,8 @@ import numpy as np
 
 from dojo_ai._lexicon import EXTRA, GROUPS, STOPWORDS
 
-DIM = 64
+DIM = 128
+RUIDO = 0.9          # peso de la «identidad» propia de cada palabra frente a su significado (concepto)
 _SUFIJOS = sorted(
     'amientos imientos aciones uciones amiento imiento adores adoras acion ucion mente ables ibles ando iendo ados adas idos idas aron ieron aban amos emos imos ar er ir as es os an en on ad ado ida ido ada a e o s'.split(),
     key=len,
@@ -88,7 +89,7 @@ class _Modelo:
                 else:
                     v = v + w * P[idx[c]]
             r = _gauss(_fnv('w:' + k), DIM)
-            v = v + 0.3 * r / np.linalg.norm(r)
+            v = v + RUIDO * r / np.linalg.norm(r)
             self.exacto[k] = v / np.linalg.norm(v)
         por_raiz = {}
         for k in coords:
@@ -138,7 +139,7 @@ def tokens(texto):
 
 
 def embed_palabra(palabra):
-    """Vector (64,) de una palabra del vocabulario; ``None`` si no la conoce."""
+    """Vector (128,) de una palabra del vocabulario; ``None`` si no la conoce."""
     v = _modelo().palabra(palabra)
     return None if v is None else v.copy()
 
@@ -164,7 +165,7 @@ def _embed_texto(texto):
 
 
 def embed(texto):
-    """Embedding de una frase (``(64,)``) o de una lista de frases (``(n, 64)``), normalizados a longitud 1."""
+    """Embedding de una frase (``(128,)``) o de una lista de frases (``(n, 128)``), normalizados a longitud 1."""
     if isinstance(texto, str):
         return _embed_texto(texto)
     return np.array([_embed_texto(t) for t in texto])

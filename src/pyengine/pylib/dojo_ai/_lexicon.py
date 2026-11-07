@@ -1,7 +1,7 @@
 """Léxico semántico en español para los embeddings de juguete de ``dojo_ai``.
 
 Cada palabra pertenece a uno o varios *conceptos* (ejes). Un embedding es la suma de los ejes de sus palabras,
-proyectada a 64 dimensiones con una matriz aleatoria fija: así las dimensiones finales NO son interpretables
+proyectada a 128 dimensiones con una matriz aleatoria fija: así las dimensiones finales NO son interpretables
 (como en un embedding real) pero las distancias sí reflejan el significado.
 """
 
@@ -48,6 +48,29 @@ GROUPS = {
     'lento': 'lento tardar retraso demora despacio tarde pausado',
     'cantidad': 'uno dos tres cuatro cinco seis siete diez veinte treinta cien mil número cantidad total mitad doble',
     'accion': 'hacer usar ver buscar encontrar necesitar querer poder saber decir dar tener abrir cerrar guardar',
+    # conceptos finos de atención al cliente (cada tema de la tienda tiene su propio eje)
+    'internacional': 'extranjero internacional internacionales europa europeo unión mundo exterior fuera mundial países',
+    'seguimiento': 'seguimiento rastrear rastreo localizar seguir sigo código tracking encuentro paradero',
+    'express': 'exprés express urgente 24 inmediato antes',
+    'gratis': 'gratis gratuito gratuita gratuitos sin coste importe',
+    'plazo': 'plazo límite caduca caducan caducar vencimiento hasta desde',
+    'reembolso': 'reembolso reembolsar devuelven devuelvan devuelvo devuelves devuelve devuelva devolvéis devolvemos reintegro abono recuperar dinero cobro',
+    'garantia': 'garantía garantizar años defectos fabricación cubre cobertura duración dura duran',
+    'defecto': 'roto rota rotos defectuoso defectuosa dañado dañada estropeado averiado sustituir sustituimos foto llegó',
+    'talla': 'talla tallas tamaño medida queda quedan ajusta cambiarla cambiarlo',
+    'metodos_pago': 'tarjeta paypal transferencia débito crédito bancaria efectivo método métodos aceptamos bizum',
+    'plazos': 'plazos cuotas intereses fraccionar fraccionado mensualidades financiar',
+    'factura': 'factura facturas descargar descargo descargas recibo comprobante justificante',
+    'cupon': 'cupón cupones código promoción promocional combinar introducir carrito',
+    'password': 'contraseña clave olvidé olvidado olvidaste restablecer recuperar acceso entrar',
+    'borrar_cuenta': 'eliminar borrar borro borrar baja personales privacidad',
+    'puntos': 'puntos fidelidad acumulas ganas canjear obtienes',
+    'horario': 'horario hora horas atienden atendéis atiende atención abierto abre cierra lunes viernes chat teléfono',
+    'email_contacto': 'correo email escribir escribirnos escríbenos contacto contactar responder respuesta',
+    'cancelar': 'cancelar cancelación cancelo anular anulo almacén',
+    'direccion': 'dirección direcciones domicilio entrega',
+    'regalo': 'regalo regalos tarjetas',
+    'proceso_devolucion': 'solicitar solicitud etiqueta prepagada proceso pasos artículo',
 }
 
 # palabras con varios conceptos o con pesos concretos. Las claves que empiezan por ~ son vectores latentes
@@ -98,8 +121,10 @@ EXTRA = {
     'reembolso': {'devolucion': 1, 'dinero': 0.8},
     'devolver': {'devolucion': 1, 'envio': 0.2},
     'factura': {'pago': 1, 'dinero': 0.5},
-    'cupón': {'dinero': 0.8, 'compra': 0.5},
-    'descuento': {'dinero': 0.8, 'compra': 0.5},
+    'cupón': {'cupon': 1.5, 'dinero': 0.4},
+    'cupones': {'cupon': 1.5, 'dinero': 0.4},
+    'descuento': {'dinero': 0.8, 'compra': 0.5, 'cupon': 0.3},
+    'dinero': {'dinero': 1, 'reembolso': 1.5},
     'contraseña': {'seguridad': 1, 'cuenta': 0.7},
     'puntos': {'cuenta': 0.8, 'dinero': 0.5},
     'mañana': {'tiempo': 1},
@@ -108,7 +133,7 @@ EXTRA = {
     'lluvia': {'clima': 1, 'naturaleza': 0.4},
     'feliz': {'positivo': 1},
     'triste': {'negativo': 1},
-    'rápido': {'rapido': 1, 'positivo': 0.3},
+    'rápido': {'rapido': 1, 'positivo': 0.3, 'express': 0.8},
     'lento': {'lento': 1, 'negativo': 0.3},
 }
 
@@ -119,12 +144,12 @@ PAISES = {
     'chile': ('santiago', 'cl'), 'colombia': ('bogotá', 'co'), 'perú': ('lima', 'pe'),
 }
 for _p, (_c, _k) in PAISES.items():
-    EXTRA[_p] = {'pais': 1, '~' + _k: 1.4}
+    EXTRA[_p] = {'pais': 1, 'internacional': 0.6, '~' + _k: 1.4}
     EXTRA[_c] = {'capital': 1, '~' + _k: 1.4}
 
 STOPWORDS = set(
     'de la el los las un una unos unas y o u e en a al del que es por para con se su sus mi mis tu tus lo le les me te nos '
     'como más pero si no qué cuál cuáles cuánto cuánta cuántos cuántas cómo dónde cuándo quién hay está están son ser estar '
-    'ha han he hemos fue era muy ya también sobre entre sin desde hasta este esta estos estas ese esa eso esto ello puedo '
-    'puede pueden podemos quiero quieres tengo tiene tienen vez cual donde cuando'.split()
+    'ha han he hemos fue era muy ya también sobre entre sin desde este esta estos estas ese esa eso esto ello puedo '
+    'puede pueden podemos quiero quieres tengo tiene tienen vez cual donde cuando entra abre pulsa sigue necesito necesitas necesitamos tienes tenéis hacéis podéis'.split()
 )

@@ -21,7 +21,7 @@ Cada lección: 7+ pasos, ≥3 preguntas, al menos un reto de código `pyPractice
 ## Avanzado (deep learning y IA generativa)
 - **Z8 · Redes neuronales desde cero** ✅ — neurona y perceptrón, capas y propagación hacia delante (XOR), activaciones (gradiente evanescente, softmax estable), pérdida y retropropagación (comprobada con derivadas numéricas), bucle de entrenamiento, mini-lotes, inicialización, SGD/momento/Adam y `MLPClassifier`. Datos: dos lunas (`make_moons`).
 - **Z9 · Deep learning práctico** ✅ — tensores (formas, dtypes, errores típicos), autograd, `nn.Module` y bucle de entrenamiento, CNN (convolución, pooling, dígitos 8×8), RNN/LSTM con `Embedding`, dropout, BatchNorm, decaimiento de pesos, parada temprana y transfer learning. 6 lecciones + jefe.
-- **Z10 · Datos vectoriales y embeddings** — vectores, similitud coseno, embeddings, búsqueda por vecinos (exacta y ANN), bases de datos vectoriales, chunking.
+- **Z10 · Datos vectoriales y embeddings** ✅ — vectores y similitud coseno, embeddings (mapa de palabras, analogías), búsqueda semántica (hit@k, umbral de rechazo), índices exacto/IVF/ANN (recall vs comparaciones), base de datos vectorial estilo Chroma (metadatos y filtros) y chunking (tamaño, solape, frases). Datos: embeddings de juguete de `dojo_ai` + FAQ de DojoShop.
 - **Z11 · Transformers y LLMs** — tokens y BPE, atención, arquitectura, preentrenamiento, ajuste fino, generación (temperatura, top-k/top-p), contexto.
 - **Z12 · Prompt engineering** — roles, few-shot, cadena de pensamiento, formatos estructurados, evaluación de prompts, inyección de prompts.
 - **Z13 · RAG** — pipeline completo, recuperación, reranking, citas, evaluación de RAG, fallos típicos.
@@ -37,5 +37,5 @@ Cada lección: 7+ pasos, ≥3 preguntas, al menos un reto de código `pyPractice
 | scikit-learn mini (preprocesado, modelos lineales, árboles y bosques con el constructor de árboles portado a TS, SVM con el SMO de libsvm portado a TS, MLP, KNN, Naive Bayes, K-means/DBSCAN/jerárquico, PCA, texto, pipelines, búsquedas, métricas) | hecho · contrastado con la librería real en `__tests__/golden/sklearn_*.py` |
 | SciPy mínimo (`stats`, `special`, `spatial.distance`, `optimize`) | hecho |
 | torch mini (tensores, autograd, `nn`, `optim`, `utils.data`) | hecho · `__tests__/selfcheck/torch_*.py` (gradientes contra diferencias finitas y capas contra NumPy) |
-| `dojo_ai` | por hacer (zonas 10–15) |
+| `dojo_ai` | hecho: `embeddings`, `tokenizer`, `lm`, `vectordb`, `corpus` (zona 10). Por hacer: `llm` (simulador estilo OpenAI, zonas 11–15) |
 | `tools/contentdiff.ts` | compara demos, «¿qué imprime?», retos y fichas con CPython real: úsalo con cada zona nueva |

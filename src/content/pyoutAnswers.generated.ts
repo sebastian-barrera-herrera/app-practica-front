@@ -99,10 +99,12 @@ export const PYOUT: Record<string, string> = {
   "f1f10d9c": "fin 2\nfin 3\nfin 1\n[1, 2, 3]",
   "f6c4864a": "0.0",
   "f8526d5f": "1 1 1",
+  "f9e3d9ee": "0.0 1.0",
   "fbb7b4b1": "mayor que 5\nfin",
   "fc4c4c98": "7 3",
   "fc888419": "{'a': 10, 'b': 2, 'c': 3}\nnada",
   "fcf82693": "10",
   "fe77800b": "1\n3",
   "fead59bb": "5 9 9",
+  "fff8e49c": "[1, 3, 2] 0.9",
 };

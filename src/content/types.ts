@@ -169,7 +169,12 @@ export type IllustrationId =
   | 'ia-train-loop'
   | 'ia-conv'
   | 'ia-rnn'
-  | 'ia-overfit';
+  | 'ia-overfit'
+  | 'ia-vec-space'
+  | 'ia-embed-map'
+  | 'ia-semantic-search'
+  | 'ia-ann'
+  | 'ia-chunking';
 
 // ───────────────────────── preguntas ─────────────────────────
 

@@ -55,6 +55,10 @@ const checkExpr = (c: PyCheck): string | null => {
       return `(${c.name}) == (${c.equals})`;
     case 'expr':
       return `(${c.expr}) == (${c.equals})`;
+    case 'calls': {
+      if (c.isolate) return null;
+      return c.tests.map((t) => `((${t.expr}) == (${t.equals}))`).join(' and ');
+    }
     case 'true':
       return `bool(${c.expr})`;
     case 'all': {
@@ -94,7 +98,7 @@ const report = (where: string, what: string, a: string, b: string) => {
     process.exit(bad ? 1 : 0);
   }
   for (const w of course.worlds) {
-    if (filter && !w.id.startsWith(filter) && !filter.startsWith(w.id)) continue;
+    if (filter && w.id !== filter && !filter.startsWith(w.id + '-')) continue;
     const jobs: { lessonId: string; step: any; idx: number }[] = [];
     for (const l of w.lessons) {
       if (filter && filter.includes('-') && !l.id.startsWith(filter)) continue;

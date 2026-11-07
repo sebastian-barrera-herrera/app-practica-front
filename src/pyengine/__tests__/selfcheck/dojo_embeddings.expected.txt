@@ -1,23 +1,23 @@
-607
-perro [('gato', 0.9576), ('conejo', 0.9101), ('serpiente', 0.7004), ('vaca', 0.6972), ('pez', 0.6893)]
-pizza [('ensalada', 0.8652), ('pollo', 0.863), ('tortilla', 0.8595), ('carne', 0.8591), ('sopa', 0.8561)]
-envío [('entrega', 0.9339), ('transporte', 0.9335), ('seguimiento', 0.9317), ('postal', 0.9304), ('entregar', 0.9299)]
-contraseña [('clave', 0.8183), ('fraude', 0.8146), ('protección', 0.8036), ('restablecer', 0.7917), ('privacidad', 0.7829)]
-fútbol [('entrenador', 0.9354), ('deporte', 0.9319), ('baloncesto', 0.931), ('correr', 0.9274), ('campeonato', 0.9262)]
-rey [('príncipe', 0.7524), ('hombre', 0.6885), ('camarero', 0.6184), ('niño', 0.5548), ('profesor', 0.5513)]
-('hombre', 'rey', 'mujer') [('reina', 0.9299), ('princesa', 0.6748), ('camarera', 0.647)]
-('hombre', 'mujer', 'rey') [('reina', 0.9299), ('princesa', 0.6748), ('camarera', 0.647)]
-('francia', 'parís', 'italia') [('roma', 0.9544), ('capital', 0.6173), ('buenos', 0.5909)]
-('padre', 'madre', 'hijo') [('hija', 0.9343), ('hermana', 0.7582), ('tía', 0.7298)]
-('españa', 'madrid', 'japón') [('tokio', 0.9607), ('buenos', 0.5511), ('aires', 0.5314)]
-('tío', 'tía', 'abuelo') [('abuela', 0.9325), ('madre', 0.7647), ('hermana', 0.7624)]
-('camarero', 'camarera', 'profesor') [('profesora', 0.9381), ('alumno', 0.6554), ('mujer', 0.6423)]
-perro gato 0.958
-perro ordenador 0.02
-comprar vender 0.917
-feliz triste -0.02
-envío paquete 0.883
-¿Cuánto tarda en llegar mi paquete? -> 0 [0.64, 0.15, 0.05, -0.05, -0.06]
-quiero devolver un producto -> 1 [0.06, 0.76, 0.02, 0.01, -0.13]
-olvidé mi contraseña -> 2 [-0.01, 0.03, 0.78, -0.03, 0.03]
-cómo pago con tarjeta -> 3 [-0.01, -0.07, -0.06, 0.97, -0.06]
+735
+perro [('gato', 0.6951), ('conejo', 0.6241), ('serpiente', 0.5144), ('animal', 0.5041), ('león', 0.4963)]
+pizza [('pan', 0.618), ('carne', 0.5962), ('pasta', 0.5826), ('sopa', 0.5787), ('tortilla', 0.5736)]
+envío [('postal', 0.6199), ('correos', 0.5789), ('recepción', 0.5777), ('repartidor', 0.5758), ('transporte', 0.5743)]
+contraseña [('proteger', 0.5954), ('bloquear', 0.595), ('seguro', 0.5762), ('verificación', 0.5652), ('autenticación', 0.5431)]
+fútbol [('baloncesto', 0.6038), ('carrera', 0.5997), ('correr', 0.5953), ('campeonato', 0.5881), ('deporte', 0.58)]
+rey [('hombre', 0.5674), ('príncipe', 0.565), ('reina', 0.5068), ('niño', 0.4997), ('camarero', 0.4898)]
+('hombre', 'rey', 'mujer') [('reina', 0.6333), ('chica', 0.4227), ('princesa', 0.405)]
+('hombre', 'mujer', 'rey') [('reina', 0.6333), ('chica', 0.4227), ('princesa', 0.405)]
+('francia', 'parís', 'italia') [('roma', 0.6861), ('capital', 0.3831), ('buenos', 0.3535)]
+('padre', 'madre', 'hijo') [('hija', 0.6583), ('princesa', 0.5132), ('niña', 0.4579)]
+('españa', 'madrid', 'japón') [('tokio', 0.6787), ('capital', 0.3955), ('buenos', 0.3727)]
+('tío', 'tía', 'abuelo') [('abuela', 0.6733), ('hermana', 0.5809), ('madre', 0.519)]
+('camarero', 'camarera', 'profesor') [('profesora', 0.6258), ('alumno', 0.47), ('niña', 0.4112)]
+perro gato 0.695
+perro ordenador -0.026
+comprar vender 0.556
+feliz triste -0.1
+envío paquete 0.461
+¿Cuánto tarda en llegar mi paquete? -> 0 [0.46, 0.06, 0.06, 0.0, 0.02]
+quiero devolver un producto -> 1 [0.04, 0.57, 0.0, 0.03, -0.04]
+olvidé mi contraseña -> 2 [0.06, 0.01, 0.66, 0.1, -0.03]
+cómo pago con tarjeta -> 3 [0.04, 0.01, 0.04, 0.74, 0.02]
