@@ -1,0 +1,150 @@
+## creacion
+tensor([[1., 2., 3.],
+        [4., 5., 6.]]) torch.Size([2, 3]) torch.float32 2 6 torch.Size([2, 3]) 3
+tensor([[0., 0., 0.],
+        [0., 0., 0.]]) tensor([1., 1.]) tensor([[7., 7.],
+        [7., 7.]]) tensor([[1., 0., 0.],
+        [0., 1., 0.],
+        [0., 0., 1.]])
+tensor([0, 1, 2, 3, 4]) tensor([1, 4, 7]) tensor([0.0000, 0.2500, 0.5000, 0.7500]) tensor([0.0000, 0.2500, 0.5000, 0.7500, 1.0000])
+tensor([1, 2, 3]) tensor([ True, False]) tensor(3.5000) torch.int64
+tensor([1.5000, 2.5000], dtype=torch.float64) tensor([1., 2.]) tensor([0, 0])
+tensor([0.1000, 0.2000, 0.3000]) tensor([1.0000e-05, 1.0000e+00]) tensor([1.0000e+06, 2.0000e+00]) tensor([0.1235])
+tensor([[[1., 2.],
+         [3., 4.]],
+
+        [[5., 6.],
+         [7., 8.]]])
+torch.Size([2, 3]) torch.Size([2, 3]) tensor([[0., 0., 0.],
+        [0., 0., 0.]]) torch.float32
+## operaciones
+tensor([[11., 22., 33.],
+        [14., 25., 36.]]) tensor([[ 2.,  4.,  6.],
+        [ 8., 10., 12.]]) tensor([[ 1.,  4.,  9.],
+        [16., 25., 36.]]) tensor([[0.5000, 1.0000, 1.5000],
+        [2.0000, 2.5000, 3.0000]]) tensor([[0., 1., 2.],
+        [3., 4., 5.]]) tensor([[ 1.,  0., -1.],
+        [-2., -3., -4.]]) tensor([[-1., -2., -3.],
+        [-4., -5., -6.]]) 0
+tensor([[14., 32.],
+        [32., 77.]]) torch.Size([3, 2]) torch.Size([3, 2]) tensor([140., 320.]) tensor(21.) tensor([5., 7., 9.]) tensor([[ 6.],
+        [15.]]) tensor(3.5000) tensor([2.5000, 3.5000, 4.5000])
+tensor(6.) tensor(1.) torch.return_types.max(
+values=tensor([3., 6.]),
+indices=tensor([2, 2])) tensor(5) tensor([2, 2]) tensor(1.8708) tensor([4.5000, 4.5000, 4.5000]) tensor(720.)
+tensor([1., 2., 3.]) tensor([2., 5.]) tensor(6.) tensor([4., 5., 6.]) tensor([[1., 2.],
+        [4., 5.]]) tensor([3., 4.]) 2.0 torch.Size([1, 2, 3])
+tensor([[1., 2.],
+        [3., 4.],
+        [5., 6.]]) tensor([1., 2., 3., 4., 5., 6.]) tensor([1., 2., 3., 4., 5., 6.]) torch.Size([1, 2, 3]) torch.Size([2, 3, 1]) torch.Size([2, 3]) torch.Size([3, 2]) torch.Size([3, 2])
+torch.Size([4, 3]) torch.Size([2, 6]) torch.Size([2, 2, 3]) tensor([[0., 0., 0.],
+        [4., 5., 6.]]) tensor([[2., 2., 3.],
+        [4., 5., 5.]])
+tensor([2., 3.]) tensor([1.0000, 2.7183]) tensor([0.0000, 1.0000]) tensor([1., 2.]) tensor([0.5000, 0.8808]) tensor([0.0000, 0.7616]) tensor([0., 2.])
+tensor([[0.0900, 0.2447, 0.6652]]) tensor([0.0900, 0.2447, 0.6652]) tensor([-2.4076, -1.4076, -0.4076])
+tensor([[False, False,  True],
+        [ True,  True,  True]]) tensor(4) tensor(0.6667) tensor(True) True tensor([[1, 1]])
+[[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]] [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]] torch.float32 tensor([[1, 2, 3],
+        [4, 5, 6]]) torch.int32 torch.float64 torch.float64 torch.int64
+True True False cpu 2 [tensor([1., 2., 3.]), tensor([4., 5., 6.])] False
+## autograd
+tensor(12., grad_fn=<AddBackward0>) <AddBackward0 object> None
+tensor(14.)
+tensor(26.)
+tensor(0.)
+tensor(14., grad_fn=<SumBackward0>) <SumBackward0 object>
+tensor([2., 4., 6.]) True True False
+False tensor([2., 4., 6.]) False
+True False <MulBackward0 object> <AddBackward0 object> <SumBackward0 object> <MeanBackward0 object> <DotBackward0 object> <SigmoidBackward0 object> <ReluBackward0 object> <ExpBackward0 object> <ViewBackward0 object> <SelectBackward0 object> <PowBackward0 object> <DivBackward0 object> <NegBackward0 object>
+None
+RuntimeError grad can be implicitly created only for scalar outputs
+RuntimeError element 0 of tensors does not require grad and does not have a grad_fn
+RuntimeError a leaf Variable that requires grad is being used in an in-place operation.
+RuntimeError Can't call numpy() on Tensor that requires grad. Use tensor.detach().numpy() instead.
+tensor([3.0000, 1.5000])
+(tensor([2., 4.]),)
+## nn
+Linear(in_features=3, out_features=2, bias=True) torch.Size([2, 3]) torch.Size([2]) ['weight', 'bias'] 8 True torch.float32 Parameter
+tensor([[3.0000, 3.0000],
+        [0.5000, 0.5000]], grad_fn=<AddmmBackward0>) torch.Size([2])
+Sequential(
+  (0): Linear(in_features=4, out_features=8, bias=True)
+  (1): ReLU()
+  (2): Dropout(p=0.2, inplace=False)
+  (3): Linear(in_features=8, out_features=3, bias=True)
+) 4 Linear(in_features=4, out_features=8, bias=True) 3 True ['Linear', 'ReLU', 'Dropout', 'Linear'] ['0.weight', '0.bias', '3.weight', '3.bias'] [(8, 4), (8,), (3, 8), (3,)]
+False False
+True
+Net(
+  (f1): Linear(in_features=2, out_features=4, bias=True)
+  (f2): Linear(in_features=4, out_features=1, bias=True)
+) 17 ['f1.weight', 'f1.bias', 'f2.weight', 'f2.bias'] torch.Size([5, 1]) True
+tensor(1.3333) tensor(2.5000) tensor(1.5000)
+tensor(0.3185) tensor([0.4170, 0.2200]) tensor(0.3185) tensor(0.3937) tensor(0.1643)
+tensor([0, 1]) 1.0 tensor([[1, 0, 0],
+        [0, 1, 0]]) tensor([0., 1.]) tensor([0., 1.]) tensor([[0.6590, 0.2424, 0.0986],
+        [0.1086, 0.8025, 0.0889]]) torch.Size([2, 12]) tensor([0.5000]) tensor([0.]) tensor([0.8413]) tensor([-0.1000])
+## optim
+[[0.8, -1.6], [0.64, -1.28], [0.512, -1.024]]
+[[0.8, -1.6], [0.46, -0.92], [0.062, -0.124]]
+[[0.62, -1.24], [0.2224, -0.4448], [-0.1084, 0.2167]]
+[[0.75, -1.5], [0.5625, -1.125], [0.4219, -0.8438]]
+[[0.9, -1.9], [0.8004, -1.8002], [0.7016, -1.7006]]
+[[0.899, -1.898], [0.7985, -1.7963], [0.6989, -1.6949]]
+[[0.9, -1.9], [0.8329, -1.8309], [0.78, -1.7753]]
+[[0.9, -1.9], [0.8331, -1.8311], [0.7805, -1.7758]]
+0.1 1
+[0.1, 0.1, 0.05, 0.05, 0.025] [0.025]
+[1.0, 0.8536, 0.5, 0.1464, 0.0]
+## data
+5 (tensor([2., 3.]), tensor(1)) torch.Size([2])
+3 [(torch.Size([2, 2]), [0, 1]), (torch.Size([2, 2]), [2, 3]), (torch.Size([1, 2]), [4])]
+2
+[0, 1, 2, 3, 4]
+3 2
+## cnn
+tensor([[[[10., 14., 18.],
+          [26., 30., 34.],
+          [42., 46., 50.]]]], grad_fn=<ConvolutionBackward0>) Conv2d(1, 1, kernel_size=(2, 2), stride=(1, 1), bias=False) torch.Size([1, 1, 2, 2])
+tensor([[[[ 5.,  7.],
+          [13., 15.]]]]) tensor([[[[ 2.5000,  4.5000],
+          [10.5000, 12.5000]]]]) torch.Size([2, 8, 8, 8]) torch.Size([2, 8, 3, 3]) torch.Size([2, 4, 1, 1])
+Sequential(
+  (0): Conv2d(1, 4, kernel_size=(3, 3), stride=(1, 1))
+  (1): ReLU()
+  (2): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False)
+  (3): Flatten(start_dim=1, end_dim=-1)
+  (4): Linear(in_features=36, out_features=10, bias=True)
+)
+## rnn
+torch.Size([2, 2, 3]) Embedding(5, 3) torch.Size([5, 3])
+torch.Size([2, 5, 6]) torch.Size([1, 2, 6]) torch.Size([1, 2, 6]) LSTM(4, 6, batch_first=True)
+torch.Size([5, 2, 6]) torch.Size([2, 2, 6]) GRU(4, 6, num_layers=2)
+torch.Size([2, 5, 12]) torch.Size([2, 2, 6])
+## reg
+torch.Size([3, 3]) tensor([0.3000, 0.4000, 0.6000]) tensor([1.3000, 1.3000, 2.2000])
+torch.Size([3, 3])
+tensor([1., 1., 1., 1.])
+True
+True
+[False, False] 0
+['weight', 'bias'] OrderedDict
+<All keys matched successfully> True
+## errores
+RuntimeError addmm: mat1 and mat2 shapes cannot be multiplied (4x5 and 3x2)
+RuntimeError The size of tensor a (3) must match the size of tensor b (4) at non-singleton dimension 1
+RuntimeError shape '[4, 2]' is invalid for input of size 6
+IndexError index 5 is out of bounds for dimension 0 with size 3
+IndexError too many indices for tensor of dimension 2
+RuntimeError Given groups=1, weight of size [4, 3, 3, 3], expected input[1, 1, 8, 8] to have 3 channels, but got 1 channels instead
+RuntimeError expected target dtype to be Long or Byte, but got Float
+RuntimeError a Tensor with 2 elements cannot be converted to Scalar
+RuntimeError a Tensor with 2 elements cannot be converted to Scalar
+RuntimeError Sizes of tensors must match except in dimension 0. Expected size 2 but got size 3 for tensor number 1 in the list.
+RuntimeError stack expects each tensor to be equal size, but got [2] at entry 0 and [3] at entry 1
+IndexError Dimension out of range (expected to be in range of [-2, 1], but got 2)
+IndexError index out of range in self
+ValueError expected sequence of length 2 at dim 1 (got 1)
+TypeError new(): invalid data type 'str'
+AttributeError 'Tensor' object has no attribute 'foo'
+AttributeError 'Linear' object has no attribute 'bar'

@@ -1357,6 +1357,14 @@ function install(m: PyModule): void {
     const hi = bits === 64 ? 9223372036854775807n : (1n << BigInt(bits - 1)) - 1n;
     return mkInfo({ bits, max: hi > BigInt(Number.MAX_SAFE_INTEGER) ? hi : Number(hi), min: -hi - 1n > BigInt(-Number.MAX_SAFE_INTEGER) ? Number(-hi - 1n) : -hi - 1n, dtype: 'int' + bits });
   });
+  // redondea a float32 (lo usa el `torch` en miniatura para que `.item()` imprima lo mismo que PyTorch)
+  f('_fround32', 'a', (a: any) => {
+    const A = arr(a);
+    const src = flatNum(A);
+    const out = new Float64Array(src.length);
+    for (let i = 0; i < src.length; i++) out[i] = Math.fround(src[i]);
+    return mkNum(out, [...A.shape], 'float64');
+  });
   f('seterr', '**kw', () => new PyDict());
   // `with np.errstate(all="ignore"):` — el motor no emite avisos numéricos, así que el contexto no hace nada
   {

@@ -137,7 +137,7 @@ def _fmt_all(a, floating):
     int_mode = all(v == round(v) for v in flat if v == v and _b.abs(v) != math.inf)
     strs = []
     if int_mode:
-        sci = mx > 1e8
+        sci = bool_(mx / mn > 1000.0 or mx > 1e8) if nz else False
         for v in flat:
             if v != v:
                 strs.append('nan')
@@ -225,14 +225,84 @@ def _infer_dtype(arr):
     return _default_dtype
 
 
+def _f32(a):
+    return np.asarray(np._fround32(a))
+
+
+_DT_C = {'float32': 'Float', 'float64': 'Double', 'float16': 'Half', 'int64': 'Long', 'int32': 'Int', 'bool': 'Bool', 'int8': 'Char', 'uint8': 'Byte'}
+_DT_LOW = {'float32': 'float', 'float64': 'double', 'float16': 'half', 'int64': 'long int', 'int32': 'int', 'bool': 'bool'}
+
+
+def _broadcast_error(sa, sb):
+    na, nb = len(sa), len(sb)
+    n = na if na > nb else nb
+    for k in range(1, n + 1):
+        x = sa[na - k] if k <= na else 1
+        y = sb[nb - k] if k <= nb else 1
+        if x != y and x != 1 and y != 1:
+            return RuntimeError('The size of tensor a (%d) must match the size of tensor b (%d) at non-singleton dimension %d' % (x, y, n - k))
+    return RuntimeError('The size of tensor a must match the size of tensor b')
+
+
+def _shape_x(shape):
+    return 'x'.join(str(v) for v in shape)
+
+
+def _check_seq(data, depth=0, sizes=None):
+    if sizes is None:
+        sizes = {}
+    if isinstance(data, (list, tuple)):
+        n = len(data)
+        if depth in sizes and sizes[depth] != n:
+            raise ValueError('expected sequence of length %d at dim %d (got %d)' % (sizes[depth], depth, n))
+        sizes.setdefault(depth, n)
+        for v in data:
+            _check_seq(v, depth + 1, sizes)
+    elif depth in sizes and not isinstance(data, Tensor):
+        raise ValueError('expected sequence of length %d at dim %d (got 0)' % (sizes[depth], depth)) if False else None
+
+
+def _index_msg(msg, ndim):
+    import re
+    m = re.search(r'index (-?\d+) is out of bounds for axis (\d+) with size (\d+)', msg)
+    if m:
+        return 'index %s is out of bounds for dimension %s with size %s' % (m.group(1), m.group(2), m.group(3))
+    if 'too many indices' in msg:
+        return 'too many indices for tensor of dimension %d' % ndim
+    return msg
+
+
+def _check_mm(a, b, prefix='mm'):
+    """Comprueba tipos y formas como `torch.mm` / `addmm` y lanza los mismos errores que PyTorch."""
+    if a._dtype is not b._dtype:
+        if prefix == 'addmm':
+            raise RuntimeError('mat1 and mat2 must have the same dtype, but got %s and %s' % (_DT_C[a._dtype.name], _DT_C[b._dtype.name]))
+        raise RuntimeError('expected m1 and m2 to have the same dtype, but got: %s != %s' % (_DT_LOW[a._dtype.name], _DT_LOW[b._dtype.name]))
+    if a._a.ndim == 2 and b._a.ndim == 2 and a._a.shape[1] != b._a.shape[0]:
+        raise RuntimeError('%s: mat1 and mat2 shapes cannot be multiplied (%s and %s)' % (prefix, _shape_x(a._a.shape), _shape_x(b._a.shape)))
+
+
 class Tensor:
     __array_priority__ = 100
 
     def __init__(self, data=None, dtype=None, requires_grad=False):
+        if isinstance(data, str):
+            raise TypeError("new(): invalid data type 'str'")
+        if isinstance(data, (list, tuple)):
+            _check_seq(data)
         a = np.asarray(data._a if isinstance(data, Tensor) else data)
-        dt = dtype or _infer_dtype(a)
+        if dtype is not None:
+            dt = dtype
+        elif isinstance(data, Tensor):
+            dt = data._dtype
+        elif isinstance(data, np.ndarray) and a.dtype.kind == 'f':
+            dt = float64      # un array de NumPy conserva su precisión (float64), como en PyTorch
+        else:
+            dt = _infer_dtype(a)
         if dt.is_floating_point:
             a = a.astype(np.float64)
+            if dt is float32:
+                a = _f32(a)
         elif dt is bool:
             a = a.astype(np.bool_)
         else:
@@ -252,6 +322,8 @@ class Tensor:
         a = np.asarray(a)
         t._dtype = dt or _infer_dtype(a)
         t._a = a if (t._dtype.is_floating_point and a.dtype == np.float64) or (not t._dtype.is_floating_point and a.dtype != np.float64) else (a.astype(np.float64) if t._dtype.is_floating_point else a)
+        if parents and t._dtype is float32 and t._a.ndim >= 0:
+            t._a = _f32(t._a)       # el resultado de una operación en float32 se redondea a float32
         t.grad = None
         t.requires_grad = False
         t._parents = ()
@@ -327,7 +399,12 @@ class Tensor:
     def tolist(self):
         return self._a.tolist()
 
+    def data_ptr(self):
+        return id(self._a) * 16
+
     def numpy(self):
+        if self.requires_grad:
+            raise RuntimeError("Can't call numpy() on Tensor that requires grad. Use tensor.detach().numpy() instead.")
         return self._a
 
     def __array__(self, dtype=None):
@@ -454,9 +531,14 @@ class Tensor:
     def _bin(self, other, name, fa, fb, op):
         o = other if isinstance(other, Tensor) else None
         oa = o._a if o is not None else np.asarray(other)
-        res = op(self._a, oa)
+        try:
+            res = np.asarray(op(self._a, oa))
+        except ValueError:
+            raise _broadcast_error(self._a.shape, oa.shape) from None
         floating = res.dtype.kind == 'f' or self._dtype.is_floating_point or (o is not None and o._dtype.is_floating_point)
         dt = (self._dtype if self._dtype.is_floating_point else (o._dtype if (o is not None and o._dtype.is_floating_point) else (float32 if res.dtype.kind == 'f' else self._dtype)))
+        if o is not None and self._dtype.is_floating_point and o._dtype.is_floating_point and self._dtype is not o._dtype:
+            dt = float64 if (self._dtype is float64 or o._dtype is float64) else self._dtype
         if res.dtype.kind == 'b':
             dt = bool
         parents = (self, o) if o is not None else (self,)
@@ -573,7 +655,7 @@ class Tensor:
 
     def _set(self, res):
         self._inplace_check()
-        self._a[...] = res
+        self._a[...] = _f32(np.asarray(res, dtype=np.float64)) if self._dtype is float32 else res
         return self
 
     def add_(self, o, alpha=1):
@@ -669,7 +751,10 @@ class Tensor:
     def leaky_relu(self, negative_slope=0.01):
         return self._un('LeakyReluBackward0', lambda a: np.where(a > 0, a, negative_slope * a), lambda g, a, r: g * np.where(a > 0, 1.0, negative_slope))
 
-    def gelu(self):
+    def gelu(self, approximate='none'):
+        if approximate == 'none':
+            r2 = math.sqrt(2.0)
+            return self._un('GeluBackward0', lambda a: 0.5 * a * (1.0 + np.vectorize(math.erf)(a / r2)), lambda g, a, r: g * (0.5 * (1.0 + np.vectorize(math.erf)(a / r2)) + a * np.exp(-0.5 * a * a) / math.sqrt(2 * math.pi)))
         c = math.sqrt(2 / math.pi)
         return self._un('GeluBackward0', lambda a: 0.5 * a * (1 + np.tanh(c * (a + 0.044715 * a ** 3))), lambda g, a, r: g * (0.5 * (1 + np.tanh(c * (a + 0.044715 * a ** 3))) + 0.5 * a * (1 - np.tanh(c * (a + 0.044715 * a ** 3)) ** 2) * c * (1 + 3 * 0.044715 * a * a)))
 
@@ -695,9 +780,13 @@ class Tensor:
     def _norm_dim(self, dim):
         if dim is None:
             return None
+        nd = self._a.ndim if self._a.ndim > 0 else 1
+        for d in (dim if isinstance(dim, (list, tuple)) else (dim,)):
+            if d < -nd or d >= nd:
+                raise IndexError('Dimension out of range (expected to be in range of [%d, %d], but got %d)' % (-nd, nd - 1, d))
         if isinstance(dim, (list, tuple)):
-            return tuple(d % self._a.ndim for d in dim)
-        return dim % self._a.ndim
+            return tuple(d % nd for d in dim)
+        return dim % nd
 
     def sum(self, dim=None, keepdim=False, dtype=None):
         d = self._norm_dim(dim)
@@ -712,6 +801,8 @@ class Tensor:
         return Tensor._wrap(res, dt, (self,), 'SumBackward0' if dim is None else 'SumBackward1', bwd)
 
     def mean(self, dim=None, keepdim=False):
+        if not self._dtype.is_floating_point:
+            raise NotImplementedError('mean(): could not infer output dtype. Input dtype must be either a floating point or complex dtype. Got: %s' % _DT_C[self._dtype.name])
         d = self._norm_dim(dim)
         res = self._a.mean(axis=d, keepdims=keepdim)
         n = self._a.size if d is None else (np.prod([self._a.shape[i] for i in (d if isinstance(d, tuple) else (d,))]))
@@ -776,7 +867,7 @@ class Tensor:
         if not keepdim:
             vals = np.squeeze(vals, axis=d)
         sel = Tensor._wrap(vals, self._dtype, (self,), 'MaxBackward0', lambda g: (_scatter(self._a.shape, d, idx, g, keepdim),))
-        return _MinMax(sel, Tensor._wrap(idx if keepdim is False else np.expand_dims(idx, d), int64))
+        return _MinMax(sel, Tensor._wrap(idx if keepdim is False else np.expand_dims(idx, d), int64), 'max')
 
     def min(self, dim=None, keepdim=False):
         if dim is None:
@@ -791,7 +882,7 @@ class Tensor:
         if not keepdim:
             vals = np.squeeze(vals, axis=d)
         sel = Tensor._wrap(vals, self._dtype, (self,), 'MinBackward0', lambda g: (_scatter(self._a.shape, d, idx, g, keepdim),))
-        return _MinMax(sel, Tensor._wrap(idx if keepdim is False else np.expand_dims(idx, d), int64))
+        return _MinMax(sel, Tensor._wrap(idx if keepdim is False else np.expand_dims(idx, d), int64), 'min')
 
     def argmax(self, dim=None, keepdim=False):
         if dim is None:
@@ -816,13 +907,13 @@ class Tensor:
         idx = np.argsort(-self._a, axis=d, kind='stable')
         idx = np.take(idx, np.arange(k), axis=d)
         it = Tensor._wrap(idx, int64)
-        return _MinMax(self.gather(d, it), it)
+        return _MinMax(self.gather(d, it), it, 'topk')
 
     def sort(self, dim=-1, descending=False):
         d = dim % self._a.ndim
         idx = np.argsort(-self._a if descending else self._a, axis=d, kind='stable')
         it = Tensor._wrap(idx, int64)
-        return _MinMax(self.gather(d, it), it)
+        return _MinMax(self.gather(d, it), it, 'sort')
 
     def cumsum(self, dim):
         return Tensor._wrap(np.cumsum(self._a, axis=dim), self._dtype, (self,), 'CumsumBackward0', lambda g: (np.flip(np.cumsum(np.flip(g, dim), axis=dim), dim),))
@@ -832,7 +923,11 @@ class Tensor:
         if len(shape) == 1 and isinstance(shape[0], (tuple, list, Size)):
             shape = tuple(shape[0])
         old = self._a.shape
-        return Tensor._wrap(self._a.reshape(shape), self._dtype, (self,), 'ViewBackward0', lambda g: (g.reshape(old),))
+        try:
+            out = self._a.reshape(shape)
+        except ValueError:
+            raise RuntimeError("shape '[%s]' is invalid for input of size %d" % (', '.join(str(v) for v in shape), self._a.size)) from None
+        return Tensor._wrap(out, self._dtype, (self,), 'ViewBackward0', lambda g: (g.reshape(old),))
 
     view = reshape
 
@@ -875,13 +970,21 @@ class Tensor:
         inv = [0] * len(dims)
         for i, d in enumerate(dims):
             inv[d] = i
-        return Tensor._wrap(self._a.transpose(dims), self._dtype, (self,), 'PermuteBackward0', lambda g: (g.transpose(inv),))
+        r = Tensor._wrap(self._a.transpose(dims), self._dtype, (self,), 'PermuteBackward0', lambda g: (g.transpose(inv),))
+        r._nc = list(dims) != sorted(dims)
+        return r
 
     def t(self):
         return self.T
 
     def contiguous(self):
-        return self
+        if not getattr(self, '_nc', False):
+            return self
+        c = Tensor._wrap(self._a.copy(), self._dtype, (self,), 'CloneBackward0', lambda g: (g,))
+        return c
+
+    def is_contiguous(self):
+        return not getattr(self, '_nc', False)
 
     def expand(self, *shape):
         if len(shape) == 1 and isinstance(shape[0], (tuple, list)):
@@ -948,7 +1051,10 @@ class Tensor:
 
     def __getitem__(self, idx):
         i = _conv_index(idx)
-        res = self._a[i]
+        try:
+            res = self._a[i]
+        except IndexError as e:
+            raise IndexError(_index_msg(str(e), self._a.ndim)) from None
         shape = self._a.shape
 
         def bwd(g):
@@ -1022,11 +1128,17 @@ def _backprop(root, g0, accumulate, wanted):
 
 
 class _MinMax(tuple):
-    def __new__(cls, values, indices):
+    def __new__(cls, values, indices, kind='max'):
         o = tuple.__new__(cls, (values, indices))
         o.values = values
         o.indices = indices
+        o._kind = kind
         return o
+
+    def __repr__(self):
+        return 'torch.return_types.%s(\nvalues=%r,\nindices=%r)' % (self._kind, self.values, self.indices)
+
+    __str__ = __repr__
 
 
 class _GradFn:
@@ -1054,6 +1166,15 @@ class device:
 
     def __repr__(self):
         return "device(type='%s')" % self.type
+
+    def __str__(self):
+        return self.type
+
+    def __eq__(self, o):
+        return str(o) == self.type
+
+    def __hash__(self):
+        return hash(self.type)
 
 
 def _has_int_array(i):
@@ -1116,7 +1237,7 @@ def as_tensor(data, dtype=None):
 
 
 def from_numpy(a):
-    return Tensor._wrap(a, None)
+    return Tensor._wrap(a, float64 if a.dtype.kind == 'f' else None)
 
 
 def is_tensor(x):
@@ -1135,6 +1256,8 @@ def _shape_args(size):
 
 def _mk(a, dtype, requires_grad):
     dt = dtype or (_default_dtype if a.dtype.kind == 'f' else _infer_dtype(a))
+    if dt is float32 and a.dtype.kind == 'f':
+        a = _f32(a)
     t = Tensor._wrap(a, dt)
     t.requires_grad = requires_grad
     return t
@@ -1229,6 +1352,13 @@ def linspace(start, end, steps, dtype=None, requires_grad=False):
 
 def cat(tensors, dim=0):
     arrs = [t._a for t in tensors]
+    nd = arrs[0].ndim
+    for k, a in enumerate(arrs):
+        if a.ndim != nd and not (a.size == 0):
+            raise RuntimeError('Tensors must have same number of dimensions: got %d and %d' % (nd, a.ndim))
+        for ax in range(nd):
+            if ax != (dim % nd) and a.shape[ax] != arrs[0].shape[ax]:
+                raise RuntimeError('Sizes of tensors must match except in dimension %d. Expected size %d but got size %d for tensor number %d in the list.' % (dim % nd, arrs[0].shape[ax], a.shape[ax], k))
     res = np.concatenate(arrs, axis=dim)
     sizes = [a.shape[dim] for a in arrs]
     dt = tensors[0]._dtype
@@ -1247,6 +1377,9 @@ concat = cat
 
 
 def stack(tensors, dim=0):
+    for k, t in enumerate(tensors):
+        if t._a.shape != tensors[0]._a.shape:
+            raise RuntimeError('stack expects each tensor to be equal size, but got %s at entry 0 and %s at entry %d' % (list(tensors[0]._a.shape), list(t._a.shape), k))
     ts = [t.unsqueeze(dim) for t in tensors]
     return cat(ts, dim)
 
@@ -1254,7 +1387,13 @@ def stack(tensors, dim=0):
 def matmul(a, b):
     a = a if isinstance(a, Tensor) else tensor(a)
     b = b if isinstance(b, Tensor) else tensor(b)
-    res = np.matmul(a._a, b._a)
+    _check_mm(a, b)
+    if a._a.ndim == 1 and b._a.ndim == 1 and a._a.shape != b._a.shape:
+        raise RuntimeError('inconsistent tensor size, expected tensor [%d] and src [%d] to have the same number of elements, but got %d and %d elements respectively' % (a._a.shape[0], b._a.shape[0], a._a.shape[0], b._a.shape[0]))
+    try:
+        res = np.matmul(a._a, b._a)
+    except ValueError:
+        raise RuntimeError('mat1 and mat2 shapes cannot be multiplied (%s and %s)' % (_shape_x(a._a.shape), _shape_x(b._a.shape))) from None
 
     def bwd(g):
         ga = np.matmul(g, np.swapaxes(b._a, -1, -2)) if b._a.ndim > 1 else np.multiply.outer(g, b._a) if a._a.ndim > 1 else g * b._a
@@ -1815,7 +1954,7 @@ def _t_median(self, dim=None, keepdim=False):
     if not keepdim:
         idx = np.squeeze(idx, dim)
         vals = np.squeeze(vals, dim)
-    return _MinMax(Tensor._wrap(vals, self._dtype), Tensor._wrap(idx, int64))
+    return _MinMax(Tensor._wrap(vals, self._dtype), Tensor._wrap(idx, int64), 'median')
 
 
 def _extreme(self, dim, keepdim, fn):

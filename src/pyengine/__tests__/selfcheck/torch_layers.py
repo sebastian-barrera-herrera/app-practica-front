@@ -64,7 +64,8 @@ print('num_batches', bn.num_batches_tracked)
 # AdaptiveAvgPool, AvgPool
 print(nn.AdaptiveAvgPool2d((1, 1))(xb).shape, nn.AvgPool2d(2)(xb).shape)
 
-# LSTM finite-difference gradient on weight_hh
+# LSTM finite-difference gradient on weight_hh (en float64: con float32 la derivada numérica no tiene precisión)
+torch.set_default_dtype(torch.float64)
 lstm2 = nn.LSTM(2, 3, batch_first=True)
 x2 = torch.randn(1, 4, 2)
 def loss():
@@ -82,6 +83,7 @@ for i in range(g.shape[0]):
         W._a[i, j] = old
         num[i, j] = (lp - lm) / 2e-6
 print('lstm grad', np.abs(num - g).max() < 1e-5)
+torch.set_default_dtype(torch.float32)
 
 # MHA vs manual
 mha = nn.MultiheadAttention(8, 2, batch_first=True)

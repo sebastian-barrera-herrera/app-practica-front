@@ -20,8 +20,8 @@ def tanh(x):
     return x.tanh()
 
 
-def gelu(x, approximate='tanh'):
-    return x.gelu()
+def gelu(x, approximate='none'):
+    return x.gelu(approximate)
 
 
 def softplus(x):
@@ -45,6 +45,7 @@ def log_softmax(x, dim=-1):
 
 
 def linear(x, weight, bias=None):
+    torch._check_mm(x, weight.T, 'addmm')
     out = x @ weight.T
     return out + bias if bias is not None else out
 
@@ -84,6 +85,11 @@ huber_loss = smooth_l1_loss
 
 def nll_loss(input, target, weight=None, reduction='mean'):
     t = _as_np(target).astype(np.int64)
+    if input._a.ndim >= 2 and t.size:
+        k = input._a.shape[1]
+        bad = t[(t < 0) | (t >= k)]
+        if bad.size:
+            raise IndexError('Target %d is out of bounds.' % int(bad[0]))
     idx = torch.tensor(t.reshape(-1, 1)) if input._a.ndim == 2 else None
     if input._a.ndim == 2:
         picked = input.gather(1, idx).reshape(-1)
@@ -101,6 +107,8 @@ def nll_loss(input, target, weight=None, reduction='mean'):
 def cross_entropy(input, target, weight=None, reduction='mean', label_smoothing=0.0):
     lp = torch.log_softmax(input, -1)
     t = target
+    if t._dtype.is_floating_point and t._a.shape != input._a.shape:
+        raise RuntimeError('expected target dtype to be Long or Byte, but got %s' % torch._DT_C[t._dtype.name])
     if t._dtype.is_floating_point:
         loss = -(lp * t).sum(-1)
         return _reduce(loss, reduction)
@@ -146,6 +154,8 @@ def cosine_similarity(a, b, dim=1, eps=1e-8):
 
 def embedding(idx, weight):
     i = _as_np(idx).astype(np.int64)
+    if i.size and (i.max() >= weight._a.shape[0] or i.min() < 0):
+        raise IndexError('index out of range in self')
     flat = weight.index_select(0, i.reshape(-1))
     return flat.reshape(list(i.shape) + [weight.shape[1]])
 
@@ -160,6 +170,8 @@ def layer_norm(x, normalized_shape, weight=None, bias=None, eps=1e-5):
         y = y * weight
     if bias is not None:
         y = y + bias
+    if y._name is not None:
+        y._name = 'NativeLayerNormBackward0'
     return y
 
 
@@ -180,6 +192,8 @@ def batch_norm(x, running_mean, running_var, weight=None, bias=None, training=Fa
         y = y * weight.reshape(shape)
     if bias is not None:
         y = y + bias.reshape(shape)
+    if y._name is not None:
+        y._name = 'NativeBatchNormBackward0'
     return y
 
 
@@ -234,6 +248,12 @@ def _col2im(gc, shape, kh, kw, sh, sw, oh, ow):
 
 
 def conv2d(x, weight, bias=None, stride=1, padding=0):
+    if x._a.ndim == 3:
+        return conv2d(x.unsqueeze(0), weight, bias, stride, padding).squeeze(0)
+    if x._a.ndim != 4:
+        raise RuntimeError('Expected 3D (unbatched) or 4D (batched) input to conv2d, but got input of size: %s' % (list(x._a.shape),))
+    if x._a.shape[1] != weight._a.shape[1]:
+        raise RuntimeError('Given groups=1, weight of size %s, expected input%s to have %d channels, but got %d channels instead' % (list(weight._a.shape), list(x._a.shape), weight._a.shape[1], x._a.shape[1]))
     sh, sw = _pair(stride)
     ph, pw = _pair(padding)
     xa, wa = x._a, weight._a

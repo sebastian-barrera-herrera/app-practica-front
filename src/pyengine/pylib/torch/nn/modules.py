@@ -221,9 +221,14 @@ class Linear(Module):
         self.bias = Parameter(_rng.uniform(-b, b, (out_features,))) if bias else None
 
     def forward(self, x):
+        torch._check_mm(x, self.weight.T, 'addmm')
         out = x @ self.weight.T
-        out._name = 'AddmmBackward0' if x._a.ndim == 2 and self.bias is not None else out._name
-        return out + self.bias if self.bias is not None else out
+        if self.bias is None:
+            return out
+        res = out + self.bias
+        if x._a.ndim == 2 and res._name is not None:
+            res._name = 'AddmmBackward0'
+        return res
 
     def extra_repr(self):
         return 'in_features=%d, out_features=%d, bias=%s' % (self.in_features, self.out_features, self.bias is not None)
@@ -478,6 +483,8 @@ class Conv2d(Module):
         s = '%d, %d, kernel_size=%s, stride=%s' % (self.in_channels, self.out_channels, self.kernel_size, self.stride)
         if self.padding != (0, 0):
             s += ', padding=%s' % (self.padding,)
+        if self.bias is None:
+            s += ', bias=False'
         return s
 
 
@@ -577,40 +584,75 @@ class _RNNBase(Module):
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.num_layers = num_layers
+        self.bias = bias
         self.batch_first = batch_first
+        self.dropout = dropout
+        self.bidirectional = bidirectional
         b = 1.0 / math.sqrt(hidden_size)
         m = self.mult
+        dirs = 2 if bidirectional else 1
         for l in range(num_layers):
-            ins = input_size if l == 0 else hidden_size
-            self.register_parameter('weight_ih_l%d' % l, Parameter(_rng.uniform(-b, b, (m * hidden_size, ins))))
-            self.register_parameter('weight_hh_l%d' % l, Parameter(_rng.uniform(-b, b, (m * hidden_size, hidden_size))))
-            self.register_parameter('bias_ih_l%d' % l, Parameter(_rng.uniform(-b, b, (m * hidden_size,))))
-            self.register_parameter('bias_hh_l%d' % l, Parameter(_rng.uniform(-b, b, (m * hidden_size,))))
+            ins = input_size if l == 0 else hidden_size * dirs
+            for d in range(dirs):
+                sfx = '_l%d%s' % (l, '_reverse' if d else '')
+                self.register_parameter('weight_ih' + sfx, Parameter(_rng.uniform(-b, b, (m * hidden_size, ins))))
+                self.register_parameter('weight_hh' + sfx, Parameter(_rng.uniform(-b, b, (m * hidden_size, hidden_size))))
+                if bias:
+                    self.register_parameter('bias_ih' + sfx, Parameter(_rng.uniform(-b, b, (m * hidden_size,))))
+                    self.register_parameter('bias_hh' + sfx, Parameter(_rng.uniform(-b, b, (m * hidden_size,))))
 
     def extra_repr(self):
-        return '%d, %d' % (self.input_size, self.hidden_size) + (', num_layers=%d' % self.num_layers if self.num_layers > 1 else '') + (', batch_first=True' if self.batch_first else '')
+        s = '%d, %d' % (self.input_size, self.hidden_size)
+        if self.num_layers != 1:
+            s += ', num_layers=%d' % self.num_layers
+        if not self.bias:
+            s += ', bias=False'
+        if self.batch_first:
+            s += ', batch_first=True'
+        if self.dropout:
+            s += ', dropout=%s' % self.dropout
+        if self.bidirectional:
+            s += ', bidirectional=True'
+        return s
 
     def _run(self, x, state, cell):
-        if self.batch_first:
+        unbatched = x._a.ndim == 2
+        if unbatched:
+            x = x.unsqueeze(1)
+        elif self.batch_first:
             x = x.transpose(0, 1)
         t_len, bsz = x.shape[0], x.shape[1]
+        dirs = 2 if self.bidirectional else 1
+        zero_b = torch.zeros(self.mult * self.hidden_size)
         outputs = x
         finals = []
         for l in range(self.num_layers):
-            wih = self._parameters['weight_ih_l%d' % l]
-            whh = self._parameters['weight_hh_l%d' % l]
-            bih = self._parameters['bias_ih_l%d' % l]
-            bhh = self._parameters['bias_hh_l%d' % l]
-            st = self._init_state(state, l, bsz)
-            seq = []
-            for t in range(t_len):
-                st = cell(outputs[t], st, wih, whh, bih, bhh)
-                seq.append(st[0] if isinstance(st, tuple) else st)
-            outputs = torch.stack(seq, 0)
-            finals.append(st)
-        if self.batch_first:
+            outs = []
+            for d in range(dirs):
+                sfx = '_l%d%s' % (l, '_reverse' if d else '')
+                wih = self._parameters['weight_ih' + sfx]
+                whh = self._parameters['weight_hh' + sfx]
+                bih = self._parameters['bias_ih' + sfx] if self.bias else zero_b
+                bhh = self._parameters['bias_hh' + sfx] if self.bias else zero_b
+                st = self._init_state(state, l * dirs + d, bsz, unbatched)
+                seq = [None] * t_len
+                for t in (range(t_len - 1, -1, -1) if d else range(t_len)):
+                    st = cell(outputs[t], st, wih, whh, bih, bhh)
+                    seq[t] = st[0] if isinstance(st, tuple) else st
+                outs.append(torch.stack(seq, 0))
+                finals.append(st)
+            outputs = torch.cat(outs, -1) if dirs == 2 else outs[0]
+            if self.dropout and self.training and l < self.num_layers - 1:
+                outputs = F.dropout(outputs, self.dropout, True)
+        if unbatched:
+            outputs = outputs.squeeze(1)
+        elif self.batch_first:
             outputs = outputs.transpose(0, 1)
-        return outputs, finals
+        return outputs, finals, unbatched
+
+    def _h0(self, state, i, bsz, unbatched):
+        h = state[i]
+        return h.unsqueeze(0) if unbatched else h
 
 
 class RNN(_RNNBase):
@@ -618,21 +660,22 @@ class RNN(_RNNBase):
         super().__init__(input_size, hidden_size, num_layers, bias, batch_first, dropout, bidirectional)
         self.nonlinearity = nonlinearity
 
-    def _init_state(self, state, l, bsz):
-        return state[l] if state is not None else torch.zeros(bsz, self.hidden_size)
+    def _init_state(self, state, i, bsz, unbatched):
+        return self._h0(state, i, bsz, unbatched) if state is not None else torch.zeros(bsz, self.hidden_size)
 
     def forward(self, x, h0=None):
         act = (lambda v: v.tanh()) if self.nonlinearity == 'tanh' else (lambda v: v.relu())
         cell = lambda xt, h, wih, whh, bih, bhh: act(xt @ wih.T + bih + h @ whh.T + bhh)
-        out, fin = self._run(x, h0, cell)
-        return out, torch.stack(fin, 0)
+        out, fin, unb = self._run(x, h0, cell)
+        h = torch.stack(fin, 0)
+        return out, (h.squeeze(1) if unb else h)
 
 
 class GRU(_RNNBase):
     mult = 3
 
-    def _init_state(self, state, l, bsz):
-        return state[l] if state is not None else torch.zeros(bsz, self.hidden_size)
+    def _init_state(self, state, i, bsz, unbatched):
+        return self._h0(state, i, bsz, unbatched) if state is not None else torch.zeros(bsz, self.hidden_size)
 
     def forward(self, x, h0=None):
         H = self.hidden_size
@@ -644,16 +687,17 @@ class GRU(_RNNBase):
             z = (gi[:, H:2 * H] + gh[:, H:2 * H]).sigmoid()
             n = (gi[:, 2 * H:] + r * gh[:, 2 * H:]).tanh()
             return (1 - z) * n + z * h
-        out, fin = self._run(x, h0, cell)
-        return out, torch.stack(fin, 0)
+        out, fin, unb = self._run(x, h0, cell)
+        h = torch.stack(fin, 0)
+        return out, (h.squeeze(1) if unb else h)
 
 
 class LSTM(_RNNBase):
     mult = 4
 
-    def _init_state(self, state, l, bsz):
+    def _init_state(self, state, i, bsz, unbatched):
         if state is not None:
-            return (state[0][l], state[1][l])
+            return (self._h0(state[0], i, bsz, unbatched), self._h0(state[1], i, bsz, unbatched))
         return (torch.zeros(bsz, self.hidden_size), torch.zeros(bsz, self.hidden_size))
 
     def forward(self, x, state=None):
@@ -668,8 +712,10 @@ class LSTM(_RNNBase):
             o = g[:, 3 * H:].sigmoid()
             c2 = f * c + i * gg
             return (o * c2.tanh(), c2)
-        out, fin = self._run(x, state, cell)
-        return out, (torch.stack([f[0] for f in fin], 0), torch.stack([f[1] for f in fin], 0))
+        out, fin, unb = self._run(x, state, cell)
+        hn = torch.stack([f[0] for f in fin], 0)
+        cn = torch.stack([f[1] for f in fin], 0)
+        return out, ((hn.squeeze(1), cn.squeeze(1)) if unb else (hn, cn))
 
 
 class MultiheadAttention(Module):
