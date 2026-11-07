@@ -22,6 +22,7 @@ import { BiasVarianceDemo, ConfusionDemo, KFoldDemo, RocDemo, SearchDemo } from 
 import { CoefEffect, LinRegFit, RegMetricsView, RegModelsView, RegPathView } from './IaReg';
 import { AiMlDl, FitCurve, LearningTypes, SplitDemo } from './IaBasics';
 import { AnnDemo, ChunkingDemo, EmbedMapDemo, SemanticSearchDemo, VecSpaceDemo } from './IaVectors';
+import { AttentionDemo, BpeDemo, ContextDemo, LlmStagesDemo, SamplingDemo, TransformerDemo } from './IaLlm';
 import { AutogradLab, ConvDemo, OverfitDemo, RnnMemoryDemo, TensorShapesDemo, TrainLoopDemo } from './IaDeep';
 import { ActivationsDemo, BackpropDemo, ForwardDemo, NeuronDemo, OptimizersDemo, TrainNetDemo } from './IaNeural';
 import { AptFlow, BootSequence, DnsLookup, NetRoute, SshHandshake, SudoFlow } from './Flows';
@@ -209,6 +210,12 @@ const MAP: Partial<Record<IllustrationId, React.ComponentType>> = {
   'ia-semantic-search': SemanticSearchDemo,
   'ia-ann': AnnDemo,
   'ia-chunking': ChunkingDemo,
+  'ia-bpe': BpeDemo,
+  'ia-attention': AttentionDemo,
+  'ia-transformer': TransformerDemo,
+  'ia-sampling': SamplingDemo,
+  'ia-llm-stages': LlmStagesDemo,
+  'ia-context': ContextDemo,
 };
 
 export function Illustration({ id }: { id: IllustrationId }) {

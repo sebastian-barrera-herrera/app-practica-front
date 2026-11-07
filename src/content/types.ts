@@ -174,7 +174,13 @@ export type IllustrationId =
   | 'ia-embed-map'
   | 'ia-semantic-search'
   | 'ia-ann'
-  | 'ia-chunking';
+  | 'ia-chunking'
+  | 'ia-bpe'
+  | 'ia-attention'
+  | 'ia-transformer'
+  | 'ia-sampling'
+  | 'ia-llm-stages'
+  | 'ia-context';
 
 // ───────────────────────── preguntas ─────────────────────────
 
