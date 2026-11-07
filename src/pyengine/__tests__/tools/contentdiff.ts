@@ -66,6 +66,9 @@ const checkExpr = (c: PyCheck): string | null => {
   }
 };
 
+/** ¿El programa terminó con una excepción? (los avisos no cuentan) */
+const crashed = (err: string): boolean => /Traceback \(most recent call last\)/.test(err);
+
 const norm = (s: string): string => s.replace(/[ \t]+$/gm, '').replace(/\s+$/, '');
 
 let bad = 0;
@@ -106,7 +109,8 @@ const report = (where: string, what: string, a: string, b: string) => {
         const [a, b] = [real(code, step.setup), await mine(code, step.setup)];
         checked++;
         const hasErr = cells.some((c: any) => c.error);
-        if (!hasErr && (norm(a.out) !== norm(b.out) || a.err.trim() !== '' && b.err.trim() === '')) report(where, `demo «${step.title}»`, a.out + (a.err ? '\n[stderr] ' + a.err.split('\n').slice(-3).join('\n') : ''), b.out + (b.err ? '\n[stderr] ' + b.err.split('\n').slice(-3).join('\n') : ''));
+        if (!hasErr && (norm(a.out) !== norm(b.out) || crashed(a.err) !== crashed(b.err))) report(where, `demo «${step.title}»`, a.out + (a.err ? '\n[stderr] ' + a.err.split('\n').slice(-3).join('\n') : ''), b.out + (b.err ? '\n[stderr] ' + b.err.split('\n').slice(-3).join('\n') : ''));
+        else if (!hasErr && crashed(a.err)) report(where, `demo «${step.title}» falla también en CPython`, a.err.split('\n').slice(-4).join('\n'), b.err.split('\n').slice(-4).join('\n'));
         else if (show) console.log(`✓ ${where} demo «${step.title}»\n${a.out}`);
       } else if (step.type === 'quiz' && step.q.t === 'pyout') {
         const [a, b] = [real(step.q.code, step.q.setup), await mine(step.q.code, step.q.setup)];

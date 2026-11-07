@@ -17,6 +17,8 @@ def _to_array(X):
         return X.toarray()
     if hasattr(X, 'to_numpy'):
         return X.to_numpy()
+    if not isinstance(X, (np.ndarray, list, tuple)) and hasattr(X, '__array__'):
+        return X.__array__()
     return X
 
 
@@ -80,6 +82,8 @@ def _safe_indexing(X, indices):
         return X.iloc[list(indices)]
     if isinstance(X, np.ndarray):
         return X[indices]
+    if hasattr(X, 'shape') and hasattr(X, '__getitem__'):      # tensores de PyTorch y similares
+        return X[np.asarray(indices)]
     return [X[i] for i in indices]
 
 

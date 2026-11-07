@@ -163,7 +163,13 @@ export type IllustrationId =
   | 'ia-activations'
   | 'ia-backprop'
   | 'ia-train-net'
-  | 'ia-optimizers';
+  | 'ia-optimizers'
+  | 'ia-tensor-shapes'
+  | 'ia-autograd'
+  | 'ia-train-loop'
+  | 'ia-conv'
+  | 'ia-rnn'
+  | 'ia-overfit';
 
 // ───────────────────────── preguntas ─────────────────────────
 

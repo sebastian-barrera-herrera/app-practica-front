@@ -54,7 +54,7 @@ def dropout(x, p=0.5, training=True, inplace=False):
     if not training or p == 0:
         return x
     keep = (_rng.uniform(0, 1, x._a.shape) >= p).astype(np.float64) / (1.0 - p)
-    return x * torch.tensor(keep)
+    return x * torch.tensor(keep, dtype=x._dtype)
 
 
 def _reduce(loss, reduction):
@@ -95,7 +95,7 @@ def nll_loss(input, target, weight=None, reduction='mean'):
         picked = input.gather(1, idx).reshape(-1)
         loss = -picked
         if weight is not None:
-            w = torch.tensor(_as_np(weight)[t])
+            w = torch.tensor(_as_np(weight)[t], dtype=input._dtype)
             loss = loss * w
             if reduction == 'mean':
                 return loss.sum() / w.sum()
@@ -183,8 +183,8 @@ def batch_norm(x, running_mean, running_var, weight=None, bias=None, training=Fa
         var = ((x - mu) ** 2).mean(axes, keepdim=True)
         n = x._a.size // x._a.shape[1]
         if running_mean is not None:
-            running_mean._a[...] = (1 - momentum) * running_mean._a + momentum * mu._a.reshape(-1)
-            running_var._a[...] = (1 - momentum) * running_var._a + momentum * var._a.reshape(-1) * n / max(n - 1, 1)
+            running_mean._a[...] = torch._f32((1 - momentum) * running_mean._a + momentum * mu._a.reshape(-1))
+            running_var._a[...] = torch._f32((1 - momentum) * running_var._a + momentum * var._a.reshape(-1) * n / max(n - 1, 1))
         y = (x - mu) / (var + eps).sqrt()
     else:
         y = (x - running_mean.reshape(shape)) / (running_var.reshape(shape) + eps).sqrt()

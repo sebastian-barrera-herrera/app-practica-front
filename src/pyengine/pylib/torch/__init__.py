@@ -200,13 +200,12 @@ def _tensor_str(a, floating, indent):
 
 
 def _unbroadcast(g, shape):
-    if g.shape == tuple(shape):
-        return g
+    g = np.asarray(g)
     while g.ndim > len(shape):
-        g = g.sum(axis=0)
+        g = np.asarray(g.sum(axis=0))
     for i, s in enumerate(shape):
         if s == 1 and g.shape[i] != 1:
-            g = g.sum(axis=i, keepdims=True)
+            g = np.asarray(g.sum(axis=i, keepdims=True))
     return g.reshape(shape)
 
 
@@ -360,7 +359,7 @@ class Tensor:
 
     @property
     def grad_fn(self):
-        return _GradFn(self._name) if self._name else None
+        return _GradFn(self._name, self) if self._name else None
 
     @property
     def is_leaf(self):
@@ -1142,11 +1141,22 @@ class _MinMax(tuple):
 
 
 class _GradFn:
-    def __init__(self, name):
-        self.name = name
+    def __init__(self, name, node=None):
+        self._n = name
+        self._node = node
+
+    def name(self):
+        return self._n
+
+    @property
+    def next_functions(self):
+        out = []
+        for p in (self._node._parents if self._node is not None else ()):
+            out.append((p.grad_fn if p._backward_fn is not None else None, 0))
+        return tuple(out)
 
     def __repr__(self):
-        return '<%s object>' % self.name
+        return '<%s object>' % self._n
 
 
 class Size(tuple):

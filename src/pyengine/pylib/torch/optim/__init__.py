@@ -5,6 +5,10 @@ from torch import Tensor
 from torch.optim import lr_scheduler
 
 
+def _upd(p, value):
+    p._a[...] = torch._f32(np.asarray(value, dtype=np.float64)) if p._dtype is torch.float32 else value
+
+
 class Optimizer:
     def __init__(self, params, defaults):
         self.defaults = defaults
@@ -67,7 +71,7 @@ class SGD(Optimizer):
             else:
                 st['buf'] = grp['momentum'] * st['buf'] + (1 - grp['dampening']) * g
             g = g + grp['momentum'] * st['buf'] if grp['nesterov'] else st['buf']
-        p._a[...] = p._a - grp['lr'] * g
+        _upd(p, p._a - grp['lr'] * g)
 
 
 class Adam(Optimizer):
@@ -86,7 +90,7 @@ class Adam(Optimizer):
         t = st['step']
         if grp['weight_decay']:
             if self.decoupled:
-                p._a[...] = p._a * (1 - grp['lr'] * grp['weight_decay'])
+                _upd(p, p._a * (1 - grp['lr'] * grp['weight_decay']))
             else:
                 g = g + grp['weight_decay'] * p._a
         st['m'] = b1 * st['m'] + (1 - b1) * g
@@ -94,7 +98,7 @@ class Adam(Optimizer):
         bc1 = 1 - b1 ** t
         bc2 = 1 - b2 ** t
         denom = np.sqrt(st['v']) / math.sqrt(bc2) + grp['eps']
-        p._a[...] = p._a - (grp['lr'] / bc1) * st['m'] / denom
+        _upd(p, p._a - (grp['lr'] / bc1) * st['m'] / denom)
 
 
 class AdamW(Adam):
@@ -118,9 +122,9 @@ class RMSprop(Optimizer):
         avg = np.sqrt(st['sq']) + grp['eps']
         if grp['momentum'] > 0:
             st['buf'] = grp['momentum'] * st['buf'] + g / avg
-            p._a[...] = p._a - grp['lr'] * st['buf']
+            _upd(p, p._a - grp['lr'] * st['buf'])
         else:
-            p._a[...] = p._a - grp['lr'] * g / avg
+            _upd(p, p._a - grp['lr'] * g / avg)
 
 
 class Adagrad(Optimizer):
@@ -135,4 +139,4 @@ class Adagrad(Optimizer):
             st['step'] = 0
         st['step'] += 1
         st['sum'] = st['sum'] + g * g
-        p._a[...] = p._a - grp['lr'] / (1 + (st['step'] - 1) * grp['lr_decay']) * g / (np.sqrt(st['sum']) + grp['eps'])
+        _upd(p, p._a - grp['lr'] / (1 + (st['step'] - 1) * grp['lr_decay']) * g / (np.sqrt(st['sum']) + grp['eps']))

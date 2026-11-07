@@ -8,6 +8,7 @@ import { NOSUPERVISADO_REFS } from './ref/nosupervisado';
 import { NUMPY_REFS } from './ref/numpy';
 import { PANDAS_REFS } from './ref/pandas';
 import { PREPROCESADO_REFS } from './ref/preprocesado';
+import { PYTORCH_REFS } from './ref/pytorch';
 import { REDES_REFS } from './ref/redes';
 import { REGRESION_REFS } from './ref/regresion';
 
@@ -26,6 +27,6 @@ export const IA_REF_CATEGORY: Record<IaRefCategory, string> = {
 
 export type IaRef = PyRef<IaRefCategory>;
 
-export const IA_REFERENCE: IaRef[] = [...CONCEPTOS_REFS, ...NUMPY_REFS, ...MATEMATICAS_REFS, ...PANDAS_REFS, ...PREPROCESADO_REFS, ...REGRESION_REFS, ...CLASIFICACION_REFS, ...EVALUACION_REFS, ...NOSUPERVISADO_REFS, ...REDES_REFS];
+export const IA_REFERENCE: IaRef[] = [...CONCEPTOS_REFS, ...NUMPY_REFS, ...MATEMATICAS_REFS, ...PANDAS_REFS, ...PREPROCESADO_REFS, ...REGRESION_REFS, ...CLASIFICACION_REFS, ...EVALUACION_REFS, ...NOSUPERVISADO_REFS, ...REDES_REFS, ...PYTORCH_REFS];
 
 export const iaRefByName = (name: string): IaRef | undefined => IA_REFERENCE.find((r) => r.name === name);

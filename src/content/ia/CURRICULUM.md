@@ -20,7 +20,7 @@ Cada lección: 7+ pasos, ≥3 preguntas, al menos un reto de código `pyPractice
 
 ## Avanzado (deep learning y IA generativa)
 - **Z8 · Redes neuronales desde cero** ✅ — neurona y perceptrón, capas y propagación hacia delante (XOR), activaciones (gradiente evanescente, softmax estable), pérdida y retropropagación (comprobada con derivadas numéricas), bucle de entrenamiento, mini-lotes, inicialización, SGD/momento/Adam y `MLPClassifier`. Datos: dos lunas (`make_moons`).
-- **Z9 · Deep learning práctico** — PyTorch mini, autograd, CNN, RNN/LSTM, regularización (dropout, batch norm), transfer learning.
+- **Z9 · Deep learning práctico** ✅ — tensores (formas, dtypes, errores típicos), autograd, `nn.Module` y bucle de entrenamiento, CNN (convolución, pooling, dígitos 8×8), RNN/LSTM con `Embedding`, dropout, BatchNorm, decaimiento de pesos, parada temprana y transfer learning. 6 lecciones + jefe.
 - **Z10 · Datos vectoriales y embeddings** — vectores, similitud coseno, embeddings, búsqueda por vecinos (exacta y ANN), bases de datos vectoriales, chunking.
 - **Z11 · Transformers y LLMs** — tokens y BPE, atención, arquitectura, preentrenamiento, ajuste fino, generación (temperatura, top-k/top-p), contexto.
 - **Z12 · Prompt engineering** — roles, few-shot, cadena de pensamiento, formatos estructurados, evaluación de prompts, inyección de prompts.

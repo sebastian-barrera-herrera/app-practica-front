@@ -21,6 +21,7 @@ import { DbscanDemo, ElbowDemo, KMeansSteps, PcaAxesDemo, RecommenderDemo } from
 import { BiasVarianceDemo, ConfusionDemo, KFoldDemo, RocDemo, SearchDemo } from './IaEval';
 import { CoefEffect, LinRegFit, RegMetricsView, RegModelsView, RegPathView } from './IaReg';
 import { AiMlDl, FitCurve, LearningTypes, SplitDemo } from './IaBasics';
+import { AutogradLab, ConvDemo, OverfitDemo, RnnMemoryDemo, TensorShapesDemo, TrainLoopDemo } from './IaDeep';
 import { ActivationsDemo, BackpropDemo, ForwardDemo, NeuronDemo, OptimizersDemo, TrainNetDemo } from './IaNeural';
 import { AptFlow, BootSequence, DnsLookup, NetRoute, SshHandshake, SudoFlow } from './Flows';
 import { FsTree } from './FsTree';
@@ -196,6 +197,12 @@ const MAP: Partial<Record<IllustrationId, React.ComponentType>> = {
   'ia-backprop': BackpropDemo,
   'ia-train-net': TrainNetDemo,
   'ia-optimizers': OptimizersDemo,
+  'ia-tensor-shapes': TensorShapesDemo,
+  'ia-autograd': AutogradLab,
+  'ia-train-loop': TrainLoopDemo,
+  'ia-conv': ConvDemo,
+  'ia-rnn': RnnMemoryDemo,
+  'ia-overfit': OverfitDemo,
 };
 
 export function Illustration({ id }: { id: IllustrationId }) {
