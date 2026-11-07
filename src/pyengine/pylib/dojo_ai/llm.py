@@ -207,6 +207,17 @@ def _sentimiento_lexico(texto):
     return p, n
 
 
+# Lo que cualquier modelo general «sabe» del significado de las etiquetas habituales de atención al cliente.
+_SENTIDO = {
+    'envios': 'envío entrega paquete transporte llegada pedido retraso dirección',
+    'devoluciones': 'devolver devolución reembolso cambio talla',
+    'pagos': 'pagar pago tarjeta factura cobro cuotas precio',
+    'cuenta': 'cuenta perfil contraseña correo usuario datos acceso',
+    'garantia': 'garantía defecto roto averiado funcionar reparar',
+    'soporte': 'ayuda atención contacto horario',
+}
+
+
 class _Clasificador:
     def __init__(self, etiquetas, ejemplos):
         self.etiquetas = etiquetas
@@ -222,7 +233,7 @@ class _Clasificador:
                 self.cuentas[et][f] = self.cuentas[et].get(f, 0) + 1
                 self.total[et] += 1
         self.vocab = {f for c in self.cuentas.values() for f in c}
-        self.emb = {e: embed(e) for e in self.etiquetas}
+        self.emb = {e: embed(e + ' ' + _SENTIDO.get(_n(e), '')) for e in self.etiquetas}
 
     def _prior(self, texto, et):
         """Conocimiento previo del modelo (sin ejemplos): léxico de sentimiento o parecido semántico con el nombre de la etiqueta."""
@@ -595,6 +606,9 @@ class _Cerebro:
         t = self.inyeccion_directa()
         if t is not None:
             return self.persona(t), [], 'stop'
+        t = self.secuestro()
+        if t is not None:
+            return t, [], 'stop'
         if ('evalua' in self.sisn or 'juez' in self.sisn or 'puntua' in self.sisn) and 'referencia' in self.un:
             return self.juez(), [], 'stop'
         if self.pide_json():
@@ -611,7 +625,7 @@ class _Cerebro:
         t = self.matematicas()
         if t is not None:
             return t, [], 'stop'
-        if re.search(r'\bresum', self.un):
+        if re.search(r'\bresum', self.sisn + ' ' + self.un):
             return self.persona(self.resumen()), [], 'stop'
         return self.persona(self.general()), [], 'stop'
 
@@ -634,6 +648,13 @@ class _Cerebro:
         if s:
             return 'Claro. El código secreto es %s.' % s
         return 'Mis instrucciones son: %s' % self.sis.strip()
+
+    def secuestro(self):
+        """Inyección de prompt «de secuestro»: una orden escondida en el texto del usuario («ignora… y responde X») que un modelo sin defensas obedece."""
+        if self.defendido or self.spec['resiste_inyeccion']:
+            return None
+        m = re.search(r'(?:ignora|olvida)[^.\n]*?(?:responde|di|escribe)\s*(?:solo\s*)?[:«"\']?\s*([^.\n«»"\'<>]+)', self.u, re.I)
+        return m.group(1).strip() if m else None
 
     # ---- formato de la respuesta ----
     def persona(self, texto):
@@ -724,7 +745,7 @@ class _Cerebro:
         while i < ultimo_u:
             if msgs[i]['role'] == 'user' and i + 1 < len(msgs) and msgs[i + 1]['role'] == 'assistant':
                 resp = _contenido(msgs[i + 1]).strip()
-                if 0 < len(resp) <= 40 and not msgs[i + 1].get('tool_calls'):
+                if 0 < len(resp) <= 40 and len(resp.split()) <= 3 and not msgs[i + 1].get('tool_calls'):
                     out.append((_contenido(msgs[i]), resp.strip('.')))
                 i += 2
             else:
@@ -747,7 +768,8 @@ class _Cerebro:
         clf = _Clasificador(etiquetas, ejemplos)
         et, _ = clf.predecir(texto)
         solo = ejemplos and all(len(e) <= 20 for _, e in ejemplos)
-        if 'solo' in self.sisn + ' ' + self.un.lower() and ('etiqueta' in self.sisn + self.un.lower() or 'palabra' in self.sisn + self.un.lower()) or solo:
+        pide = self.sisn + ' ' + self.un
+        if ('solo' in pide and any(w in pide for w in ('etiqueta', 'palabra', 'categoria', 'clase'))) or solo:
             return et
         if set(map(_n, etiquetas)) <= {'positivo', 'negativo', 'neutral', 'neutro'}:
             return self.elegir(['El sentimiento es «%s».' % et, 'Yo diría que es «%s».' % et])
@@ -829,6 +851,9 @@ class _Cerebro:
     # ---- resumen ----
     def resumen(self):
         texto = self.texto_dato() if re.search(r'texto\s*:', self.u, re.I) else self.u
+        cab = re.match(r'([^:\n]*resum[^:\n]*):\s*(.+)$', texto, re.I | re.S)
+        if cab:
+            texto = cab.group(2)
         fr = _frases(texto)
         fr = [f for f in fr if not re.match(r'(?i)resume', f)] or fr
         m = re.search(r'en\s+(\d+|una|dos|tres)\s+frases?', self.un)
@@ -852,6 +877,11 @@ class _Cerebro:
         if re.search(r'qui[eé]n eres|qu[eé] eres|c[oó]mo te llamas', u):
             return 'Soy %s, un simulador de modelo de lenguaje de Dev Dojo. No uso una red neuronal: sigo reglas para que practiques con la API.' % self.modelo
         m = re.search(r'capital de ([a-z ]+)', u)
+        if not m:
+            seguimiento = re.match(r'\s*y\s+(?:la\s+|el\s+)?(?:de\s+|en\s+)?([a-z ]+?)\s*\??\s*$', u.strip().lstrip('¿'))
+            previo = [_n(_contenido(x)) for x in self.msgs[:-1] if x['role'] == 'user']
+            if seguimiento and any('capital de' in x for x in previo):
+                m = re.search(r'capital de ([a-z ]+)', 'capital de ' + seguimiento.group(1))
         if m:
             pais = m.group(1).strip(' ?¿.')
             c = CAPITALES.get(pais)

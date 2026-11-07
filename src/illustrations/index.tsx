@@ -23,6 +23,7 @@ import { CoefEffect, LinRegFit, RegMetricsView, RegModelsView, RegPathView } fro
 import { AiMlDl, FitCurve, LearningTypes, SplitDemo } from './IaBasics';
 import { AnnDemo, ChunkingDemo, EmbedMapDemo, SemanticSearchDemo, VecSpaceDemo } from './IaVectors';
 import { AttentionDemo, BpeDemo, ContextDemo, LlmStagesDemo, SamplingDemo, TransformerDemo } from './IaLlm';
+import { ChatMessagesDemo, CotDemo, FewShotDemo, InjectionDemo, PromptAnatomyDemo } from './IaPrompt';
 import { AutogradLab, ConvDemo, OverfitDemo, RnnMemoryDemo, TensorShapesDemo, TrainLoopDemo } from './IaDeep';
 import { ActivationsDemo, BackpropDemo, ForwardDemo, NeuronDemo, OptimizersDemo, TrainNetDemo } from './IaNeural';
 import { AptFlow, BootSequence, DnsLookup, NetRoute, SshHandshake, SudoFlow } from './Flows';
@@ -216,6 +217,11 @@ const MAP: Partial<Record<IllustrationId, React.ComponentType>> = {
   'ia-sampling': SamplingDemo,
   'ia-llm-stages': LlmStagesDemo,
   'ia-context': ContextDemo,
+  'ia-chat-messages': ChatMessagesDemo,
+  'ia-prompt-anatomy': PromptAnatomyDemo,
+  'ia-fewshot': FewShotDemo,
+  'ia-cot': CotDemo,
+  'ia-injection': InjectionDemo,
 };
 
 export function Illustration({ id }: { id: IllustrationId }) {

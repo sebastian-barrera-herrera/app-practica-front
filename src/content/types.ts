@@ -180,7 +180,12 @@ export type IllustrationId =
   | 'ia-transformer'
   | 'ia-sampling'
   | 'ia-llm-stages'
-  | 'ia-context';
+  | 'ia-context'
+  | 'ia-chat-messages'
+  | 'ia-prompt-anatomy'
+  | 'ia-fewshot'
+  | 'ia-cot'
+  | 'ia-injection';
 
 // ───────────────────────── preguntas ─────────────────────────
 
