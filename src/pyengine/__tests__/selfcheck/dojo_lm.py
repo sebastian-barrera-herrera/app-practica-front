@@ -1,0 +1,15 @@
+from dojo_ai.lm import modelo_cuentos, softmax_temperatura, filtrar_top_k, filtrar_top_p
+m = modelo_cuentos()
+print(m)
+print(m.probabilidades('el'))
+print(m.probabilidades('el gato'))
+print(m.probabilidades('gato'))
+for T in (0.2, 1.0, 2.0):
+    print(T, [m.generar('el', temperatura=T, semilla=s) for s in range(3)])
+print(m.generar('el', temperatura=0))
+print(m.generar('la niña', top_k=2, semilla=1), '|', m.generar('la niña', top_p=0.5, semilla=1))
+pal, lg = m.logits('el')
+print([round(float(x), 3) for x in softmax_temperatura(lg, 0.5)[:4]], [round(float(x), 3) for x in softmax_temperatura(lg, 2)[:4]])
+m3 = modelo_cuentos(3)
+print(m3.probabilidades('el gato'), m3.probabilidades('el perro corre'))
+print(round(m.perplejidad('el gato come pescado .'), 3), round(m.perplejidad('pescado come gato el .'), 3))

@@ -1,0 +1,130 @@
+"""Léxico semántico en español para los embeddings de juguete de ``dojo_ai``.
+
+Cada palabra pertenece a uno o varios *conceptos* (ejes). Un embedding es la suma de los ejes de sus palabras,
+proyectada a 64 dimensiones con una matriz aleatoria fija: así las dimensiones finales NO son interpretables
+(como en un embedding real) pero las distancias sí reflejan el significado.
+"""
+
+# concepto -> palabras (peso 1). Se buscan por raíz, así «enviamos», «envío» y «enviar» comparten vector.
+GROUPS = {
+    'animal': 'perro gato caballo vaca cerdo oveja pájaro pez tigre león lobo zorro conejo ratón elefante mono oso águila serpiente tortuga delfín ballena abeja mascota animal',
+    'comida': 'comida pizza pan arroz pasta carne pollo pescado huevo queso ensalada sopa hamburguesa tortilla paella taco galleta chocolate postre cena almuerzo desayuno receta cocinar plato',
+    'fruta': 'manzana naranja plátano uva fresa limón pera melón sandía cereza fruta mango piña',
+    'bebida': 'agua café té leche zumo cerveza vino refresco bebida batido jugo',
+    'tecnologia': 'ordenador computadora portátil teléfono móvil pantalla teclado ratón cable batería cargador auricular tablet dispositivo aparato electrónico tecnología gadget robot sensor',
+    'programacion': 'programa código algoritmo software aplicación app función variable bucle error depurar compilar lenguaje python script programar desarrollo desarrollador',
+    'internet': 'internet web página navegador enlace correo email red wifi servidor nube online digital sitio descargar subir',
+    'ia': 'inteligencia modelo datos entrenar aprendizaje neurona predicción algoritmo clasificar embedding vector tokens prompt agente máquina automático',
+    'deporte': 'fútbol baloncesto tenis natación correr carrera equipo partido gol jugador entrenador deporte gimnasio ciclismo atleta campeonato',
+    'musica': 'música canción guitarra piano concierto cantante banda ritmo melodía álbum instrumento violín batería',
+    'arte': 'arte pintura cuadro museo escultura dibujo película cine teatro novela libro autor lectura',
+    'dinero': 'dinero euro dólar precio coste costo barato caro descuento oferta cupón ahorro gasto importe tarifa saldo moneda',
+    'compra': 'comprar compra pedido carrito tienda producto artículo vender venta cliente catálogo stock marca talla color',
+    'envio': 'envío enviar paquete entrega entregar llegar transporte mensajería repartidor correos domicilio dirección seguimiento rastrear rastreo código postal almacén recibir recepción',
+    'devolucion': 'devolver devolución reembolso reintegro cambio cambiar garantía defectuoso roto dañado reclamación reclamar retorno anular',
+    'cuenta': 'cuenta usuario perfil registro registrarse iniciar sesión login cliente suscripción puntos fidelidad miembro',
+    'seguridad': 'contraseña seguridad clave privacidad proteger protección seguro hackeo fraude verificación autenticación cifrado restablecer recuperar bloquear acceso',
+    'pago': 'pago pagar tarjeta paypal transferencia factura recibo cobro cargo débito crédito efectivo plazos cuota',
+    'soporte': 'ayuda soporte atención asistencia contacto contactar chat consulta pregunta problema incidencia queja teléfono horario agente',
+    'tiempo': 'día días hora horas semana semanas mes meses año tiempo plazo laborable hábil mañana ayer hoy pronto tarde',
+    'lugar': 'ciudad pueblo calle país mundo mapa viaje viajar hotel playa montaña aeropuerto estación ruta destino turismo vuelo',
+    'pais': 'españa francia italia alemania portugal méxico argentina chile colombia perú japón china brasil',
+    'capital': 'madrid parís roma berlín lisboa tokio pekín brasilia santiago bogotá lima buenos aires capital',
+    'persona': 'persona gente humano amigo vecino compañero ciudadano adulto',
+    'familia': 'familia padre madre hijo hija hermano hermana abuelo abuela tío tía primo sobrino pareja bebé',
+    'trabajo': 'trabajo empleo empresa jefe oficina salario contrato profesión reunión equipo proyecto negocio emprendedor',
+    'educacion': 'escuela colegio universidad profesor alumno estudiante clase examen curso aprender estudiar enseñar tarea lección',
+    'salud': 'salud médico doctor hospital medicina enfermedad dolor fiebre farmacia paciente tratamiento vacuna dieta',
+    'naturaleza': 'árbol bosque río mar montaña flor planta naturaleza paisaje sol luna estrella tierra cielo',
+    'clima': 'lluvia nieve viento tormenta calor frío temperatura nublado soleado clima tiempo meteorología grados',
+    'vehiculo': 'coche auto moto bicicleta tren avión autobús barco camión conducir carretera tráfico gasolina vehículo',
+    'casa': 'casa piso habitación cocina baño sofá mesa silla cama ventana puerta jardín mueble hogar',
+    'ropa': 'camiseta pantalón zapatos zapatillas vestido chaqueta abrigo ropa falda gorra bufanda calcetines',
+    'positivo': 'bueno excelente genial perfecto fantástico increíble maravilloso encantar encanta gustar feliz alegre contento satisfecho recomendable estupendo magnífico mejor útil rápido amable cómodo bonito',
+    'negativo': 'malo terrible horrible pésimo decepcionante decepción enfadado triste lento molesto roto peor defectuoso fatal caro odiar problema queja error inútil incómodo tarde',
+    'grande': 'grande enorme gigante amplio extenso largo alto mucho muchos inmenso',
+    'pequeno': 'pequeño diminuto corto bajo poco pocos mini ligero',
+    'rapido': 'rápido veloz urgente exprés inmediato pronto instantáneo ágil',
+    'lento': 'lento tardar retraso demora despacio tarde pausado',
+    'cantidad': 'uno dos tres cuatro cinco seis siete diez veinte treinta cien mil número cantidad total mitad doble',
+    'accion': 'hacer usar ver buscar encontrar necesitar querer poder saber decir dar tener abrir cerrar guardar',
+}
+
+# palabras con varios conceptos o con pesos concretos. Las claves que empiezan por ~ son vectores latentes
+# compartidos (p. ej. «francia» y «parís» comparten ~fr, y por eso París − Francia + Italia ≈ Roma).
+EXTRA = {
+    'hombre': {'persona': 1, 'masculino': 1},
+    'mujer': {'persona': 1, 'femenino': 1},
+    'niño': {'persona': 1, 'masculino': 1, 'joven': 1},
+    'niña': {'persona': 1, 'femenino': 1, 'joven': 1},
+    'chico': {'persona': 1, 'masculino': 1, 'joven': 1},
+    'chica': {'persona': 1, 'femenino': 1, 'joven': 1},
+    'rey': {'realeza': 1, 'masculino': 1, 'persona': 0.5},
+    'reina': {'realeza': 1, 'femenino': 1, 'persona': 0.5},
+    'príncipe': {'realeza': 1, 'masculino': 1, 'joven': 1},
+    'princesa': {'realeza': 1, 'femenino': 1, 'joven': 1},
+    'padre': {'familia': 1, 'masculino': 1},
+    'madre': {'familia': 1, 'femenino': 1},
+    'hijo': {'familia': 1, 'masculino': 1, 'joven': 1},
+    'hija': {'familia': 1, 'femenino': 1, 'joven': 1},
+    'hermano': {'familia': 1, 'masculino': 1},
+    'hermana': {'familia': 1, 'femenino': 1},
+    'abuelo': {'familia': 1, 'masculino': 1, 'mayor': 1},
+    'abuela': {'familia': 1, 'femenino': 1, 'mayor': 1},
+    'tío': {'familia': 1, 'masculino': 1},
+    'tía': {'familia': 1, 'femenino': 1},
+    'camarero': {'trabajo': 0.6, 'comida': 0.5, 'masculino': 1, 'persona': 0.5},
+    'camarera': {'trabajo': 0.6, 'comida': 0.5, 'femenino': 1, 'persona': 0.5},
+    'profesor': {'educacion': 1, 'masculino': 1, 'persona': 0.5},
+    'profesora': {'educacion': 1, 'femenino': 1, 'persona': 0.5},
+    'médico': {'salud': 1, 'persona': 0.5},
+    'perro': {'animal': 1, 'mascota': 1},
+    'gato': {'animal': 1, 'mascota': 1},
+    'conejo': {'animal': 1, 'mascota': 0.6},
+    'pizza': {'comida': 1, 'italia': 0.4},
+    'paella': {'comida': 1, 'españa': 0.4},
+    'taco': {'comida': 1, 'méxico': 0.4},
+    'gol': {'deporte': 1, 'positivo': 0.2},
+    'ordenador': {'tecnologia': 1, 'programacion': 0.3},
+    'portátil': {'tecnologia': 1, 'programacion': 0.3},
+    'móvil': {'tecnologia': 1, 'internet': 0.3},
+    'dojoshop': {'compra': 1, 'tienda': 0.5},
+    'pedido': {'compra': 0.8, 'envio': 0.5},
+    'paquete': {'envio': 1, 'compra': 0.3},
+    'llegar': {'envio': 1, 'tiempo': 0.2},
+    'tardar': {'lento': 1, 'tiempo': 0.5, 'envio': 0.2},
+    'tarda': {'lento': 1, 'tiempo': 0.5, 'envio': 0.2},
+    'gratis': {'dinero': 0.6, 'positivo': 0.4},
+    'reembolso': {'devolucion': 1, 'dinero': 0.8},
+    'devolver': {'devolucion': 1, 'envio': 0.2},
+    'factura': {'pago': 1, 'dinero': 0.5},
+    'cupón': {'dinero': 0.8, 'compra': 0.5},
+    'descuento': {'dinero': 0.8, 'compra': 0.5},
+    'contraseña': {'seguridad': 1, 'cuenta': 0.7},
+    'puntos': {'cuenta': 0.8, 'dinero': 0.5},
+    'mañana': {'tiempo': 1},
+    'ayer': {'tiempo': 1},
+    'hoy': {'tiempo': 1},
+    'lluvia': {'clima': 1, 'naturaleza': 0.4},
+    'feliz': {'positivo': 1},
+    'triste': {'negativo': 1},
+    'rápido': {'rapido': 1, 'positivo': 0.3},
+    'lento': {'lento': 1, 'negativo': 0.3},
+}
+
+# países y capitales: comparten un vector latente (~fr, ~it…), de modo que capital − país es casi constante
+PAISES = {
+    'españa': ('madrid', 'es'), 'francia': ('parís', 'fr'), 'italia': ('roma', 'it'), 'alemania': ('berlín', 'de'),
+    'portugal': ('lisboa', 'pt'), 'japón': ('tokio', 'jp'), 'china': ('pekín', 'cn'), 'brasil': ('brasilia', 'br'),
+    'chile': ('santiago', 'cl'), 'colombia': ('bogotá', 'co'), 'perú': ('lima', 'pe'),
+}
+for _p, (_c, _k) in PAISES.items():
+    EXTRA[_p] = {'pais': 1, '~' + _k: 1.4}
+    EXTRA[_c] = {'capital': 1, '~' + _k: 1.4}
+
+STOPWORDS = set(
+    'de la el los las un una unos unas y o u e en a al del que es por para con se su sus mi mis tu tus lo le les me te nos '
+    'como más pero si no qué cuál cuáles cuánto cuánta cuántos cuántas cómo dónde cuándo quién hay está están son ser estar '
+    'ha han he hemos fue era muy ya también sobre entre sin desde hasta este esta estos estas ese esa eso esto ello puedo '
+    'puede pueden podemos quiero quieres tengo tiene tienen vez cual donde cuando'.split()
+)

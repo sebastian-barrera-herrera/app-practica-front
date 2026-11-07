@@ -1,0 +1,7 @@
+[1416, 1426, 1288, 387, 1485] 30000
+ivf 1 0.92 2478
+ivf 2 1.0 4294
+ivf 4 1.0 8144
+lsh 0.4 5501
+[['devolucion-proceso', 'producto-defectuoso']] [0.165, 0.28]
+[['factura', 'cupon', 'pago-plazos']]

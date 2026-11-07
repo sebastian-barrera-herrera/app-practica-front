@@ -1,0 +1,12 @@
+ModeloNgramas(n=2, vocabulario=47)
+{'gato': 0.1944, 'perro': 0.1944, 'jardín': 0.1111, 'niño': 0.1111, 'parque': 0.0833, 'pájaro': 0.0833, 'hombre': 0.0556, 'profesor': 0.0556, 'sofá': 0.0556, 'cuaderno': 0.0278, 'árbol': 0.0278}
+{'.': 0.3333, 'come': 0.2222, 'bebe': 0.1111, 'duerme': 0.1111, 'mira': 0.1111, 'y': 0.1111}
+{'.': 0.3333, 'come': 0.2222, 'bebe': 0.1111, 'duerme': 0.1111, 'mira': 0.1111, 'y': 0.1111}
+0.2 ['el perro come pescado .', 'el gato .', 'el gato .']
+1.0 ['el niño come pizza en el parque .', 'el jardín .', 'el jardín .']
+2.0 ['el parque .', 'el niño lee un libro .', 'el niño juega con el niño juega con el jardín .']
+el gato .
+la niña corre por el gato . | la niña come pizza .
+[0.302, 0.302, 0.099, 0.099] [0.139, 0.139, 0.105, 0.105]
+{'come': 0.2857, '.': 0.1429, 'bebe': 0.1429, 'duerme': 0.1429, 'mira': 0.1429, 'y': 0.1429} {'por': 1.0}
+3.195 10000.0

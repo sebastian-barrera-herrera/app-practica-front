@@ -1,0 +1,9 @@
+BPETokenizer(vocab_size=175, merges=140) 175
+los envíos internacionales tardan más -> ['los</w>', 'en', 'v', 'í', 'os</w>', 'int', 'ern', 'aci', 'on', 'al', 'es</w>', 't', 'ar', 'd', 'an</w>', 'má', 's</w>'] [67, 37, 24, 30, 43, 135]
+internacionalización -> ['int', 'ern', 'aci', 'on', 'aliz', 'ación</w>'] [135, 131, 55, 68, 153, 66]
+el gato come pescado . -> ['el</w>', 'gato</w>', 'come</w>', 'p', 'esc', 'ad', 'o</w>', '.</w>'] [40, 77, 76, 18, 132, 59]
+zxqwv -> ['z', 'x', 'q', 'w', 'v', '</w>'] [27, 25, 19, 1, 24, 34]
+programación -> ['pro', 'g', 'r', 'am', 'ación</w>'] [117, 9, 20, 65, 66]
+el gato come pescado.
+[('a', '</w>'), ('s', '</w>'), ('e', 'n'), ('e', '</w>'), ('e', 'l'), ('el', '</w>'), ('o', '</w>'), ('n', '</w>'), ('o', 's</w>'), ('c', 'i'), ('l', 'a</w>'), ('e', 'r')]
+15
