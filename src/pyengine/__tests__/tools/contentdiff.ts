@@ -4,12 +4,14 @@
  *
  *   bun src/pyengine/__tests__/tools/contentdiff.ts ia ia8            # una zona
  *   bun src/pyengine/__tests__/tools/contentdiff.ts ia ia8-3 --show   # una lección, enseñando también lo que coincide
+ *   bun src/pyengine/__tests__/tools/contentdiff.ts ia refs [nombre]  # ejemplos de las fichas de la biblioteca (curso ia)
  *
  * Sale con código 1 si hay discrepancias. Sirve para comprobar que lo que la lección AFIRMA (cifras, formas, salidas)
  * es lo que Python de verdad imprime, no solo lo que imprime el motor.
  */
 import { PySession } from '../../index';
 import { COURSES } from '../../../content';
+import { IA_REFERENCE } from '../../../content/ia/reference';
 import type { PyCheck } from '../../types';
 
 declare const require: (m: string) => any;
@@ -74,6 +76,20 @@ const report = (where: string, what: string, a: string, b: string) => {
 };
 
 (async () => {
+  if (filter === 'refs') {
+    const only = flags.find((f) => !f.startsWith('--'));
+    for (const r of IA_REFERENCE) {
+      if (only && r.name !== only) continue;
+      for (const [code] of r.examples) {
+        const [a, b] = [real(code), await mine(code)];
+        checked++;
+        if (norm(a.out) !== norm(b.out) || (a.err.trim() !== '') !== (b.err.trim() !== '')) report(`ficha ${r.name}`, 'ejemplo', a.out + (a.err ? '\n[stderr] ' + a.err.split('\n').slice(-3).join('\n') : ''), b.out + (b.err ? '\n[stderr] ' + b.err.split('\n').slice(-3).join('\n') : ''));
+        else if (show) console.log(`✓ ficha ${r.name}`);
+      }
+    }
+    console.log(`\n${checked - bad}/${checked} ejemplos de fichas coinciden con CPython`);
+    process.exit(bad ? 1 : 0);
+  }
   for (const w of course.worlds) {
     if (filter && !w.id.startsWith(filter) && !filter.startsWith(w.id)) continue;
     const jobs: { lessonId: string; step: any; idx: number }[] = [];

@@ -1358,6 +1358,14 @@ function install(m: PyModule): void {
     return mkInfo({ bits, max: hi > BigInt(Number.MAX_SAFE_INTEGER) ? hi : Number(hi), min: -hi - 1n > BigInt(-Number.MAX_SAFE_INTEGER) ? Number(-hi - 1n) : -hi - 1n, dtype: 'int' + bits });
   });
   f('seterr', '**kw', () => new PyDict());
+  // `with np.errstate(all="ignore"):` — el motor no emite avisos numéricos, así que el contexto no hace nada
+  {
+    const errType = newNativeType('errstate', 'numpy', [objectType]);
+    errType.dict!.set('__enter__', mkNative('__enter__', 'self', (self: any) => self, { method: true, owner: 'errstate' }));
+    errType.dict!.set('__exit__', mkNative('__exit__', 'self, *a', () => false, { method: true, owner: 'errstate' }));
+    errType.dict!.set('__new__', mkNative('__new__', 'cls, *args, **kw', (cls: PyType) => new PyObject(cls), { owner: 'errstate' }));
+    m.dict!.set('errstate', errType);
+  }
   f('geterr', '', () => new PyDict());
   f('may_share_memory', 'a, b', (a: any, b: any) => a instanceof NdArray && b instanceof NdArray && (a.buf === b.buf));
   f('shares_memory', 'a, b', (a: any, b: any) => a instanceof NdArray && b instanceof NdArray && a.buf === b.buf);

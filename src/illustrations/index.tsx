@@ -21,6 +21,7 @@ import { DbscanDemo, ElbowDemo, KMeansSteps, PcaAxesDemo, RecommenderDemo } from
 import { BiasVarianceDemo, ConfusionDemo, KFoldDemo, RocDemo, SearchDemo } from './IaEval';
 import { CoefEffect, LinRegFit, RegMetricsView, RegModelsView, RegPathView } from './IaReg';
 import { AiMlDl, FitCurve, LearningTypes, SplitDemo } from './IaBasics';
+import { ActivationsDemo, BackpropDemo, ForwardDemo, NeuronDemo, OptimizersDemo, TrainNetDemo } from './IaNeural';
 import { AptFlow, BootSequence, DnsLookup, NetRoute, SshHandshake, SudoFlow } from './Flows';
 import { FsTree } from './FsTree';
 import { Missing } from './Missing';
@@ -189,6 +190,12 @@ const MAP: Partial<Record<IllustrationId, React.ComponentType>> = {
   'ia-dbscan': DbscanDemo,
   'ia-pca': PcaAxesDemo,
   'ia-recommender': RecommenderDemo,
+  'ia-neuron': NeuronDemo,
+  'ia-forward': ForwardDemo,
+  'ia-activations': ActivationsDemo,
+  'ia-backprop': BackpropDemo,
+  'ia-train-net': TrainNetDemo,
+  'ia-optimizers': OptimizersDemo,
 };
 
 export function Illustration({ id }: { id: IllustrationId }) {

@@ -19,7 +19,7 @@ Cada lección: 7+ pasos, ≥3 preguntas, al menos un reto de código `pyPractice
 - **Z7 · Aprendizaje no supervisado** ✅ — k-means (codo y silueta), DBSCAN y jerárquico, PCA, anomalías (z-score, IQR, distancia al centro) y recomendador por similitud coseno. Datos: `tienda.csv`.
 
 ## Avanzado (deep learning y IA generativa)
-- **Z8 · Redes neuronales desde cero** — neurona, capas, activaciones, retropropagación, entrenar con NumPy, optimizadores.
+- **Z8 · Redes neuronales desde cero** ✅ — neurona y perceptrón, capas y propagación hacia delante (XOR), activaciones (gradiente evanescente, softmax estable), pérdida y retropropagación (comprobada con derivadas numéricas), bucle de entrenamiento, mini-lotes, inicialización, SGD/momento/Adam y `MLPClassifier`. Datos: dos lunas (`make_moons`).
 - **Z9 · Deep learning práctico** — PyTorch mini, autograd, CNN, RNN/LSTM, regularización (dropout, batch norm), transfer learning.
 - **Z10 · Datos vectoriales y embeddings** — vectores, similitud coseno, embeddings, búsqueda por vecinos (exacta y ANN), bases de datos vectoriales, chunking.
 - **Z11 · Transformers y LLMs** — tokens y BPE, atención, arquitectura, preentrenamiento, ajuste fino, generación (temperatura, top-k/top-p), contexto.
@@ -36,4 +36,6 @@ Cada lección: 7+ pasos, ≥3 preguntas, al menos un reto de código `pyPractice
 | pandas mini | hecho |
 | scikit-learn mini (preprocesado, modelos lineales, árboles y bosques con el constructor de árboles portado a TS, SVM con el SMO de libsvm portado a TS, MLP, KNN, Naive Bayes, K-means/DBSCAN/jerárquico, PCA, texto, pipelines, búsquedas, métricas) | hecho · contrastado con la librería real en `__tests__/golden/sklearn_*.py` |
 | SciPy mínimo (`stats`, `special`, `spatial.distance`, `optimize`) | hecho |
-| torch mini · `dojo_ai` | por hacer (se añaden con las zonas 8–11) |
+| torch mini (tensores, autograd, `nn`, `optim`, `utils.data`) | hecho · `__tests__/selfcheck/torch_*.py` (gradientes contra diferencias finitas y capas contra NumPy) |
+| `dojo_ai` | por hacer (zonas 10–15) |
+| `tools/contentdiff.ts` | compara demos, «¿qué imprime?», retos y fichas con CPython real: úsalo con cada zona nueva |

@@ -129,7 +129,7 @@ class SVC(ClassifierMixin, BaseSVM):
                     else:
                         coef[a, pos[g]] = alpha[k]
         self.support_ = sv_idx
-        self.support_vectors_ = X[sv_idx]
+        self.support_vectors_ = X[sv_idx].astype(np.float64)
         self._n_support = np.array(n_support, dtype=np.int32)
         self.n_support_ = self._n_support
         self._dual_coef_ = coef
@@ -419,7 +419,7 @@ class SVR(RegressorMixin, BaseSVM):
         coef = alpha2[:n] - alpha2[n:]
         nz = np.where(coef != 0)[0]
         self.support_ = nz.astype(np.int32)
-        self.support_vectors_ = X[nz]
+        self.support_vectors_ = X[nz].astype(np.float64)
         self.dual_coef_ = coef[nz].reshape(1, -1)
         self._dual_coef_ = self.dual_coef_
         self.intercept_ = np.array([-rho])

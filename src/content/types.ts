@@ -157,7 +157,13 @@ export type IllustrationId =
   | 'ia-elbow'
   | 'ia-dbscan'
   | 'ia-pca'
-  | 'ia-recommender';
+  | 'ia-recommender'
+  | 'ia-neuron'
+  | 'ia-forward'
+  | 'ia-activations'
+  | 'ia-backprop'
+  | 'ia-train-net'
+  | 'ia-optimizers';
 
 // ───────────────────────── preguntas ─────────────────────────
 
