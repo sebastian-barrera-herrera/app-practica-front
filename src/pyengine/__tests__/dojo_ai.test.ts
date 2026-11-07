@@ -11,7 +11,7 @@ const { readFileSync } = require('fs');
 const { join } = require('path');
 
 const dir: string = join(__dirname, 'selfcheck');
-const scripts = ['dojo_embeddings', 'dojo_tokenizer', 'dojo_vectordb', 'dojo_lm'];
+const scripts = ['dojo_embeddings', 'dojo_tokenizer', 'dojo_vectordb', 'dojo_lm', 'dojo_llm'];
 
 describe('dojo_ai: idéntico a CPython', () => {
   test.each(scripts)('%s', async (name) => {

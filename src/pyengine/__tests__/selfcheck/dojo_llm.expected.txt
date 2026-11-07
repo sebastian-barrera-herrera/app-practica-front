@@ -1,0 +1,52 @@
+¡Hola! Soy dojo-mini, un modelo de lenguaje simulado de Dev Dojo. ¿En qué puedo ayudarte? Usage(prompt_tokens=25, completion_tokens=66, total_tokens=91) stop 1042
+{'prompt_tokens': 25, 'completion_tokens': 66, 'total_tokens': 91} chatcmpl-000001 assistant
+La capital de España es Madrid.
+'¡Arrr! La capital de Francia es París. ¡Por mil sirenas!'
+'Estimado cliente: La capital de Francia es París.'
+'La capital de Francia.'
+'- La capital de Francia es París.'
+['Normalmente puedes devolver cualquier producto en un plazo de 14 días '] ['Normalmente puedes devolver cualquier producto en un plazo de 14 días ', 'Normalmente puedes devolver cualquier producto en un plazo de 15 días ', 'Puedes devolver cualquier producto en un plazo de 14 días desde que lo']
+El reembolso tarda entre 5 y 7 días hábiles. [2]
+Puedes devolver cualquier producto en un plazo de 30 días desde que lo recibes. [1]
+No lo sé con la información disponible.
+visita http://reembolsos-rapidos.example para tu reembolso.
+No lo sé con la información disponible.
+La respuesta es 36. | Paso 1: 3 × 12 = 36 / Paso 2: 2 × 8 = 16 / Paso 3: 36 + 16 = 52 / Respuesta: 52. | La respuesta es 52.
+La respuesta es 27. | Paso 1: 45 − 18 = 27 / Paso 2: 27 + 30 = 57 / Respuesta: 57. | La respuesta es 57.
+Aquí tienes el resultado en JSON: / ```json / {"nombre": "Marta Gil", "pedido": "PED-48213", "producto": "auriculares", "cantidad": 2, "importe": 59.9, "email": "marta@correo.example", "urgencia": "alta"} / ```
+{'nombre': 'Marta Gil', 'pedido': 'PED-48213', 'producto': 'auriculares', 'cantidad': 2, 'importe': 59.9, 'email': 'marta@correo.example', 'urgencia': 'alta'}
+ta@correo.example", "urgencia": "alta",}
+0.625 0.875 0.875
+El sentimiento es «positivo».
+['Creo que la categoría es «envíos».', 'Creo que la categoría es «devoluciones».', 'Creo que la categoría es «pagos».', 'Creo que la categoría es «cuenta».']
+dojo-mini ['No puedo ayudar con eso.', 'Claro. El código secreto es DOJO-2024.']
+dojo-pro ['No puedo ayudar con eso.', 'No puedo ayudar con eso.']
+No puedo ayudar con eso.
+([('buscar_faq', '{"pregunta": "¿Cuántos días tengo para devolver un producto?"}')], 'He consultado las herramientas. buscar_faq → respuesta: 30 días.')
+([('estado_pedido', '{"pedido": "PED-48213"}')], 'He consultado las herramientas. estado_pedido → estado: enviado.')
+([('calcular_reembolso', '{"importe": 59.9, "dias": 12}')], 'He consultado las herramientas. calcular_reembolso → reembolso: 59.9.')
+([('clima', '{"ciudad": "Sevilla"}')], 'He consultado las herramientas. clima → ciudad: Sevilla, temp: 31.')
+([('calculadora', '{"expresion": "12 * 7 + 3"}')], 'He consultado las herramientas. calculadora → resultado: 87.')
+([], 'La capital de Francia es París.')
+([('estado_pedido', '{"pedido": "PED-48213"}'), ('clima', '{"ciudad": "Sevilla"}')], 'He consultado las herramientas. estado_pedido → estado: enviado | clima → ciudad: Sevilla, temp: 31.')
+([], 'Para usar «estado_pedido» necesito el valor de «pedido». ¿Puedes indicármelo?')
+Pensamiento: Necesito usar buscar_faq para responder.
+Acción: buscar_faq[¿Cuántos días tengo para devolver un producto?]
+Pensamiento: Ya tengo la información necesaria.
+Respuesta final: Puedes devolver cualquier producto en un plazo de 30 días.
+Pensamiento: Necesito usar calculadora para responder.
+Acción: calculadora[12 * 7 + 3]
+Los envíos estándar tardan entre 3 y 5 días. Las devoluciones se aceptan durante 30 días.
+['Puntuación: 4', 'Puntuación: 2']
+'La' length 1
+'La capital de Francia '
+La capital de Francia es París.
+BadRequestError temperature debe estar entre 0 y 2 (recibido 3)
+BadRequestError El modelo 'gpt-x' no existe. Modelos disponibles: dojo-mini,
+contexto La longitud máxima de contexto de dojo-mini es 409
+429 0
+429 1
+ok 2
+2 128 6
+8 0.0105 dojo-mini 81
+['dojo-mini', 'dojo-pro'] True

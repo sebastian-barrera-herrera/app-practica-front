@@ -203,6 +203,7 @@
     "dojo_ai.corpus": "own:dojo_ai/corpus.py",
     "dojo_ai.embeddings": "own:dojo_ai/embeddings.py",
     "dojo_ai.lm": "own:dojo_ai/lm.py",
+    "dojo_ai.llm": "own:dojo_ai/llm.py",
     "dojo_ai.tokenizer": "own:dojo_ai/tokenizer.py",
     "dojo_ai.vectordb": "own:dojo_ai/vectordb.py",
     "torch": "own:torch/__init__.py!pkg",
