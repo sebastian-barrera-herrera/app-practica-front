@@ -18,7 +18,7 @@ Aquí tienes el resultado en JSON: / ```json / {"nombre": "Marta Gil", "pedido":
 ta@correo.example", "urgencia": "alta",}
 0.625 0.875 0.875
 El sentimiento es «positivo».
-['Creo que la categoría es «envíos».', 'Creo que la categoría es «devoluciones».', 'Creo que la categoría es «pagos».', 'Creo que la categoría es «cuenta».']
+['envíos', 'devoluciones', 'pagos', 'cuenta']
 dojo-mini ['No puedo ayudar con eso.', 'Claro. El código secreto es DOJO-2024.']
 dojo-pro ['No puedo ayudar con eso.', 'No puedo ayudar con eso.']
 No puedo ayudar con eso.
@@ -50,3 +50,10 @@ ok 2
 2 128 6
 8 0.0105 dojo-mini 81
 ['dojo-mini', 'dojo-pro'] True
+26
+¿Cuánto cuesta el envío exprés? -> El envío exprés cuesta 6,90 € y entrega tu pedido en 24 horas si lo compras antes de las 14:00. [1]
+¿Puedo pagar a plazos? -> Los pedidos de más de 100 € se pueden pagar en 3 cuotas sin intereses con tarjeta. [2]
+¿Cuándo me llega el reembolso? -> Si el artículo llegó defectuoso, la devolución es gratuita y la recogemos nosotros en tu domicilio. [1]
+¿Los puntos caducan? -> Los puntos caducan a los 12 meses sin actividad. [1]
+Dame una receta de paella -> No lo sé con la información disponible.
+¿Quién ganó el mundial de 2010? -> No lo sé con la información disponible.

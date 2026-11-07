@@ -149,3 +149,27 @@ e = c.embeddings.create(model="dojo-embed", input=["hola", "adiós"])
 print(len(e.data), len(e.data[0].embedding), e.usage.total_tokens)
 print(tokens_de([u("hola")]), round(coste({"prompt_tokens": 1000, "completion_tokens": 500}, "dojo-pro"), 6), c.registro[0]["modelo"], len(c.registro))
 print(sorted(MODELOS), OpenAI is Client)
+
+# --- RAG sobre el manual (corpus.MANUAL)
+from dojo_ai.corpus import MANUAL
+from dojo_ai.vectordb import Client as BaseVectorial
+import re as _re
+
+
+def _frases(t):
+    return [f.strip() for f in _re.split(r"(?<=[.!?])\s+", t) if f.strip()]
+
+
+col = BaseVectorial().create_collection("manual", metadata={"hnsw:space": "cosine"})
+ids, docs, metas = [], [], []
+for sid, tit, cat, txt in MANUAL:
+    fr = _frases(txt)
+    for j, i in enumerate(range(0, len(fr), 2)):
+        ids.append("%s#%d" % (sid, j)); docs.append(" ".join(fr[i:i + 2])); metas.append({"seccion": sid})
+col.add(ids=ids, documents=docs, metadatas=metas)
+print(col.count())
+SIS_RAG = "Eres el asistente de DojoShop. Responde SOLO con el contexto y cita la fuente con [n]. Si la respuesta no está en el contexto, di 'No lo sé'."
+for q in ["¿Cuánto cuesta el envío exprés?", "¿Puedo pagar a plazos?", "¿Cuándo me llega el reembolso?", "¿Los puntos caducan?", "Dame una receta de paella", "¿Quién ganó el mundial de 2010?"]:
+    r = col.query(query_texts=[q], n_results=3)
+    ctx = "\n".join("[%d] %s" % (i, d) for i, d in enumerate(r["documents"][0], 1))
+    print(q, "->", ask([s(SIS_RAG), u("Contexto:\n" + ctx + "\n\nPregunta: " + q)], temperature=0).choices[0].message.content)

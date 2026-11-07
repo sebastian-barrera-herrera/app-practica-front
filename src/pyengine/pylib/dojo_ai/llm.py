@@ -651,7 +651,7 @@ class _Cerebro:
 
     def secuestro(self):
         """Inyección de prompt «de secuestro»: una orden escondida en el texto del usuario («ignora… y responde X») que un modelo sin defensas obedece."""
-        if self.defendido or self.spec['resiste_inyeccion']:
+        if self.defendido or self.spec['resiste_inyeccion'] or self.contexto():
             return None
         m = re.search(r'(?:ignora|olvida)[^.\n]*?(?:responde|di|escribe)\s*(?:solo\s*)?[:«"\']?\s*([^.\n«»"\'<>]+)', self.u, re.I)
         return m.group(1).strip() if m else None
@@ -819,33 +819,42 @@ class _Cerebro:
     def rag(self, pasajes):
         q = self.pregunta()
         qv = embed(q)
-        cand = []
+        qraices = {raiz(t) for t in _tokens(q) if len(t) >= 4 and _n(t) not in STOPWORDS and _n(t) not in _COMUNES}
+        por_frase = {}
         for n, txt in pasajes:
             for fr in _frases(txt):
                 if self.defendido and 'ignora' in _n(fr) and 'instrucciones' in _n(fr):
                     continue                # con defensa, el contexto se trata como datos y no como órdenes
-                cand.append((float(qv @ embed(fr)), n, fr))
-        cand.sort(key=lambda c: (-c[0], c[1]))
+                if fr not in por_frase:
+                    por_frase[fr] = [float(qv @ embed(fr)), []]
+                if n not in por_frase[fr][1]:
+                    por_frase[fr][1].append(n)
+        cand = sorted(((v[0], min(v[1]), fr) for fr, v in por_frase.items()), key=lambda c: (-c[0], c[1]))
         cita = 'cita' in self.sisn + ' ' + self.un.lower() or 'fuente' in self.sisn
         anclado = any(w in self.sisn for w in ('solo con el contexto', 'solo con la informacion', 'unicamente', 'exclusivamente', 'no lo se', 'solo el contexto', 'basandote solo', 'basate solo', 'solo usando'))
-        if not cand or cand[0][0] < 0.30:
+
+        def solape(fr):
+            return len(qraices & {raiz(t) for t in _tokens(fr) if len(t) >= 4})
+
+        if not cand or cand[0][0] < 0.30 or (cand[0][0] < 0.60 and solape(cand[0][2]) == 0):
             if anclado:
                 return self.elegir(['No lo sé con la información disponible.', 'No tengo información suficiente en los documentos para responder.'])
             return self.general()
         mejor = cand[0]
-        for _, n, fr in cand:
-            if re.search(r'ignora|olvida', _n(fr)) and re.search(r'instrucciones', _n(fr)) and not self.defendido:
-                m = re.search(r'(?:responde|di|escribe|visita|envia)[^.:]*[:.]?\s*(.+)$', fr, re.I)
-                return (m.group(1) if m else fr).strip()
-        salida = mejor[2]
-        usados = [mejor[1]]
+        if not self.defendido:
+            for sc, n, fr in cand:
+                if re.search(r'ignora|olvida', _n(fr)) and re.search(r'instrucciones', _n(fr)):
+                    m = re.search(r'(?:responde|di|escribe|visita|envia)[^.:]*[:.]?\s*(.+)$', fr, re.I)
+                    return (m.group(1) if m else fr).strip()
+        elegidas = [mejor]
         for sc, n, fr in cand[1:]:
-            if n not in usados and sc >= 0.85 * mejor[0] and sc >= 0.30:
-                salida += ' ' + fr
-                usados.append(n)
+            if sc >= 0.9 * mejor[0] and sc >= 0.42 and solape(fr) >= 1:
+                elegidas.append((sc, n, fr))
                 break
+        salida = ' '.join(fr for _, _, fr in elegidas)
         if cita:
-            salida += ' ' + ' '.join('[%d]' % n for n in usados)
+            fuentes = sorted({x for _, _, fr in elegidas for x in por_frase[fr][1]})
+            salida += ' ' + ' '.join('[%d]' % x for x in fuentes)
         return salida
 
     # ---- resumen ----

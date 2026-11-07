@@ -11,6 +11,7 @@ import { ia9 } from './w9';
 import { ia10 } from './w10';
 import { ia11 } from './w11';
 import { ia12 } from './w12';
+import { ia13 } from './w13';
 
 /** Zonas del curso de IA (se añaden a medida que se escriben; ver `CURRICULUM.md`). */
-export const IA_WORLDS: WorldDef[] = [ia1, ia2, ia3, ia4, ia5, ia6, ia7, ia8, ia9, ia10, ia11, ia12];
+export const IA_WORLDS: WorldDef[] = [ia1, ia2, ia3, ia4, ia5, ia6, ia7, ia8, ia9, ia10, ia11, ia12, ia13];

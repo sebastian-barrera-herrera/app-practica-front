@@ -185,7 +185,12 @@ export type IllustrationId =
   | 'ia-prompt-anatomy'
   | 'ia-fewshot'
   | 'ia-cot'
-  | 'ia-injection';
+  | 'ia-injection'
+  | 'ia-rag-pipeline'
+  | 'ia-rag-chunks'
+  | 'ia-rag-retrieval'
+  | 'ia-rag-answer'
+  | 'ia-rag-eval';
 
 // ───────────────────────── preguntas ─────────────────────────
 

@@ -24,6 +24,7 @@ import { AiMlDl, FitCurve, LearningTypes, SplitDemo } from './IaBasics';
 import { AnnDemo, ChunkingDemo, EmbedMapDemo, SemanticSearchDemo, VecSpaceDemo } from './IaVectors';
 import { AttentionDemo, BpeDemo, ContextDemo, LlmStagesDemo, SamplingDemo, TransformerDemo } from './IaLlm';
 import { ChatMessagesDemo, CotDemo, FewShotDemo, InjectionDemo, PromptAnatomyDemo } from './IaPrompt';
+import { RagAnswerDemo, RagChunksDemo, RagEvalDemo, RagPipelineDemo, RagRetrievalDemo } from './IaRag';
 import { AutogradLab, ConvDemo, OverfitDemo, RnnMemoryDemo, TensorShapesDemo, TrainLoopDemo } from './IaDeep';
 import { ActivationsDemo, BackpropDemo, ForwardDemo, NeuronDemo, OptimizersDemo, TrainNetDemo } from './IaNeural';
 import { AptFlow, BootSequence, DnsLookup, NetRoute, SshHandshake, SudoFlow } from './Flows';
@@ -222,6 +223,11 @@ const MAP: Partial<Record<IllustrationId, React.ComponentType>> = {
   'ia-fewshot': FewShotDemo,
   'ia-cot': CotDemo,
   'ia-injection': InjectionDemo,
+  'ia-rag-pipeline': RagPipelineDemo,
+  'ia-rag-chunks': RagChunksDemo,
+  'ia-rag-retrieval': RagRetrievalDemo,
+  'ia-rag-answer': RagAnswerDemo,
+  'ia-rag-eval': RagEvalDemo,
 };
 
 export function Illustration({ id }: { id: IllustrationId }) {
