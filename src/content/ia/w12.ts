@@ -557,6 +557,7 @@ for semilla in range(1, 4):
           ],
         ],
       ),
+      mc('¿Qué te garantiza response_format={"type": "json_object"}?', ['Que el texto devuelto es JSON válido (las claves y los tipos hay que validarlos igualmente)', 'Que todos los datos del JSON son correctos', 'Que el modelo no inventa valores', 'Que no hace falta usar json.loads'], 0, 'Garantiza la sintaxis, no el contenido: puede faltar una clave, tener un tipo equivocado o un valor inventado. Por eso se valida con código.'),
       pyPractice({
         goal: 'Extrae el JSON de un texto',
         prompt: 'Escribe `extraer_json(texto)`: busca desde el primer `{` hasta el último `}` del texto (así ignora el saludo y las marcas ```), intenta `json.loads` y devuelve el diccionario. Si no hay llaves o el JSON es inválido, devuelve `None`.',
