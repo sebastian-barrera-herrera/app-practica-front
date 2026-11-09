@@ -71,3 +71,10 @@ Cuando encuentres una diferencia con CPython: **añade un `.py` golden** que la 
 ## Utilidades de desarrollo (`__tests__/tools`)
 
 `diff.ts` (golden), `run.ts` (ejecutar), `repl.ts` (sesión interactiva), `astcorpus.ts` (compara el AST con el de CPython sobre un corpus), `cmpcols.ts` (columnas de tracebacks), `compilecheck.ts`, `parsebench.ts` e `imports.ts` (mide el coste de importar cada módulo). No forman parte del *build* de la app (están excluidas de `tsc`).
+
+## Curso de IA: NumPy, miniaturas y `dojo_ai`
+
+- **NumPy** (`stdlib/numpy/*`) es nativo y fiel: el generador aleatorio (`default_rng`, PCG64 con tablas del zigurat) y las sumas por pares producen **los mismos números** que el real; no hay dtypes `float32` ni escalares tipados (los escalares son `float`).
+- **pandas, scikit-learn, SciPy, matplotlib y PyTorch** son miniaturas (`pylib/pandas.py`, `pylib/sklearn/*`, `pylib/torch/*`…) comparadas con los reales en `__tests__/golden` y `__tests__/selfcheck`.
+- **`dojo_ai`** (`pylib/dojo_ai/*`) es Python puro (embeddings de juguete, tokenizador BPE, índices y base vectorial, modelo de n-gramas) y `dojo_ai.llm`, un **simulador** de la API de chat de los proveedores (roles, `tools`, JSON, `stream`, errores, `usage`) con reglas deterministas. **No es un modelo de lenguaje**: sirve para practicar el código alrededor de uno. `selfcheck/dojo_*.expected.txt` guarda la salida de CPython y `dojo_ai.test.ts` exige que el motor la reproduzca exactamente.
+- **`tools/contentdiff.ts`** compara con CPython real todas las demos, «¿qué imprime?», comprobaciones de retos y ejemplos de fichas del curso: `PYTHONPATH=<torch real>:<carpeta con un enlace a pylib/dojo_ai> bun src/pyengine/__tests__/tools/contentdiff.ts ia ia12 [--show]` (o `ia refs [nombre]`).
