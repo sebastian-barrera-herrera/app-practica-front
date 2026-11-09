@@ -103,6 +103,7 @@ export const PYOUT: Record<string, string> = {
   "ebe39832": "(32, 4)",
   "eedf1fea": "A",
   "efd35ea5": "[[ 4  6]\n [ 8 10]]",
+  "f1df146c": "int 119.8",
   "f1f10d9c": "fin 2\nfin 3\nfin 1\n[1, 2, 3]",
   "f6c4864a": "0.0",
   "f8526d5f": "1 1 1",

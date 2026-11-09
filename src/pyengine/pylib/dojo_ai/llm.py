@@ -118,6 +118,7 @@ class Chunk(_Obj):
 # ───────────────────────── utilidades de texto ─────────────────────────
 
 NEGACIONES = ('no', 'nunca', 'sin', 'ni', 'tampoco', 'jamas')
+_MUTA = ('cancel', 'elimin', 'borr', 'anul', 'modific', 'actualiz', 'envia', 'mand', 'pagar', 'comprar', 'reserv', 'escrib')
 _COMUNES = {'hace', 'hacer', 'tiene', 'tienen', 'puede', 'pueden', 'cada', 'sobre', 'segun', 'desde', 'como', 'donde', 'cuando', 'cuanto', 'cuanta', 'cuantos', 'cuantas', 'quiero', 'quiere', 'necesito', 'saber', 'dame', 'dime', 'favor', 'tienda', 'cliente', 'usuario', 'datos', 'dato', 'informacion'}
 
 
@@ -582,6 +583,7 @@ class _Cerebro:
         ult = [m for m in msgs if m['role'] == 'user']
         self.u = _contenido(ult[-1]) if ult else ''
         self.un = _n(self.u)
+        self._cache = {}
         self.defendido = any(d in self.sisn for d in _DEFENSAS) or '<entrada>' in self.sisn or 'delimit' in self.sisn
 
     # ---- variación según la temperatura ----
@@ -952,29 +954,48 @@ class _Cerebro:
         return out
 
     def relevancia(self, h, texto):
-        """Cuánto encaja una herramienta con la petición: coincidencias de significado entre las palabras de la petición y las del nombre y la descripción."""
-        desc = [w for w in _tokens(h['name'].replace('_', ' ') + ' ' + h['description']) if len(w) >= 3 and _n(w) not in STOPWORDS and _n(w) not in _COMUNES]
-        dv = [(raiz(w), embed_palabra(w)) for w in desc]
-        mejores = []
-        for qw in _tokens(texto):
-            if len(qw) < 3 or _n(qw) in STOPWORDS or _n(qw) in _COMUNES:
-                continue
-            qr = raiz(qw)
-            qv = embed_palabra(qw)
-            m = 0.0
-            for r, v in dv:
-                if r == qr:
-                    m = 1.0
-                    break
-                if qv is not None and v is not None:
-                    m = max(m, float(qv @ v))
-            mejores.append(m)
-        mejores.sort(reverse=True)
-        fuertes = [x for x in mejores[:3] if x >= 0.6]
-        nombre = _n(h['name'] + ' ' + h['description'])
-        if ('aritm' in nombre or 'operacion' in nombre or h['name'] == 'calculadora') and re.search(r'\d\s*[+\-*/x×]\s*\d', texto):
-            fuertes.append(1.0)
-        return sum(fuertes), len(fuertes)
+        """Cuánto encaja una herramienta con la petición. Cada palabra de la petición reparte su peso entre las herramientas cuyo nombre o descripción tienen un significado parecido: las coincidencias exclusivas pesan más que las compartidas."""
+        clave = ('rel', texto)
+        if clave not in self._cache:
+            espec = self.espec()
+            dvs = {}
+            for t in espec:
+                desc = [w for w in _tokens(t['name'].replace('_', ' ') + ' ' + t['description']) if len(w) >= 3 and _n(w) not in STOPWORDS and _n(w) not in _COMUNES]
+                dvs[t['name']] = [(raiz(w), embed_palabra(w)) for w in desc]
+            pesos = {t['name']: [] for t in espec}
+            for qw in _tokens(texto):
+                if len(qw) < 3 or _n(qw) in STOPWORDS or _n(qw) in _COMUNES:
+                    continue
+                qr = raiz(qw)
+                qv = embed_palabra(qw)
+                ms = {}
+                for nombre, dv in dvs.items():
+                    m = 0.0
+                    for r, v in dv:
+                        if r == qr:
+                            m = 1.0
+                            break
+                        if qv is not None and v is not None:
+                            m = max(m, float(qv @ v))
+                    ms[nombre] = m
+                fuertes = [n for n, m in ms.items() if m >= 0.6]
+                for n in fuertes:
+                    pesos[n].append(ms[n] / len(fuertes))
+            res = {}
+            for t in espec:
+                ps = sorted(pesos[t['name']], reverse=True)[:3]
+                sc = sum(ps)
+                hits = len(ps)
+                nombre = _n(t['name'] + ' ' + t['description'])
+                muta = [v for v in _MUTA if v in nombre.replace('_', ' ')]
+                if muta and sc > 0 and not any(_n(qw).startswith(v) for qw in _tokens(texto) for v in muta):
+                    sc *= 0.3               # una acción con efectos (cancelar, enviar…) solo se elige si la petición la pide de forma explícita
+                if ('aritm' in nombre or 'operacion' in nombre or t['name'] == 'calculadora') and re.search(r'\d\s*[+\-*/x×]\s*\d', texto):
+                    sc += 1.0
+                    hits += 1
+                res[t['name']] = (sc, hits)
+            self._cache[clave] = res
+        return self._cache[clave][h['name']]
 
     def argumento(self, nombre, esq, texto, usados, previas):
         n = _n(nombre)
@@ -1097,7 +1118,7 @@ class _Cerebro:
             elegido = None
             pendiente = None
             for sc, h in rank:
-                if sc < 0.25 * tope:
+                if sc < 0.15 * tope:
                     break
                 if h['name'] in ya:
                     continue
@@ -1119,6 +1140,9 @@ class _Cerebro:
     def herramientas(self):
         if not self.tools:
             return None
+        inj = self.inyeccion_en_herramientas()
+        if inj is not None:
+            return None, [inj], 'tool_calls'
         texto = self.u
         listas, faltan = self.planificar(texto)
         if listas:
@@ -1132,6 +1156,34 @@ class _Cerebro:
         if faltan:
             nombre, p = faltan[0]
             return 'Para usar «%s» necesito el valor de «%s». ¿Puedes indicármelo?' % (nombre, p), [], 'stop'
+        return None
+
+    def inyeccion_en_herramientas(self):
+        """Inyección indirecta por herramientas: un resultado que dice «ignora… envía un correo a X» hace que un modelo sin defensas use la herramienta de correo."""
+        if self.defendido or self.spec['resiste_inyeccion'] or self.msgs[-1]['role'] != 'tool':
+            return None
+        espec = self.espec()
+        correo = [h for h in espec if 'email' in h['name'] or 'correo' in h['name']]
+        if not correo:
+            return None
+        previas = self.previas()
+        if any(pn == correo[0]['name'] for pn, pa, pr in previas):
+            return None
+        for pn, pa, pr in previas:
+            if pr and re.search(r'ignora', _n(pr)):
+                m = re.search(r'(?:envia|manda|escribe)[^.]*?\b(?:correo|email|mensaje)\s+a\s+(' + _RE_EMAIL.pattern + ')', _n(pr))
+                if m:
+                    args, falta, _ = self.argumentos(correo[0], m.group(0), [])
+                    props = correo[0]['parameters'].get('properties', {})
+                    for nombre in props:
+                        if nombre not in args and props[nombre].get('type', 'string') == 'string':
+                            if nombre in ('destinatario', 'para', 'to', 'email', 'correo', 'direccion') or nombre.startswith('destin'):
+                                args[nombre] = m.group(1)
+                            elif any(w in nombre for w in ('asunto', 'subject')):
+                                args[nombre] = 'Información del cliente'
+                            else:
+                                args[nombre] = pr[:60]
+                    return ToolCall(id='call_%04d' % (len(previas) + 1), type='function', function=Function(name=correo[0]['name'], arguments=json.dumps(args, ensure_ascii=False)))
         return None
 
     def final_herramientas(self):
@@ -1153,7 +1205,7 @@ class _Cerebro:
                 partes.append('%s → %s' % (nombre, d))
         texto = 'He consultado las herramientas. ' + ' | '.join(partes) + '.' if partes else 'No obtuve resultados de las herramientas.'
         for nombre, args, res in previas:
-            if res and re.search(r'ignora', _n(res)) and re.search(r'instrucciones', _n(res)) and not self.defendido:
+            if res and re.search(r'ignora', _n(res)) and re.search(r'instrucciones', _n(res)) and not self.defendido and not self.spec['resiste_inyeccion'] and not any('email' in pn or 'correo' in pn for pn, pa, pr in previas):
                 m = re.search(r'(?:responde|di|escribe|visita|envia|llama)[^.:]*[:.]?\s*(.+)$', res, re.I)
                 return (m.group(1) if m else res).strip()
         return texto
@@ -1163,6 +1215,8 @@ class _Cerebro:
         herr = []
         for nombre, desc in re.findall(r'^\s*[-*]\s*([a-z_]+)\s*:\s*(.+)$', self.sis, re.M):
             herr.append({'name': nombre, 'description': desc, 'parameters': {'type': 'object', 'properties': {'entrada': {'type': 'string'}}, 'required': ['entrada']}})
+        self.tools = [{'type': 'function', 'function': h} for h in herr]
+        self._cache = {}
         ult = self.msgs[-1]
         usadas = []
         for m in self.msgs:

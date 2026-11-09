@@ -190,7 +190,12 @@ export type IllustrationId =
   | 'ia-rag-chunks'
   | 'ia-rag-retrieval'
   | 'ia-rag-answer'
-  | 'ia-rag-eval';
+  | 'ia-rag-eval'
+  | 'ia-agent-loop'
+  | 'ia-agent-trace'
+  | 'ia-agent-patterns'
+  | 'ia-agent-memory'
+  | 'ia-agent-safety';
 
 // ───────────────────────── preguntas ─────────────────────────
 
