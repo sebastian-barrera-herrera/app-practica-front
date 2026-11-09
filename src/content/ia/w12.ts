@@ -195,7 +195,7 @@ for modelo in ["dojo-mini", "dojo-pro"]:
         ]),
         solution: 'def coste_llamada(tokens_entrada, tokens_salida, precio_entrada, precio_salida):\n    return (tokens_entrada * precio_entrada + tokens_salida * precio_salida) / 1_000_000\n',
         hints: ['Multiplica los tokens de cada tipo por su precio y suma.', 'Divide entre un millón porque los precios son por millón de tokens.'],
-        explain: '1 000 tokens de entrada y 500 de salida cuestan 0,00045 $ con el modelo pequeño y 0,021 $ con el grande: 47 veces más. Con miles de usuarios la diferencia se nota en la factura.',
+        explain: '1 000 tokens de entrada y 500 de salida cuestan 0,00045 $ con el modelo pequeño y 0,0105 $ con el grande: 23 veces más (con 2 000 y 1 000 tokens, el grande cuesta 0,021 $). Con miles de usuarios la diferencia se nota en la factura.',
         commands: ['dojo_ai.llm'],
       }),
       match('Une cada parámetro con su efecto:', [['temperature', 'Más o menos aleatoriedad al elegir cada token'], ['max_tokens', 'Límite de longitud de la respuesta'], ['stop', 'Detiene la generación al aparecer una secuencia'], ['seed', 'Ayuda a repetir exactamente una respuesta']], 'Son los controles básicos de cualquier API de LLM; los nombres cambian poco entre proveedores.'),

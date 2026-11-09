@@ -14,6 +14,7 @@ import { LLM_REFS } from './ref/llm';
 import { PROMPTS_REFS } from './ref/prompts';
 import { AGENTES_REFS } from './ref/agentes';
 import { RAG_REFS } from './ref/rag';
+import { RESPONSABLE_REFS } from './ref/responsable';
 import { VECTORES_REFS } from './ref/vectores';
 import { REGRESION_REFS } from './ref/regresion';
 
@@ -32,6 +33,6 @@ export const IA_REF_CATEGORY: Record<IaRefCategory, string> = {
 
 export type IaRef = PyRef<IaRefCategory>;
 
-export const IA_REFERENCE: IaRef[] = [...CONCEPTOS_REFS, ...NUMPY_REFS, ...MATEMATICAS_REFS, ...PANDAS_REFS, ...PREPROCESADO_REFS, ...REGRESION_REFS, ...CLASIFICACION_REFS, ...EVALUACION_REFS, ...NOSUPERVISADO_REFS, ...REDES_REFS, ...PYTORCH_REFS, ...VECTORES_REFS, ...LLM_REFS, ...PROMPTS_REFS, ...RAG_REFS, ...AGENTES_REFS];
+export const IA_REFERENCE: IaRef[] = [...CONCEPTOS_REFS, ...NUMPY_REFS, ...MATEMATICAS_REFS, ...PANDAS_REFS, ...PREPROCESADO_REFS, ...REGRESION_REFS, ...CLASIFICACION_REFS, ...EVALUACION_REFS, ...NOSUPERVISADO_REFS, ...REDES_REFS, ...PYTORCH_REFS, ...VECTORES_REFS, ...LLM_REFS, ...PROMPTS_REFS, ...RAG_REFS, ...AGENTES_REFS, ...RESPONSABLE_REFS];
 
 export const iaRefByName = (name: string): IaRef | undefined => IA_REFERENCE.find((r) => r.name === name);

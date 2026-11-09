@@ -24,6 +24,7 @@ import { AiMlDl, FitCurve, LearningTypes, SplitDemo } from './IaBasics';
 import { AnnDemo, ChunkingDemo, EmbedMapDemo, SemanticSearchDemo, VecSpaceDemo } from './IaVectors';
 import { AttentionDemo, BpeDemo, ContextDemo, LlmStagesDemo, SamplingDemo, TransformerDemo } from './IaLlm';
 import { ChatMessagesDemo, CotDemo, FewShotDemo, InjectionDemo, PromptAnatomyDemo } from './IaPrompt';
+import { CostDemo, EvalCiDemo, FairnessDemo, OpsDemo, PrivacyDemo } from './IaResp';
 import { AgentLoopDemo, AgentMemoryDemo, AgentPatternsDemo, AgentSafetyDemo, AgentTraceDemo } from './IaAgent';
 import { RagAnswerDemo, RagChunksDemo, RagEvalDemo, RagPipelineDemo, RagRetrievalDemo } from './IaRag';
 import { AutogradLab, ConvDemo, OverfitDemo, RnnMemoryDemo, TensorShapesDemo, TrainLoopDemo } from './IaDeep';
@@ -234,6 +235,11 @@ const MAP: Partial<Record<IllustrationId, React.ComponentType>> = {
   'ia-agent-patterns': AgentPatternsDemo,
   'ia-agent-memory': AgentMemoryDemo,
   'ia-agent-safety': AgentSafetyDemo,
+  'ia-fairness': FairnessDemo,
+  'ia-privacy': PrivacyDemo,
+  'ia-eval-ci': EvalCiDemo,
+  'ia-cost': CostDemo,
+  'ia-ops': OpsDemo,
 };
 
 export function Illustration({ id }: { id: IllustrationId }) {

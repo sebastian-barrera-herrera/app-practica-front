@@ -195,7 +195,12 @@ export type IllustrationId =
   | 'ia-agent-trace'
   | 'ia-agent-patterns'
   | 'ia-agent-memory'
-  | 'ia-agent-safety';
+  | 'ia-agent-safety'
+  | 'ia-fairness'
+  | 'ia-privacy'
+  | 'ia-eval-ci'
+  | 'ia-cost'
+  | 'ia-ops';
 
 // ───────────────────────── preguntas ─────────────────────────
 
